@@ -16,7 +16,7 @@ import Leaderboard from "@/pages/ReviewerList";
 import ProfilePage from "@/pages/ProfilePage";
 import ReviewerList from './pages/ReviewerList';
 import BusinessPage from "./pages/BusinessPage";
-
+import ExpertPage from './pages/ExpertProfile'; // Adjust path as needed
 
 
 const queryClient = new QueryClient();
@@ -32,6 +32,7 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/" element={<ReviewerList />} />
             <Route path="/profile/:id" element={<ProfilePage />} />
+            <Route path="/expert/:id" element={<ExpertPage />} />
             <Route path="/login" element={<Login />} />
             <Route path="/:handle" element={<Dashboard />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />

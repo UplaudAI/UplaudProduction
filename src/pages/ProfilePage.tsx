@@ -12,6 +12,8 @@ import {
   ChevronDown,
   ChevronUp,
   ArrowLeft,
+  ThumbsUp,
+  ThumbsDown
 } from "lucide-react";
 import axios from "axios";
 import { Card } from "@/components/ui/card";
@@ -598,10 +600,58 @@ const ProfilePage = () => {
   const [myReferrals, setMyReferrals] = useState<any[]>([]);
   const [referralsUI, setReferralsUI] = useState<ReferralData[]>([]);
   const [showAllReferrals, setShowAllReferrals] = useState(false);
+  const [reviewVotes, setReviewVotes] = useState<{[key: string]: {likes: number, dislikes: number, userLiked?: boolean, userDisliked?: boolean}}>({});
 
   const isTouch = useIsTouch();
   const badgeMin = isTouch ? 84 : 128;
+  
+  const handleLike = (reviewIndex: number) => {
+  setReviewVotes((prev) => {
+    const key = `review-${reviewIndex}`;
+    const current = prev[key] || { likes: 0, dislikes: 0 };
+    
+    if (current.userLiked) {
+      return {
+        ...prev,
+        [key]: { ...current, likes: current.likes - 1, userLiked: false }
+      };
+    }
+    return {
+      ...prev,
+      [key]: {
+        ...current,
+        likes: current.likes + 1,
+        userLiked: true,
+        dislikes: current.userDisliked ? current.dislikes - 1 : current.dislikes,
+        userDisliked: false,
+      }
+    };
+  });
+};
 
+const handleDislike = (reviewIndex: number) => {
+  setReviewVotes((prev) => {
+    const key = `review-${reviewIndex}`;
+    const current = prev[key] || { likes: 0, dislikes: 0 };
+    
+    if (current.userDisliked) {
+      return {
+        ...prev,
+        [key]: { ...current, dislikes: current.dislikes - 1, userDisliked: false }
+      };
+    }
+    return {
+      ...prev,
+      [key]: {
+        ...current,
+        dislikes: current.dislikes + 1,
+        userDisliked: true,
+        likes: current.userLiked ? current.likes - 1 : current.likes,
+        userLiked: false,
+      }
+    };
+  });
+};
   useEffect(() => {
     async function fetchUserAndReviews() {
       setLoading(true);
@@ -809,84 +859,58 @@ const ProfilePage = () => {
   const [openRefPB, setOpenRefPB] = useState(true);
 
   /** ========= REVIEW CARD ========= */
-  function ReviewCardLocal({ review }: { review: any }) {
-    if (!review.businessName || !review.uplaud) return null;
+  function ReviewCardLocal({ review, index }: { review: any; index: number }) {
+  if (!review.businessName || !review.uplaud) return null;
 
-    const handleShare = () => {
-      const link =
-        review.referralLink ||
-        review.shareLink ||
-        `${window.location.origin}/business/${slugify(review.businessName)}`;
+  const voteKey = `review-${index}`;
+  const votes = reviewVotes[voteKey] || { likes: 0, dislikes: 0 };
 
-      const message = `Hey, check out this Real Review for ${review.businessName} on Uplaud. It’s a platform where real people give honest reviews on WhatsApp:\n${link}`;
-      const wa = `https://wa.me/?text=${encodeURIComponent(message)}`;
-      window.location.href = wa; // WhatsApp only
-    };
+  const handleShare = () => {
+    const link =
+      review.referralLink ||
+      review.shareLink ||
+      `${window.location.origin}/business/${slugify(review.businessName)}`;
 
-    return (
-      <div
-        className="flex flex-col rounded-2xl shadow transition hover:shadow-xl overflow-hidden"
-        style={{ background: "#FFF7E6" }}
-      >
-        <div className="w-full px-5 pt-5">
-          {/* Title row */}
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <Link
-              to={`/business/${slugify(review.businessName)}`}
-              className="w-full sm:flex-1 font-bold text-base sm:text-lg text-black hover:underline hover:text-purple-700 break-words whitespace-normal leading-tight"
-              title={review.businessName}
-              style={{ hyphens: "auto" }}
-            >
-              {review.businessName}
-            </Link>
+    const message = `Hey, check out this Real Review for ${review.businessName} on Uplaud. It's a platform where real people give honest reviews on WhatsApp:\n${link}`;
+    const wa = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.location.href = wa;
+  };
 
-            {/* Desktop meta */}
-            <div className="hidden sm:flex items-center gap-3 sm:ml-auto">
-              {review.score ? (
-                <span className="flex items-center leading-none">
-                  {Array.from({ length: review.score }).map((_, i) => (
-                    <span key={i} className="text-yellow-400 text-sm sm:text-lg leading-none">
-                      ★
-                    </span>
-                  ))}
-                  <span className="ml-1 text-lg sm:text-2xl leading-none">
-                    {emojiForScore(review.score)}
+  return (
+    <div
+      className="flex flex-col rounded-2xl shadow transition hover:shadow-xl overflow-hidden"
+      style={{ background: "#FFF7E6" }}
+    >
+      <div className="w-full px-5 pt-5">
+        {/* Title row */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <Link
+            to={`/business/${slugify(review.businessName)}`}
+            className="w-full sm:flex-1 font-bold text-base sm:text-lg text-black hover:underline hover:text-purple-700 break-words whitespace-normal leading-tight"
+            title={review.businessName}
+            style={{ hyphens: "auto" }}
+          >
+            {review.businessName}
+          </Link>
+
+          {/* Desktop meta */}
+          <div className="hidden sm:flex items-center gap-3 sm:ml-auto">
+            {review.score ? (
+              <span className="flex items-center leading-none">
+                {Array.from({ length: review.score }).map((_, i) => (
+                  <span key={i} className="text-yellow-400 text-sm sm:text-lg leading-none">
+                    ★
                   </span>
+                ))}
+                <span className="ml-1 text-lg sm:text-2xl leading-none">
+                  {emojiForScore(review.score)}
                 </span>
-              ) : null}
-
-              <span className="text-gray-500 text-xs sm:text-sm font-medium leading-none">
-                {formatDate(review.date)}
               </span>
+            ) : null}
 
-              <button
-                onClick={handleShare}
-                className="inline-flex items-center justify-center rounded-md p-2 bg-transparent hover:bg-transparent focus:bg-transparent border-0 shadow-none"
-                aria-label="Share this review on WhatsApp"
-                title="Share on WhatsApp"
-              >
-                <Share2 className="w-4 h-4 text-gray-700" />
-              </button>
-            </div>
-          </div>
-
-          {/* Mobile meta */}
-          <div className="sm:hidden mt-1 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              {review.score ? (
-                <span className="flex items-center leading-none">
-                  {Array.from({ length: review.score }).map((_, i) => (
-                    <span key={i} className="text-yellow-400 text-sm leading-none">
-                      ★
-                    </span>
-                  ))}
-                  <span className="ml-1 text-xl leading-none">{emojiForScore(review.score)}</span>
-                </span>
-              ) : null}
-              <span className="text-gray-600 text-xs font-medium leading-none">
-                {formatDate(review.date)}
-              </span>
-            </div>
+            <span className="text-gray-500 text-xs sm:text-sm font-medium leading-none">
+              {formatDate(review.date)}
+            </span>
 
             <button
               onClick={handleShare}
@@ -899,21 +923,78 @@ const ProfilePage = () => {
           </div>
         </div>
 
-        {/* Review body */}
-        <div className="mt-3 w-full">
-          <div
-            className="w-full px-5 py-4 text-gray-900 text-base font-medium break-words"
-            style={{ background: "#DCF8C6" }}
-          >
-            <span style={{ display: "block", wordBreak: "break-word" }}>{review.uplaud}</span>
+        {/* Mobile meta */}
+        <div className="sm:hidden mt-1 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {review.score ? (
+              <span className="flex items-center leading-none">
+                {Array.from({ length: review.score }).map((_, i) => (
+                  <span key={i} className="text-yellow-400 text-sm leading-none">
+                    ★
+                  </span>
+                ))}
+                <span className="ml-1 text-xl leading-none">{emojiForScore(review.score)}</span>
+              </span>
+            ) : null}
+            <span className="text-gray-600 text-xs font-medium leading-none">
+              {formatDate(review.date)}
+            </span>
           </div>
+
+          <button
+            onClick={handleShare}
+            className="inline-flex items-center justify-center rounded-md p-2 bg-transparent hover:bg-transparent focus:bg-transparent border-0 shadow-none"
+            aria-label="Share this review on WhatsApp"
+            title="Share on WhatsApp"
+          >
+            <Share2 className="w-4 h-4 text-gray-700" />
+          </button>
         </div>
-
-        <div className="pb-4" />
       </div>
-    );
-  }
 
+      {/* Review body */}
+      <div className="mt-3 w-full">
+        <div
+          className="w-full px-5 py-4 text-gray-900 text-base font-medium break-words"
+          style={{ background: "#DCF8C6" }}
+        >
+          <span style={{ display: "block", wordBreak: "break-word" }}>{review.uplaud}</span>
+        </div>
+      </div>
+
+      {/* Helpful section */}
+      <div className="px-5 py-4 flex items-center gap-4">
+        <span className="text-sm text-gray-600">Was this helpful?</span>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => handleLike(index)}
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg transition ${
+              votes.userLiked
+                ? "bg-green-100 text-green-700"
+                : "bg-gray-100 text-gray-700 hover:bg-green-50"
+            }`}
+            aria-label="Like this review"
+          >
+            <ThumbsUp className="w-4 h-4" />
+            <span className="text-sm font-semibold">{votes.likes}</span>
+          </button>
+          <button
+            onClick={() => handleDislike(index)}
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg transition ${
+              votes.userDisliked
+                ? "bg-red-100 text-red-700"
+                : "bg-gray-100 text-gray-700 hover:bg-red-50"
+            }`}
+            aria-label="Dislike this review"
+          >
+            <ThumbsDown className="w-4 h-4" />
+            <span className="text-sm font-semibold">{votes.dislikes}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+  }
   if (loading)
     return (
       <>
@@ -1118,7 +1199,7 @@ const ProfilePage = () => {
                   <div className="space-y-7">
                     {(showAllReviews ? reviews : reviews.slice(0, 5)).map(
                       (review, idx) => (
-                        <ReviewCardLocal key={idx} review={review} />
+                        <ReviewCardLocal key={idx} review={review} index={idx} />
                       )
                     )}
                   </div>
