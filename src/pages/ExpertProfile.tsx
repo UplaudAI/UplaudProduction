@@ -10,14 +10,56 @@ import {
   Users,
   Award,
 } from "lucide-react";
+import axios from "axios";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
-// For security, API keys should be stored in environment variables
-// These are placeholder values - replace with your actual Airtable configuration
-const API_KEY = import.meta.env.VITE_AIRTABLE_API_KEY || "";
-const BASE_ID = import.meta.env.VITE_AIRTABLE_BASE_ID || "";
+// import { Card } from "@/components/ui/card";
+// import {
+//   Tooltip,
+//   TooltipContent,
+//   TooltipProvider,
+//   TooltipTrigger,
+// } from "@/components/ui/tooltip";
+// import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
+/* ===================== Airtable Config ===================== */
+const API_KEY =
+  "patZS8GyNhkwoP4wY.2beddc214f4dd2a5e4c220ae654f62652a5e02a47bae2287c54fced7bb97c07e";
+const BASE_ID = "appFUJWWTaoJ3YiWt";
+const USERS_TABLE = "tblWIFgwTz3Gn3idV";
+const REVIEWS_TABLE = "tblef0n1hQXiKPHxI";
+const CIRCLES_TABLE = "tbldL8H5T4qYKUzLV";
+
+/* ===================== HTTP helpers ===================== */
+const AIRTABLE = axios.create({
+  baseURL: `https://api.airtable.com/v0/${BASE_ID}/`,
+  headers: { Authorization: `Bearer ${API_KEY}` },
+});
+
+function escapeAirtableString(v: string) {
+  // Wrap in double quotes and escape embedded double quotes
+  return `"${(v || "").replace(/"/g, '\\"')}"`;
+}
+
+async function fetchAllPages<T = any>(
+  table: string,
+  params: Record<string, any>
+): Promise<T[]> {
+  const out: T[] = [];
+  let offset: string | undefined = undefined;
+  let safety = 0; // avoid infinite loops
+  do {
+    const resp = await AIRTABLE.get(table, {
+      params: { ...params, offset, pageSize: 100 },
+    });
+    const records = resp.data?.records || [];
+    out.push(...records);
+    offset = resp.data?.offset;
+    safety++;
+  } while (offset && safety < 100);
+  return out;
+}
 /* ===================== Utilities ===================== */
 function slugify(name = "") {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
@@ -30,6 +72,79 @@ function formatDate(date?: Date | null) {
     day: "2-digit",
     year: "numeric",
   });
+}
+function emojiForScore(score?: number) {
+  if (!score) return "🤍";
+  if (score >= 5) return "🔥";
+  if (score === 4) return "😍";
+  if (score === 3) return "🙂";
+  if (score === 2) return "😐";
+  return "😶";
+}
+function getWhatsAppShareLink(user?: any) {
+  let phone = user?.autogenInvite || "";
+  const urlMatch = phone.match(/(?:wa\.me\/|\/)(\d{10,15})/);
+  if (urlMatch && urlMatch[1]) phone = urlMatch[1];
+  phone = (phone || "").replace(/[^0-9]/g, "");
+  const msg = `Add me to ${user?.name || "your"}'s circle`;
+  return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+}
+const digitsOnly = (s = "") => (s || "").toString().replace(/\D/g, "");
+const last3 = (s = "") => {
+  const d = digitsOnly(s);
+  if (!d) return "000";
+  return d.slice(-3).padStart(3, "0");
+};
+async function fetchLast3FromReviews(foundUser: any) {
+  // Try by Creator ID, then by Name
+  try {
+    const idFormula = `{ID (from Creator)}=${escapeAirtableString(foundUser.id || "")}`;
+    const byId = await fetchAllPages<any>(REVIEWS_TABLE, { filterByFormula: idFormula });
+    let rec = byId[0];
+
+    if (!rec) {
+      const nameFormula = `{Name_Creator}=${escapeAirtableString(foundUser.name || "")}`;
+      const byName = await fetchAllPages<any>(REVIEWS_TABLE, { filterByFormula: nameFormula });
+      rec = byName[0];
+    }
+    const phone =
+      rec?.fields?.ReviewerPhoneNumber ||
+      rec?.fields?.Phone ||
+      rec?.fields?.["Reviewer Phone Number"] ||
+      "";
+    return last3(phone);
+  } catch {
+    return "000";
+  }
+}
+
+/* Helpers */
+function timeAgo(from?: Date | null) {
+  if (!from) return "just now";
+  const ms = Date.now() - from.getTime();
+  const s = Math.max(1, Math.floor(ms / 1000));
+  const m = Math.floor(s / 60);
+  const h = Math.floor(m / 60);
+  const d = Math.floor(h / 24);
+  if (d > 0) return d === 1 ? "1 day ago" : `${d} days ago`;
+  if (h > 0) return h === 1 ? "1 hour ago" : `${h} hours ago`;
+  if (m > 0) return m === 1 ? "1 min ago" : `${m} mins ago`;
+  return "just now";
+}
+function toReferralStatus(raw?: string): "clicked" | "reviewed" {
+  const s = (raw || "").toLowerCase();
+  if (["reviewed", "completed", "done", "posted"].some((k) => s.includes(k)))
+    return "reviewed";
+  return "clicked";
+}
+function makeAvatarUrl(name: string) {
+  const n = encodeURIComponent(name || "User");
+  return `https://ui-avatars.com/api/?name=${n}&size=150&background=random`;
+}
+function possessive(name: string) {
+  if (!name) return "";
+  const trimmed = name.trim();
+  return trimmed.endsWith("s") || trimmed.endsWith("S") ? `${trimmed}'` : `${trimmed}'s`;
 }
 
 /* ===================== Sticky Logo Navbar ===================== */
@@ -284,50 +399,52 @@ const ExpertProfile = () => {
   const { id } = useParams();
   const navigate = useNavigate();
 
+  const [expert, setExpert] = useState<any>(null);
+const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+const [loading, setLoading] = useState(true);
   // Mock data - replace with actual API calls
-  const [expert, setExpert] = useState<any>({
-    name: "Dr. Aditi Sharma",
-    credentials: "BAMS, MD Ayurveda | Skin & Digestion Specialist",
-    bio: "Helping people balance mind and digestion through Ayurveda",
-    fullBio:
-      "Dr. Aditi Sharma is a certified Ayurvedic practitioner with over 12 years of experience in holistic healing. She specializes in treating digestive disorders and skin conditions using traditional Ayurvedic principles combined with modern wellness approaches.",
-    isVerified: true,
-    rating: 4.8,
-    recommendationsCount: 127,
-    followers: 3542,
-    image: "",
-  });
+  // const [expert, setExpert] = useState<any>({
+  //   name: "Dr. Aditi Sharma",
+  //   credentials: "BAMS, MD Ayurveda | Skin & Digestion Specialist",
+  //   bio: "Helping people balance mind and digestion through Ayurveda",
+  //   fullBio:
+  //     "Dr. Aditi Sharma is a certified Ayurvedic practitioner with over 12 years of experience in holistic healing. She specializes in treating digestive disorders and skin conditions using traditional Ayurvedic principles combined with modern wellness approaches.",
+  //   isVerified: true,
+  //   rating: 4.8,
+  //   recommendationsCount: 127,
+  //   followers: 3542,
+  //   image: "",
+  // });
 
-  const [recommendations, setRecommendations] = useState<Recommendation[]>([
-    {
-      id: "1",
-      productName: "Organic Triphala Powder",
-      category: "For Better Digestion",
-      rating: 4.9,
-      date: new Date("2025-10-08"),
-      description:
-        "This organic Triphala powder has been incredibly effective for my patients dealing with irregular digestion and constipation. It's gentle yet powerful, promoting natural cleansing without causing dependency.",
-      likes: 89,
-      dislikes: 3,
-    },
-    {
-      id: "2",
-      productName: "Himalaya Ashwagandha Capsules",
-      category: "For Better Sleep & Stress",
-      rating: 4.7,
-      date: new Date("2025-09-28"),
-      description:
-        "An excellent adaptogenic supplement for modern lifestyle stress. I recommend this to patients experiencing sleep disturbances, anxiety, and fatigue. The quality is consistent and effects are noticeable within 2-3 weeks.",
-      likes: 124,
-      dislikes: 8,
-    },
-  ]);
+  // const [recommendations, setRecommendations] = useState<Recommendation[]>([
+  //   {
+  //     id: "1",
+  //     productName: "Organic Triphala Powder",
+  //     category: "For Better Digestion",
+  //     rating: 4.9,
+  //     date: new Date("2025-10-08"),
+  //     description:
+  //       "This organic Triphala powder has been incredibly effective for my patients dealing with irregular digestion and constipation. It's gentle yet powerful, promoting natural cleansing without causing dependency.",
+  //     likes: 89,
+  //     dislikes: 3,
+  //   },
+  //   {
+  //     id: "2",
+  //     productName: "Himalaya Ashwagandha Capsules",
+  //     category: "For Better Sleep & Stress",
+  //     rating: 4.7,
+  //     date: new Date("2025-09-28"),
+  //     description:
+  //       "An excellent adaptogenic supplement for modern lifestyle stress. I recommend this to patients experiencing sleep disturbances, anxiety, and fatigue. The quality is consistent and effects are noticeable within 2-3 weeks.",
+  //     likes: 124,
+  //     dislikes: 8,
+  //   },
+  // ]);
 
   const [activeTab, setActiveTab] = useState<"Recommendations" | "Activity">(
     "Recommendations"
   );
   const [showFullBio, setShowFullBio] = useState(false);
-  const [loading, setLoading] = useState(false);
 
   const handleLike = (id: string) => {
     setRecommendations((prev) =>
@@ -365,6 +482,107 @@ const ExpertProfile = () => {
     );
   };
 
+  useEffect(() => {
+  async function fetchExpertAndRecommendations() {
+    setLoading(true);
+    try {
+     // 1. Find expert user from USERS_TABLE (not experts table)
+        const idParam = (id || "").trim();
+        const users = await fetchAllPages<any>(USERS_TABLE, {});
+        const m = idParam.match(/^(.+?)(?:-(\d{3}))?$/);
+        const targetBase = m ? m[1] : idParam;
+        const targetSuffix = m && m[2] ? m[2] : null;
+
+
+      // Match byconst experts = await fetchAllPages<any> slug or ID
+      // Find by slug or id
+        let foundExpert: any = null;
+        for (const rec of users) {
+          const name = rec.fields?.Name || "";
+          const baseSlug = slugify(name);
+          let l3 = last3(rec.fields?.Phone || "");
+          if (l3 === "000") {
+            // fallback: try to obtain from reviews if needed
+            // (optional: you can remove if not required)
+            // l3 = await fetchLast3FromReviews({ id: rec.fields?.ID, name });
+          }
+          const canonical = `${baseSlug}-${l3 || "000"}`;
+          const isExact = targetSuffix ? canonical === idParam : baseSlug === targetBase;
+          if (isExact && rec.fields?.expert) {
+            foundExpert = {
+              id: rec.fields?.ID?.toString(),
+              name,
+              credentials: rec.fields?.credentials ?? "",
+              bio: rec.fields?.bio ?? "",
+              fullBio: rec.fields?.about ?? rec.fields?.bio ?? "",
+              isVerified: !!rec.fields?.verified,
+              rating: rec.fields?.rating || 0,
+              recommendationsCount: rec.fields?.recommendationsCount || 0,
+              followers: rec.fields?.followers || 0,
+              image: Array.isArray(rec.fields?.image)
+                ? rec.fields?.image[0]?.url
+                : rec.fields?.image,
+              linkedin: rec.fields?.linkedin ?? "",
+              instagram: rec.fields?.instagram ?? "",
+              // add any extra fields you want here
+            };
+            break;
+          }
+        }
+
+        if (!foundExpert) {
+          setExpert(null);
+          setRecommendations([]);
+          setLoading(false);
+          return;
+        }
+
+        setExpert(foundExpert);
+
+        // 2. Fetch recommendations for this expert if you track them in a separate table
+        // If recommendations are in another table, do as below; otherwise, skip or adjust
+        // const recs = await fetchAllPages<any>(RECOMMENDATIONS_TABLE, {
+        //   filterByFormula: `{ExpertID}=${escapeAirtableString(foundExpert.id || "")}`,
+        // });
+        // const mappedRecs = recs.map((r: any) => ({
+        //   id: r.id,
+        //   productName: r.fields.ProductName,
+        //   category: r.fields.Category,
+        //   rating: r.fields.Rating,
+        //   date: r.fields.Date ? new Date(r.fields.Date) : null,
+        //   description: r.fields.Description,
+        //   likes: r.fields.Likes || 0,
+        //   dislikes: r.fields.Dislikes || 0,
+        // }));
+        // setRecommendations(mappedRecs);
+
+        // If you want to load reviews from REVIEWS_TABLE as recommendations,
+        // replace above with this (adjust field names as needed):
+        const recs = await fetchAllPages<any>(REVIEWS_TABLE, {
+          filterByFormula: `{ID (from Creator)}=${escapeAirtableString(foundExpert.id || "")}`,
+        });
+        const mappedRecs = recs.map((r: any) => ({
+          id: r.id,
+          productName: r.fields.business_name || "",
+          category: r.fields.Category || "",
+          rating: r.fields["Uplaud Score"] || 0,
+          date: r.fields.Date_Added ? new Date(r.fields.Date_Added) : null,
+          description: r.fields.Uplaud || "",
+          likes: r.fields.Likes || 0,
+          dislikes: r.fields.Dislikes || 0,
+        }));
+        setRecommendations(mappedRecs);
+        // --- End changes ---
+      } catch {
+        setExpert(null);
+        setRecommendations([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    if (id) fetchExpertAndRecommendations();
+  }, [id]);
   const handleFollow = () => {
     // Implement follow functionality
     console.log("Follow clicked");
@@ -387,7 +605,15 @@ const ExpertProfile = () => {
       </>
     );
   }
-
+  if (!expert)
+  return (
+    <>
+      <StickyLogoNavbar />
+      <div className="min-h-screen flex items-center justify-center text-white pt-20">
+        Expert not found.
+      </div>
+    </>
+  );
   return (
     <div
       className="min-h-screen w-full font-sans text-gray-800 relative"

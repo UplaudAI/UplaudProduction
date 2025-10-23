@@ -652,6 +652,7 @@ const handleDislike = (reviewIndex: number) => {
     };
   });
 };
+
   useEffect(() => {
     async function fetchUserAndReviews() {
       setLoading(true);
@@ -702,8 +703,12 @@ const handleDislike = (reviewIndex: number) => {
             break;
           }
         }
-
+        
         if (foundUser) {
+          if (foundUser.expert && String(foundUser.expert).toLowerCase() === "yes") {
+          navigate(`/expert/${foundUser.canonicalSlug}`, { replace: true });
+          return; // Prevent any further code execution in this function
+        }
           const currentIsCanonical = idParam === foundUser.canonicalSlug;
           if (!currentIsCanonical) {
             navigate(`/profile/${foundUser.canonicalSlug}`, { replace: true });
