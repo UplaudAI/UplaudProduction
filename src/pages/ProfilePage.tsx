@@ -674,7 +674,9 @@ const handleDislike = (reviewIndex: number) => {
         });
 
         for (const rec of candidates) {
-          const name = rec.fields?.Name || "";
+                    const name = rec.fields?.Name || "";
+
+          // Build candidate object (includes normalized expert flag)
           const candidate = {
             id: rec.fields?.ID?.toString(),
             airtableId: rec.id,
@@ -689,6 +691,23 @@ const handleDislike = (reviewIndex: number) => {
             gender: rec.fields?.["Gender"] || "Male",
           };
 
+          // NEW: read expert flag from Airtable (try common column names) and normalize to boolean
+          const expertRaw =
+            rec.fields?.Expert ??
+            rec.fields?.expert ??
+            rec.fields?.["Is Expert"] ??
+            rec.fields?.["Expert?"] ??
+            rec.fields?.["expert?"] ??
+            "";
+          const isExpert =
+            typeof expertRaw === "boolean"
+              ? expertRaw
+              : String(expertRaw || "").trim().toLowerCase() === "yes";
+
+          // Attach to candidate for later checks (foundUser will get these fields)
+          candidate.expert = expertRaw;
+          candidate.isExpert = isExpert;
+
           const baseSlug = slugify(name);
           let l3 = last3(candidate.phone);
           if (!l3 || l3 === "000") {
@@ -697,25 +716,25 @@ const handleDislike = (reviewIndex: number) => {
           }
           const canonical = `${baseSlug}-${l3 || "000"}`;
           const isExact = targetSuffix ? canonical === idParam : baseSlug === targetBase;
-
-          if (isExact) {
-            foundUser = { ...candidate, handle: baseSlug, canonicalSlug: canonical };
-            break;
-          }
         }
         
+        // --- Replace existing redirect-check with this ---
         if (foundUser) {
-          if (foundUser.expert && String(foundUser.expert).toLowerCase() === "yes") {
-          navigate(`/expert/${foundUser.canonicalSlug}`, { replace: true });
-          return; // Prevent any further code execution in this function
-        }
+          // Redirect to expert page if this user is an expert (normalized boolean)
+          if (foundUser.isExpert) {
+            navigate(`/expert/${foundUser.canonicalSlug}`, { replace: true });
+            return; // Prevent further execution so we don't fetch normal profile data
+          }
+
           const currentIsCanonical = idParam === foundUser.canonicalSlug;
           if (!currentIsCanonical) {
             navigate(`/profile/${foundUser.canonicalSlug}`, { replace: true });
           }
         }
+        // --- end replacement ---
 
         setUser(foundUser);
+        
 
         // 2) Reviews for user (by Creator ID, then by Name fallback) — fully paged
         let allReviews: any[] = [];
