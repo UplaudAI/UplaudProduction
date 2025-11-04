@@ -673,8 +673,9 @@ const handleDislike = (reviewIndex: number) => {
           return s === targetBase || s === idParam; // support /name or /name-123 resolving
         });
 
+        // --- replace the loop body with this block ---
         for (const rec of candidates) {
-                    const name = rec.fields?.Name || "";
+          const name = rec.fields?.Name || "";
 
           // Build candidate object (includes normalized expert flag)
           const candidate = {
@@ -682,31 +683,28 @@ const handleDislike = (reviewIndex: number) => {
             airtableId: rec.id,
             name,
             phone: rec.fields?.Phone || "",
-            image: Array.isArray(rec.fields?.image)
-              ? rec.fields?.image?.[0]?.url
-              : rec.fields?.image,
+            image: Array.isArray(rec.fields?.image) ? rec.fields?.image?.[0]?.url : rec.fields?.image,
             autogenInvite: rec.fields?.["Autogen Invite"] ?? "",
             bio: rec.fields?.["Bio"] ?? "",
             location: rec.fields?.["Location"] ?? "",
             gender: rec.fields?.["Gender"] || "Male",
           };
 
-          // NEW: read expert flag from Airtable (try common column names) and normalize to boolean
+          // Read expert flag from Airtable (try common column names) and normalize to boolean
           const expertRaw =
-            rec.fields?.Expert ??
-            rec.fields?.expert ??
-            rec.fields?.["Is Expert"] ??
-            rec.fields?.["Expert?"] ??
-            rec.fields?.["expert?"] ??
+            rec.fields?.Expert ?? 
             "";
-          const isExpert =
-            typeof expertRaw === "boolean"
-              ? expertRaw
-              : String(expertRaw || "").trim().toLowerCase() === "yes";
 
-          // Attach to candidate for later checks (foundUser will get these fields)
-          // candidate.expert = expertRaw;
-          // candidate.isExpert = isExpert;
+          // Robust normalization: accept boolean true, "yes", "true" (case-insensitive)
+          const isExpert =
+            typeof expertRaw === "number"
+              ? expertRaw === 1
+              : typeof expertRaw === "boolean"
+              ? expertRaw
+              : String(expertRaw || "").trim() === "1";
+
+          // Attach normalized expert flag so later checks work:
+          (candidate as any).isExpert = isExpert;
 
           const baseSlug = slugify(name);
           let l3 = last3(candidate.phone);
@@ -715,9 +713,18 @@ const handleDislike = (reviewIndex: number) => {
             l3 = await fetchLast3FromReviews({ id: candidate.id, name: candidate.name });
           }
           const canonical = `${baseSlug}-${l3 || "000"}`;
+
+          // Attach canonical slug as well
+          (candidate as any).canonicalSlug = canonical;
+
           const isExact = targetSuffix ? canonical === idParam : baseSlug === targetBase;
+
+          // If this candidate matches, set foundUser and stop
+          if (isExact) {
+            foundUser = candidate;
+            break;
+          }
         }
-        
         // --- Replace existing redirect-check with this ---
         if (foundUser) {
           // Redirect to expert page if this user is an expert (normalized boolean)
@@ -729,6 +736,7 @@ const handleDislike = (reviewIndex: number) => {
           const currentIsCanonical = idParam === foundUser.canonicalSlug;
           if (!currentIsCanonical) {
             navigate(`/profile/${foundUser.canonicalSlug}`, { replace: true });
+            return;
           }
         }
         // --- end replacement ---

@@ -376,7 +376,7 @@ const RecommendationCard = ({
             <ThumbsUp className="w-4 h-4" />
             <span className="text-sm font-semibold">{recommendation.likes}</span>
           </button>
-          <button
+          {/* <button
             onClick={() => onDislike(recommendation.id)}
             className={`flex items-center gap-1 px-3 py-1.5 rounded-lg transition ${
               recommendation.userDisliked
@@ -387,7 +387,7 @@ const RecommendationCard = ({
           >
             <ThumbsDown className="w-4 h-4" />
             <span className="text-sm font-semibold">{recommendation.dislikes}</span>
-          </button>
+          </button> */}
         </div>
       </div>
     </div>
@@ -400,46 +400,9 @@ const ExpertProfile = () => {
   const navigate = useNavigate();
 
   const [expert, setExpert] = useState<any>(null);
-const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
-const [loading, setLoading] = useState(true);
-  // Mock data - replace with actual API calls
-  // const [expert, setExpert] = useState<any>({
-  //   name: "Dr. Aditi Sharma",
-  //   credentials: "BAMS, MD Ayurveda | Skin & Digestion Specialist",
-  //   bio: "Helping people balance mind and digestion through Ayurveda",
-  //   fullBio:
-  //     "Dr. Aditi Sharma is a certified Ayurvedic practitioner with over 12 years of experience in holistic healing. She specializes in treating digestive disorders and skin conditions using traditional Ayurvedic principles combined with modern wellness approaches.",
-  //   isVerified: true,
-  //   rating: 4.8,
-  //   recommendationsCount: 127,
-  //   followers: 3542,
-  //   image: "",
-  // });
-
-  // const [recommendations, setRecommendations] = useState<Recommendation[]>([
-  //   {
-  //     id: "1",
-  //     productName: "Organic Triphala Powder",
-  //     category: "For Better Digestion",
-  //     rating: 4.9,
-  //     date: new Date("2025-10-08"),
-  //     description:
-  //       "This organic Triphala powder has been incredibly effective for my patients dealing with irregular digestion and constipation. It's gentle yet powerful, promoting natural cleansing without causing dependency.",
-  //     likes: 89,
-  //     dislikes: 3,
-  //   },
-  //   {
-  //     id: "2",
-  //     productName: "Himalaya Ashwagandha Capsules",
-  //     category: "For Better Sleep & Stress",
-  //     rating: 4.7,
-  //     date: new Date("2025-09-28"),
-  //     description:
-  //       "An excellent adaptogenic supplement for modern lifestyle stress. I recommend this to patients experiencing sleep disturbances, anxiety, and fatigue. The quality is consistent and effects are noticeable within 2-3 weeks.",
-  //     likes: 124,
-  //     dislikes: 8,
-  //   },
-  // ]);
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [loading, setLoading] = useState(true);
+  // const [recommendations, setRecommendations] = useState<Recommendation[]>([ ... ]);
 
   const [activeTab, setActiveTab] = useState<"Recommendations" | "Activity">(
     "Recommendations"
@@ -483,19 +446,17 @@ const [loading, setLoading] = useState(true);
   };
 
   useEffect(() => {
-  async function fetchExpertAndRecommendations() {
-    setLoading(true);
-    try {
-     // 1. Find expert user from USERS_TABLE (not experts table)
+    async function fetchExpertAndRecommendations() {
+      setLoading(true);
+      try {
+        // 1. Find expert user from USERS_TABLE (not experts table)
         const idParam = (id || "").trim();
         const users = await fetchAllPages<any>(USERS_TABLE, {});
         const m = idParam.match(/^(.+?)(?:-(\d{3}))?$/);
         const targetBase = m ? m[1] : idParam;
         const targetSuffix = m && m[2] ? m[2] : null;
 
-
-      // Match byconst experts = await fetchAllPages<any> slug or ID
-      // Find by slug or id
+        // Find by slug or id
         let foundExpert: any = null;
         for (const rec of users) {
           const name = rec.fields?.Name || "";
@@ -503,28 +464,70 @@ const [loading, setLoading] = useState(true);
           let l3 = last3(rec.fields?.Phone || "");
           if (l3 === "000") {
             // fallback: try to obtain from reviews if needed
-            // (optional: you can remove if not required)
-            // l3 = await fetchLast3FromReviews({ id: rec.fields?.ID, name });
+            // optional: you can enable this if many users lack phone
+            // l3 = await fetchLast3FromReviews({ id: rec.fields?.ID?.toString(), name });
           }
           const canonical = `${baseSlug}-${l3 || "000"}`;
           const isExact = targetSuffix ? canonical === idParam : baseSlug === targetBase;
-          if (isExact && rec.fields?.expert) {
+
+          // Read the exact "Expert" column and normalize to boolean:
+          // Accept numeric 1, string "1", or boolean true as expert.
+          const expertRaw = rec.fields?.Expert;
+          const isExpert =
+            typeof expertRaw === "number"
+              ? expertRaw === 1
+              : typeof expertRaw === "boolean"
+              ? expertRaw
+              : String(expertRaw ?? "").trim() === "1";
+
+          if (isExact && isExpert) {
+            // build full expert object with more fields (match ProfilePage)
             foundExpert = {
               id: rec.fields?.ID?.toString(),
+              airtableId: rec.id,
               name,
-              credentials: rec.fields?.credentials ?? "",
-              bio: rec.fields?.bio ?? "",
-              fullBio: rec.fields?.about ?? rec.fields?.bio ?? "",
+              phone: rec.fields?.Phone || "",
+              autogenInvite: rec.fields?.["Autogen Invite"] ?? "",
+              credentials:
+                rec.fields?.credentials ??
+                rec.fields?.Credentials ??
+                rec.fields?.["Credentials"] ??
+                "",
+              bio: rec.fields?.bio ?? rec.fields?.Bio ?? "",
+              fullBio:
+                rec.fields?.about ??
+                rec.fields?.About ??
+                rec.fields?.bio ??
+                rec.fields?.Bio ??
+                "",
+              location: rec.fields?.Location ?? rec.fields?.location ?? "",
+              gender: rec.fields?.Gender || rec.fields?.gender || "Male",
               isVerified: !!rec.fields?.verified,
-              rating: rec.fields?.rating || 0,
-              recommendationsCount: rec.fields?.recommendationsCount || 0,
+              // rating and recommendationsCount we'll compute from reviews if not present
+              rating: typeof rec.fields?.rating === "number" ? rec.fields?.rating : 0,
+              recommendationsCount:
+                typeof rec.fields?.recommendationsCount === "number"
+                  ? rec.fields?.recommendationsCount
+                  : 0,
               followers: rec.fields?.followers || 0,
               image: Array.isArray(rec.fields?.image)
                 ? rec.fields?.image[0]?.url
                 : rec.fields?.image,
-              linkedin: rec.fields?.linkedin ?? "",
-              instagram: rec.fields?.instagram ?? "",
-              // add any extra fields you want here
+              linkedin:
+                rec.fields?.linkedin ??
+                rec.fields?.LinkedIn ??
+                rec.fields?.["LinkedIn"] ??
+                "",
+              instagram:
+                rec.fields?.instagram ??
+                rec.fields?.Instagram ??
+                rec.fields?.["Instagram"] ??
+                "",
+              twitter:
+                rec.fields?.twitter ??
+                rec.fields?.Twitter ??
+                rec.fields?.["Twitter"] ??
+                "",
             };
             break;
           }
@@ -537,43 +540,55 @@ const [loading, setLoading] = useState(true);
           return;
         }
 
-        setExpert(foundExpert);
-
-        // 2. Fetch recommendations for this expert if you track them in a separate table
-        // If recommendations are in another table, do as below; otherwise, skip or adjust
-        // const recs = await fetchAllPages<any>(RECOMMENDATIONS_TABLE, {
-        //   filterByFormula: `{ExpertID}=${escapeAirtableString(foundExpert.id || "")}`,
-        // });
-        // const mappedRecs = recs.map((r: any) => ({
-        //   id: r.id,
-        //   productName: r.fields.ProductName,
-        //   category: r.fields.Category,
-        //   rating: r.fields.Rating,
-        //   date: r.fields.Date ? new Date(r.fields.Date) : null,
-        //   description: r.fields.Description,
-        //   likes: r.fields.Likes || 0,
-        //   dislikes: r.fields.Dislikes || 0,
-        // }));
-        // setRecommendations(mappedRecs);
-
-        // If you want to load reviews from REVIEWS_TABLE as recommendations,
-        // replace above with this (adjust field names as needed):
+        // 2. Fetch recommendations (reviews) for this expert using REVIEWS_TABLE.
+        // Use Creator ID (field name used in your reviews) — mirror ProfilePage logic.
         const recs = await fetchAllPages<any>(REVIEWS_TABLE, {
           filterByFormula: `{ID (from Creator)}=${escapeAirtableString(foundExpert.id || "")}`,
         });
-        const mappedRecs = recs.map((r: any) => ({
-          id: r.id,
-          productName: r.fields.business_name || "",
-          category: r.fields.Category || "",
-          rating: r.fields["Uplaud Score"] || 0,
-          date: r.fields.Date_Added ? new Date(r.fields.Date_Added) : null,
-          description: r.fields.Uplaud || "",
-          likes: r.fields.Likes || 0,
-          dislikes: r.fields.Dislikes || 0,
-        }));
+
+        // If no reviews found by ID, fallback to Name_Creator lookup (same as ProfilePage)
+        let allRecs = recs;
+        if (!allRecs || allRecs.length === 0) {
+          const byName = await fetchAllPages<any>(REVIEWS_TABLE, {
+            filterByFormula: `{Name_Creator}=${escapeAirtableString(foundExpert.name || "")}`,
+          });
+          allRecs = byName;
+        }
+
+        const mappedRecs: Recommendation[] = (allRecs || [])
+          .map((r: any) => ({
+            id: r.id,
+            productName: r.fields.business_name || r.fields?.BusinessName || "",
+            category: r.fields.Category || r.fields?.category || "Other",
+            rating: typeof r.fields["Uplaud Score"] === "number" ? r.fields["Uplaud Score"] : (r.fields?.rating || 0),
+            date: r.fields.Date_Added ? new Date(r.fields.Date_Added) : r.fields?.Date ? new Date(r.fields?.Date) : null,
+            description: r.fields.Uplaud || r.fields?.Review || r.fields?.Description || "",
+            likes: r.fields.Likes || 0,
+            dislikes: r.fields.Dislikes || 0,
+          }))
+          .filter((r) => !!r.productName && !!r.description);
+
+        // Compute rating average from mapped reviews if we didn't get rating from the user record
+        let rating = foundExpert.rating || 0;
+        if ((!rating || rating === 0) && mappedRecs.length > 0) {
+          const sum = mappedRecs.reduce((s, x) => s + (x.rating || 0), 0);
+          rating = sum / mappedRecs.length;
+        }
+
+        const recommendationsCount = mappedRecs.length || foundExpert.recommendationsCount || 0;
+
+        // Attach computed values to expert object
+        const expertWithData = {
+          ...foundExpert,
+          rating: rating || 0,
+          recommendationsCount,
+        };
+
+        setExpert(expertWithData);
         setRecommendations(mappedRecs);
-        // --- End changes ---
-      } catch {
+
+      } catch (err) {
+        console.error("Error loading expert:", err);
         setExpert(null);
         setRecommendations([]);
       } finally {
@@ -583,6 +598,7 @@ const [loading, setLoading] = useState(true);
 
     if (id) fetchExpertAndRecommendations();
   }, [id]);
+
   const handleFollow = () => {
     // Implement follow functionality
     console.log("Follow clicked");
@@ -606,14 +622,14 @@ const [loading, setLoading] = useState(true);
     );
   }
   if (!expert)
-  return (
-    <>
-      <StickyLogoNavbar />
-      <div className="min-h-screen flex items-center justify-center text-white pt-20">
-        Expert not found.
-      </div>
-    </>
-  );
+    return (
+      <>
+        <StickyLogoNavbar />
+        <div className="min-h-screen flex items-center justify-center text-white pt-20">
+          Expert not found.
+        </div>
+      </>
+    );
   return (
     <div
       className="min-h-screen w-full font-sans text-gray-800 relative"
@@ -685,6 +701,25 @@ const [loading, setLoading] = useState(true);
 
             {/* Bio */}
             <p className="text-sm sm:text-base text-gray-600 mb-4">{expert?.bio}</p>
+
+            {/* Socials (instagram/linkedin/twitter) */}
+            <div className="flex gap-3 mb-3">
+              {expert?.linkedin && (
+                <a href={expert.linkedin} target="_blank" rel="noreferrer" className="text-sm text-blue-700 underline">
+                  LinkedIn
+                </a>
+              )}
+              {expert?.instagram && (
+                <a href={expert.instagram} target="_blank" rel="noreferrer" className="text-sm text-pink-600 underline">
+                  Instagram
+                </a>
+              )}
+              {expert?.twitter && (
+                <a href={expert.twitter} target="_blank" rel="noreferrer" className="text-sm text-sky-600 underline">
+                  Twitter
+                </a>
+              )}
+            </div>
 
             {/* Action Buttons */}
             <div className="flex gap-3 mb-4">

@@ -42,6 +42,10 @@ export default async function handler(req, res) {
         const canonical = `${baseSlug}-${l3}`;
         const ok = targetSuffix ? canonical===idParam : baseSlug===targetBase;
         if (ok) {
+          // Normalize expert field and return boolean flag isExpert
+          const expertRaw = f.Expert ?? "";
+          const isExpert = String(expertRaw || "").trim().toLowerCase() === "yes";
+
           found = {
             id: String(f.ID ?? ""),
             airtableId: rec.id,
@@ -49,7 +53,10 @@ export default async function handler(req, res) {
             phone, image: Array.isArray(f.image)? f.image[0]?.url : f.image,
             autogenInvite: f["Autogen Invite"] ?? "",
             bio: f["Bio"] ?? "", location: f["Location"] ?? "", gender: f["Gender"] || "Male",
-            handle: baseSlug, canonicalSlug: canonical
+            handle: baseSlug, canonicalSlug: canonical,
+            // NEW — expose expert info to client
+            expert: expertRaw,
+            isExpert
           };
           break;
         }
