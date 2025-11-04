@@ -705,8 +705,8 @@ const handleDislike = (reviewIndex: number) => {
               : String(expertRaw || "").trim().toLowerCase() === "yes";
 
           // Attach to candidate for later checks (foundUser will get these fields)
-          candidate.expert = expertRaw;
-          candidate.isExpert = isExpert;
+          // candidate.expert = expertRaw;
+          // candidate.isExpert = isExpert;
 
           const baseSlug = slugify(name);
           let l3 = last3(candidate.phone);
