@@ -9,6 +9,9 @@ import {
   ThumbsDown,
   Users,
   Award,
+  Linkedin,
+  Instagram,
+  Globe,
 } from "lucide-react";
 import axios from "axios";
 import { Card } from "@/components/ui/card";
@@ -73,6 +76,25 @@ function formatDate(date?: Date | null) {
     year: "numeric",
   });
 }
+
+function getDisplayFromUrl(url?: string) {
+  if (!url) return "";
+  try {
+    // If user provided a plain handle (no protocol), show as-is
+    if (!/^https?:\/\//i.test(url)) {
+      // If it starts with @ return as-is
+      return url;
+    }
+    const u = new URL(url);
+    const segs = (u.pathname || "").replace(/\/+$/g, "").split("/").filter(Boolean);
+    const lastSeg = segs.length ? segs[segs.length - 1] : "";
+    // Return last path segment (username) if present, otherwise hostname
+    return lastSeg || u.hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
 function emojiForScore(score?: number) {
   if (!score) return "🤍";
   if (score >= 5) return "🔥";
@@ -488,17 +510,9 @@ const ExpertProfile = () => {
               name,
               phone: rec.fields?.Phone || "",
               autogenInvite: rec.fields?.["Autogen Invite"] ?? "",
-              credentials:
-                rec.fields?.credentials ??
-                rec.fields?.Credentials ??
-                rec.fields?.["Credentials"] ??
-                "",
               bio: rec.fields?.bio ?? rec.fields?.Bio ?? "",
               fullBio:
-                rec.fields?.about ??
                 rec.fields?.About ??
-                rec.fields?.bio ??
-                rec.fields?.Bio ??
                 "",
               location: rec.fields?.Location ?? rec.fields?.location ?? "",
               gender: rec.fields?.Gender || rec.fields?.gender || "Male",
@@ -514,20 +528,12 @@ const ExpertProfile = () => {
                 ? rec.fields?.image[0]?.url
                 : rec.fields?.image,
               linkedin:
-                rec.fields?.linkedin ??
-                rec.fields?.LinkedIn ??
-                rec.fields?.["LinkedIn"] ??
+                rec.fields?.["LinkedIn Profile"] ??
                 "",
               instagram:
-                rec.fields?.instagram ??
-                rec.fields?.Instagram ??
-                rec.fields?.["Instagram"] ??
+                rec.fields?.["Instagram Profile"] ??
                 "",
-              twitter:
-                rec.fields?.twitter ??
-                rec.fields?.Twitter ??
-                rec.fields?.["Twitter"] ??
-                "",
+                expert: rec.fields?.Expert ??"",
             };
             break;
           }
@@ -567,7 +573,12 @@ const ExpertProfile = () => {
             dislikes: r.fields.Dislikes || 0,
           }))
           .filter((r) => !!r.productName && !!r.description);
-
+          // Sort mappedRecs by date (newest first)
+          const sortedRecs = mappedRecs.slice().sort((a, b) => {
+            const at = a.date ? a.date.getTime() : 0;
+            const bt = b.date ? b.date.getTime() : 0;
+            return bt - at;
+          });
         // Compute rating average from mapped reviews if we didn't get rating from the user record
         let rating = foundExpert.rating || 0;
         if ((!rating || rating === 0) && mappedRecs.length > 0) {
@@ -577,6 +588,12 @@ const ExpertProfile = () => {
 
         const recommendationsCount = mappedRecs.length || foundExpert.recommendationsCount || 0;
 
+        // Compute joinDate same as ProfilePage: earliest review date (i.e. last element after descending sort)
+        const joinDate =
+          sortedRecs.length > 0 && sortedRecs[sortedRecs.length - 1].date
+            ? formatDate(sortedRecs[sortedRecs.length - 1].date)
+            : "—";
+
         // Attach computed values to expert object
         const expertWithData = {
           ...foundExpert,
@@ -585,7 +602,7 @@ const ExpertProfile = () => {
         };
 
         setExpert(expertWithData);
-        setRecommendations(mappedRecs);
+        setRecommendations(sortedRecs);
 
       } catch (err) {
         console.error("Error loading expert:", err);
@@ -686,56 +703,96 @@ const ExpertProfile = () => {
               )}
             </div>
 
-            {/* Name & Verified Badge */}
-            <div className="flex items-center justify-center gap-2 mb-2">
-              <h2 className="font-extrabold text-2xl sm:text-3xl">{expert?.name}</h2>
-              {expert?.isVerified && (
-                <CheckCircle className="w-6 h-6 text-green-600 fill-green-600" />
-              )}
-            </div>
+                        {/* Name, Join Date, Actions, Social Links */}
+            <div className="flex flex-col items-center text-center">
+              <div className="flex items-center justify-center gap-2 mb-1">
+                <h2 className="font-extrabold text-2xl sm:text-3xl">{expert?.name}</h2>
+                {expert?.isVerified && (
+                  <CheckCircle className="w-6 h-6 text-green-600 fill-green-600" />
+                )}
+              </div>
 
-            {/* Credentials */}
-            <p className="text-sm sm:text-base text-gray-700 font-medium mb-2">
-              {expert?.credentials}
-            </p>
+              {/* Join date (small line under name) */}
+              <div className="text-sm text-gray-700 mb-3">
+                Joined {expert?.joinDate ?? "—"}
+              </div>
 
-            {/* Bio */}
-            <p className="text-sm sm:text-base text-gray-600 mb-4">{expert?.bio}</p>
+              {/* Action Buttons */}
+              <div className="flex gap-3 mb-3">
+                <Button
+                  onClick={handleFollow}
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-lg font-semibold"
+                >
+                  Follow
+                </Button>
+                <button
+                  onClick={handleShare}
+                  className="inline-flex items-center justify-center border border-gray-300 text-gray-700 px-4 py-2 rounded-lg shadow hover:bg-gray-50"
+                  style={{ background: "rgba(255,255,255,0.9)" }}
+                >
+                  <Share2 className="w-5 h-5" />
+                </button>
+              </div>
 
-            {/* Socials (instagram/linkedin/twitter) */}
-            <div className="flex gap-3 mb-3">
-              {expert?.linkedin && (
-                <a href={expert.linkedin} target="_blank" rel="noreferrer" className="text-sm text-blue-700 underline">
-                  LinkedIn
-                </a>
-              )}
-              {expert?.instagram && (
-                <a href={expert.instagram} target="_blank" rel="noreferrer" className="text-sm text-pink-600 underline">
-                  Instagram
-                </a>
-              )}
-              {expert?.twitter && (
-                <a href={expert.twitter} target="_blank" rel="noreferrer" className="text-sm text-sky-600 underline">
-                  Twitter
-                </a>
-              )}
-            </div>
+              {/* Social links row (icons + compact label) */}
+              <div className="flex items-center gap-4 text-sm text-gray-800 mb-3">
+                {expert?.linkedin ? (
+                  <a
+                    href={expert.linkedin}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 hover:underline"
+                    title={expert.linkedin}
+                  >
+                    <Linkedin className="w-4 h-4 text-gray-800" />
+                    <span className="truncate" style={{ maxWidth: 220 }}>
+                      {getDisplayFromUrl(expert.linkedin)}
+                    </span>
+                  </a>
+                ) : null}
 
-            {/* Action Buttons */}
-            <div className="flex gap-3 mb-4">
-              <Button
-                onClick={handleFollow}
-                className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-lg font-semibold"
-              >
-                Follow
-              </Button>
-              <button
-                onClick={handleShare}
-                className="inline-flex items-center justify-center border border-gray-300 text-gray-700 px-4 py-2 rounded-lg shadow hover:bg-gray-50"
-                style={{ background: "rgba(255,255,255,0.9)" }}
-              >
-                <Share2 className="w-5 h-5" />
-              </button>
+                {expert?.instagram ? (
+                  <a
+                    href={expert.instagram}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 hover:underline"
+                    title={expert.instagram}
+                  >
+                    <Instagram className="w-4 h-4 text-pink-600" />
+                    <span className="truncate" style={{ maxWidth: 220 }}>
+                      {getDisplayFromUrl(expert.instagram)}
+                    </span>
+                  </a>
+                ) : null}
+
+                {expert?.website ? (
+                  <a
+                    href={expert.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 hover:underline"
+                    title={expert.website}
+                  >
+                    <Globe className="w-4 h-4 text-gray-700" />
+                    <span className="truncate" style={{ maxWidth: 220 }}>
+                      {getDisplayFromUrl(expert.website)}
+                    </span>
+                  </a>
+                ) : null}
+              </div>
+
+              {/* Credentials (kept below socials) */}
+              {expert?.credentials && (
+                <p className="text-sm sm:text-base text-gray-700 font-medium mb-2">
+                  {expert.credentials}
+                </p>
+              )}
+
+              {/* Short bio */}
+              {expert?.bio && (
+                <p className="text-sm sm:text-base text-gray-600 mb-2">{expert?.bio}</p>
+              )}
             </div>
           </div>
 
