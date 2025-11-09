@@ -77,21 +77,65 @@ function formatDate(date?: Date | null) {
   });
 }
 
+/**
+ * Return a compact label for UI from a social URL or handle:
+ * - If value is a URL, return last meaningful path segment or hostname.
+ * - If it's a handle like '@name' return as-is.
+ * - If it's a path like 'in/username' return the last segment.
+ */
+
+function ensureProtocol(url: string) {
+  if (!url) return "";
+  const trimmed = url.trim();
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
+function buildSocialHref(provider: "linkedin" | "instagram" | "website", raw?: string) {
+  if (!raw) return null;
+  const v = String(raw).trim();
+  if (!v) return null;
+
+  // If full URL already provided, ensure it has protocol
+  if (/^https?:\/\//i.test(v)) return ensureProtocol(v);
+
+  // If it looks like a domain (contains a dot) assume website-like and add protocol
+  if (provider === "website" || /\./.test(v)) return ensureProtocol(v);
+
+  if (provider === "linkedin") {
+    // possible inputs: "in/username", "/in/username", "username", "https://linkedin.com/in/username"
+    const path = v.replace(/^\/+/, ""); // remove leading slashes
+    // if user provided something like 'linkedin.com/in/xyz', just add protocol
+    if (path.toLowerCase().includes("linkedin.com")) return ensureProtocol(path);
+    return `https://www.linkedin.com/${path}`;
+  }
+
+  if (provider === "instagram") {
+    // inputs: "@username", "username", "/username", "instagram.com/username"
+    const withoutAt = v.startsWith("@") ? v.slice(1) : v.replace(/^\/+/, "");
+    if (withoutAt.toLowerCase().includes("instagram.com")) return ensureProtocol(withoutAt);
+    return `https://www.instagram.com/${withoutAt}`;
+  }
+
+  // fallback — treat as website
+  return ensureProtocol(v);
+}
+
 function getDisplayFromUrl(url?: string) {
   if (!url) return "";
+  const v = String(url).trim();
   try {
-    // If user provided a plain handle (no protocol), show as-is
-    if (!/^https?:\/\//i.test(url)) {
-      // If it starts with @ return as-is
-      return url;
+    // If not a URL, show a compact version of the raw value
+    if (!/^https?:\/\//i.test(v)) {
+      if (v.startsWith("@")) return v; // show @handle
+      const parts = v.replace(/\/+$/g, "").split("/").filter(Boolean);
+      return parts.length ? parts[parts.length - 1] : v;
     }
-    const u = new URL(url);
+    const u = new URL(ensureProtocol(v));
     const segs = (u.pathname || "").replace(/\/+$/g, "").split("/").filter(Boolean);
-    const lastSeg = segs.length ? segs[segs.length - 1] : "";
-    // Return last path segment (username) if present, otherwise hostname
-    return lastSeg || u.hostname.replace(/^www\./, "");
+    return segs.length ? segs[segs.length - 1] : u.hostname.replace(/^www\./, "");
   } catch {
-    return url;
+    return v;
   }
 }
 
@@ -533,7 +577,12 @@ const ExpertProfile = () => {
               instagram:
                 rec.fields?.["Instagram Profile"] ??
                 "",
-                expert: rec.fields?.Expert ??"",
+              website:
+                rec.fields?.Website ??
+                rec.fields?.["Website URL"] ??
+                rec.fields?.["Personal Website"] ??
+                "",
+              expert: rec.fields?.Expert ??"",
             };
             break;
           }
@@ -599,6 +648,7 @@ const ExpertProfile = () => {
           ...foundExpert,
           rating: rating || 0,
           recommendationsCount,
+          joinDate,
         };
 
         setExpert(expertWithData);
@@ -738,7 +788,7 @@ const ExpertProfile = () => {
               <div className="flex items-center gap-4 text-sm text-gray-800 mb-3">
                 {expert?.linkedin ? (
                   <a
-                    href={expert.linkedin}
+                    href={buildSocialHref("linkedin", expert.linkedin) || undefined}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-2 hover:underline"
@@ -753,7 +803,7 @@ const ExpertProfile = () => {
 
                 {expert?.instagram ? (
                   <a
-                    href={expert.instagram}
+                    href={buildSocialHref("instagram", expert.instagram) || undefined}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-2 hover:underline"
@@ -765,10 +815,9 @@ const ExpertProfile = () => {
                     </span>
                   </a>
                 ) : null}
-
                 {expert?.website ? (
                   <a
-                    href={expert.website}
+                    href={buildSocialHref("website", expert.website) || undefined}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-2 hover:underline"

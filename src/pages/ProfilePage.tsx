@@ -1010,7 +1010,7 @@ const handleDislike = (reviewIndex: number) => {
             <ThumbsUp className="w-4 h-4" />
             <span className="text-sm font-semibold">{votes.likes}</span>
           </button>
-          <button
+          {/* <button
             onClick={() => handleDislike(index)}
             className={`flex items-center gap-1 px-3 py-1.5 rounded-lg transition ${
               votes.userDisliked
@@ -1021,7 +1021,7 @@ const handleDislike = (reviewIndex: number) => {
           >
             <ThumbsDown className="w-4 h-4" />
             <span className="text-sm font-semibold">{votes.dislikes}</span>
-          </button>
+          </button> */}
         </div>
       </div>
     </div>
