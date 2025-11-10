@@ -12,6 +12,7 @@ import {
   Linkedin,
   Instagram,
   Globe,
+  Search,
 } from "lucide-react";
 import axios from "axios";
 import { Card } from "@/components/ui/card";
@@ -139,6 +140,110 @@ function getDisplayFromUrl(url?: string) {
   }
 }
 
+// REPLACE the existing normalizeVideoUrl with this block (paste into the utilities area,
+// next to ensureProtocol / getDisplayFromUrl).
+
+/** Extract YouTube video id from many common YouTube URL shapes */
+function getYouTubeId(url?: string): string | null {
+  if (!url) return null;
+  try {
+    const u = url.trim();
+    // youtu.be/ID
+    const m1 = u.match(/youtu\.be\/([A-Za-z0-9_-]{6,})/i);
+    if (m1 && m1[1]) return m1[1];
+    // youtube.com/watch?v=ID or youtube.com/embed/ID
+    const m2 = u.match(/[?&]v=([A-Za-z0-9_-]{6,})/i) || u.match(/\/embed\/([A-Za-z0-9_-]{6,})/i);
+    if (m2 && m2[1]) return m2[1];
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** Return a best-effort YouTube thumbnail url (maxresfallback -> hqdefault) */
+function getYouTubeThumbnail(url?: string): string | null {
+  const id = getYouTubeId(url || "");
+  if (!id) return null;
+  // maxresdefault may not exist for all videos; UI will still show image URL; browser will fallback to broken image
+  // We use maxresdefault first and fall back to hqdefault when necessary by using a second check in code if you like.
+  return `https://img.youtube.com/vi/${id}/maxresdefault.jpg`;
+}
+
+/** Extract Google Drive file id from common Drive link forms. */
+function getDriveFileId(url?: string): string | null {
+  if (!url) return null;
+  try {
+    const u = url.trim();
+    // patterns: /file/d/ID/, open?id=ID, drive.google.com/drive/folders/ID (folders not embeddable)
+    const m1 = u.match(/\/file\/d\/([A-Za-z0-9_-]{10,})/);
+    if (m1 && m1[1]) return m1[1];
+    const m2 = u.match(/[?&]id=([A-Za-z0-9_-]{10,})/);
+    if (m2 && m2[1]) return m2[1];
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Normalize various Airtable/field shapes into a usable video URL string or null.
+ * - Accepts attachment arrays, attachment objects, or plain strings.
+ * - Recognizes YouTube and Google Drive links and returns a canonical URL that can be embedded.
+ */
+function normalizeVideoUrl(raw?: any): string | null {
+  if (!raw || (typeof raw === "string" && raw.trim() === "")) return null;
+
+
+  // 1) If Airtable attachment array: take first file url
+  if (Array.isArray(raw)) {
+    const first = raw[0];
+    if (first && typeof first === "object" && first.url) {
+      return ensureProtocol(String(first.url).trim());
+    }
+    if (typeof raw[0] === "string" && raw[0].trim()) {
+      return ensureProtocol(raw[0].trim());
+    }
+    return null;
+  }
+
+  // 2) If object with url property
+  if (typeof raw === "object") {
+    if (raw.url && String(raw.url).trim()) return ensureProtocol(String(raw.url).trim());
+    // guard for nested shapes
+    if (raw.fields && raw.fields.url && String(raw.fields.url).trim()) return ensureProtocol(String(raw.fields.url).trim());
+    return null;
+  }
+
+  // 3) If string - try to normalize:
+  if (typeof raw === "string") {
+    const s = raw.trim();
+    if (!s) return null;
+
+    // If it's a YouTube id/path like "in/username" unlikely for video; check full URL patterns
+    // If it already includes youtube or youtu.be -> return canonical https watch link
+    const ytId = getYouTubeId(s);
+    if (ytId) {
+      // return canonical watch URL (we will convert to embed later)
+      return `https://www.youtube.com/watch?v=${ytId}`;
+    }
+
+    // Check Google Drive file id -> return preview URL for embedding
+    const driveId = getDriveFileId(s);
+    if (driveId) {
+      return `https://drive.google.com/file/d/${driveId}/preview`;
+    }
+
+    // If it looks like a URL (contains dot or protocol), ensure protocol and return
+    if (/^https?:\/\//i.test(s) || /\./.test(s)) {
+      return ensureProtocol(s);
+    }
+
+    // Otherwise not a usable video link
+    return null;
+  }
+
+  return null;
+}
 function emojiForScore(score?: number) {
   if (!score) return "🤍";
   if (score >= 5) return "🔥";
@@ -318,6 +423,8 @@ interface Recommendation {
   description: string;
   likes: number;
   dislikes: number;
+  videoUrl?: string;
+  thumbnail?: string;
   userLiked?: boolean;
   userDisliked?: boolean;
 }
@@ -474,6 +581,9 @@ const ExpertProfile = () => {
     "Recommendations"
   );
   const [showFullBio, setShowFullBio] = useState(false);
+  const [searchTerm, setSearchTerm] = useState<string>("");
+  const [reviewFilter, setReviewFilter] = useState<"all" | "video" | "text">("all");
+  const [selectedVideo, setSelectedVideo] = useState<any>(null);
 
   const handleLike = (id: string) => {
     setRecommendations((prev) =>
@@ -610,19 +720,72 @@ const ExpertProfile = () => {
           allRecs = byName;
         }
 
+        // Replace existing mapping with this version that normalizes videoUrl and thumbnail
+        // REPLACE the mappedRecs mapping inside fetchExpertAndRecommendations() with this block
+
         const mappedRecs: Recommendation[] = (allRecs || [])
-          .map((r: any) => ({
-            id: r.id,
-            productName: r.fields.business_name || r.fields?.BusinessName || "",
-            category: r.fields.Category || r.fields?.category || "Other",
-            rating: typeof r.fields["Uplaud Score"] === "number" ? r.fields["Uplaud Score"] : (r.fields?.rating || 0),
-            date: r.fields.Date_Added ? new Date(r.fields.Date_Added) : r.fields?.Date ? new Date(r.fields?.Date) : null,
-            description: r.fields.Uplaud || r.fields?.Review || r.fields?.Description || "",
-            likes: r.fields.Likes || 0,
-            dislikes: r.fields.Dislikes || 0,
-          }))
-          .filter((r) => !!r.productName && !!r.description);
-          // Sort mappedRecs by date (newest first)
+          .map((r: any) => {
+            // prefer VideoURL field (attachment or string)
+            const rawVideo =
+              r.fields?.VideoURL ??
+              r.fields?.Video ??
+              r.fields?.["Video URL"] ??
+              r.fields?.["Share Link"] ??
+              r.fields?.["ShareLink"];
+
+            const normalizedVideo = normalizeVideoUrl(rawVideo); // string or null
+
+            // normalize thumbnail: attachments array or URL string
+            let thumb: string | null = null;
+            if (Array.isArray(r.fields?.Thumbnail) && r.fields.Thumbnail[0]?.url) {
+              thumb = r.fields.Thumbnail[0].url;
+            } else if (Array.isArray(r.fields?.thumbnail) && r.fields?.thumbnail[0]?.url) {
+              thumb = r.fields.thumbnail[0].url;
+            } else if (typeof r.fields?.thumbnail === "string" && r.fields.thumbnail.trim()) {
+              thumb = r.fields.thumbnail.trim();
+            } else if (typeof r.fields?.ThumbnailUrl === "string" && r.fields.ThumbnailUrl.trim()) {
+              thumb = r.fields.ThumbnailUrl.trim();
+            } else if (typeof r.fields?.["Thumbnail URL"] === "string" && r.fields?.["Thumbnail URL"].trim()) {
+              thumb = r.fields["Thumbnail URL"].trim();
+            }
+
+            // If no thumbnail provided but we have a YouTube URL, use YouTube thumbnail
+            if (!thumb && normalizedVideo) {
+              const ytId = getYouTubeId(normalizedVideo);
+              if (ytId) {
+                thumb = getYouTubeThumbnail(normalizedVideo);
+              }
+            }
+
+            return {
+              id: r.id,
+              productName: r.fields.business_name || r.fields?.BusinessName || "",
+              category: r.fields.Category || r.fields?.category || "Other",
+              rating:
+                typeof r.fields["Uplaud Score"] === "number"
+                  ? r.fields["Uplaud Score"]
+                  : r.fields?.rating || 0,
+              date: r.fields.Date_Added
+                ? new Date(r.fields.Date_Added)
+                : r.fields?.Date
+                ? new Date(r.fields?.Date)
+                : null,
+              description:
+                r.fields.Uplaud || r.fields?.Review || r.fields?.Description || "",
+              likes: r.fields.Likes || 0,
+              dislikes: r.fields.Dislikes || 0,
+              // normalized videoUrl (string or null)
+              videoUrl: (() => {
+                if (!normalizedVideo) return null;
+                const ytId = getYouTubeId(normalizedVideo);
+                const driveId = getDriveFileId(normalizedVideo);
+                return ytId || driveId ? normalizedVideo : null;
+              })(),
+              thumbnail: thumb || "",
+            };
+          })
+          .filter((r) => !!r.productName && !!r.description);  // Sort mappedRecs by date (newest first)
+          
           const sortedRecs = mappedRecs.slice().sort((a, b) => {
             const at = a.date ? a.date.getTime() : 0;
             const bt = b.date ? b.date.getTime() : 0;
@@ -665,6 +828,44 @@ const ExpertProfile = () => {
 
     if (id) fetchExpertAndRecommendations();
   }, [id]);
+
+  const filteredRecommendations = (recommendations || []).filter((rec) => {
+  // filter by video/text/all
+  if (reviewFilter === "video" && !rec.videoUrl) return false;
+  if (reviewFilter === "text" && rec.videoUrl) return false;
+
+  const term = (searchTerm || "").trim().toLowerCase();
+  if (!term) return true;
+
+  // search on productName, description, category, rating
+  const hay = [
+    rec.productName,
+    rec.description,
+    rec.category,
+    rec.rating?.toString(),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return hay.includes(term);
+});
+
+// videos used for carousel: records that have videoUrl and match search term
+const videoItems = (recommendations || [])
+  .filter((r) => r.videoUrl && r.videoUrl.trim() !== "")
+  .filter((r) => {
+    const term = (searchTerm || "").trim().toLowerCase();
+    if (!term) return true;
+    const hay = [r.productName, r.description].filter(Boolean).join(" ").toLowerCase();
+    return hay.includes(term);
+  })
+  .map((r) => ({
+    id: r.id,
+    businessName: r.productName,
+    videoUrl: r.videoUrl,
+    thumbnail: r.thumbnail || "",
+  }));
 
   const handleFollow = () => {
     // Implement follow functionality
@@ -905,28 +1106,130 @@ const ExpertProfile = () => {
 
           {activeTab === "Recommendations" && (
             <div>
-              {recommendations.length === 0 ? (
-                <div className="text-center text-white/90 py-8">
-                  No recommendations yet.
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {recommendations.map((rec) => (
-                    <RecommendationCard
-                      key={rec.id}
-                      recommendation={rec}
-                      onLike={handleLike}
-                      onDislike={handleDislike}
-                    />
-                  ))}
+              {/* Video Carousel (shows when there are videos) */}
+              {videoItems.length > 0 && (
+                <div className="mb-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-white font-semibold">Video Reviews</div>
+                    <div className="text-sm text-white/80">{videoItems.length} video{videoItems.length !== 1 ? "s" : ""}</div>
+                  </div>
+                  <div className="flex gap-3 overflow-x-auto py-2">
+                    {videoItems.map((v) => (
+                      <button
+                        key={v.id}
+                        onClick={() =>
+                          setSelectedVideo({
+                            videoUrl: v.videoUrl,
+                            businessName: v.businessName,
+                            thumbnail: v.thumbnail,
+                          })
+                        }
+                        className="flex-shrink-0 rounded-lg overflow-hidden shadow-sm"
+                        style={{ minWidth: 220 }}
+                        aria-label={`Play ${v.businessName}`}
+                      >
+                        <div
+                          className="w-[220px] h-[120px] bg-gray-100 flex items-center justify-center"
+                          style={{
+                            backgroundImage: v.thumbnail ? `url(${v.thumbnail})` : undefined,
+                            backgroundSize: "cover",
+                            backgroundPosition: "center",
+                          }}
+                        />
+                        <div className="p-2 bg-white/90 text-sm text-gray-800">{v.businessName}</div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
+
+              {/* Filter bar + Search */}
+              <div className="flex items-center gap-3 mb-4 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setReviewFilter("all")}
+                    className={`rounded-full px-3 py-1 text-sm font-semibold ${
+                      reviewFilter === "all" ? "bg-white text-purple-700" : "bg-white/10 text-white/80"
+                    }`}
+                  >
+                    All Reviews
+                  </button>
+                  <button
+                    onClick={() => setReviewFilter("video")}
+                    className={`rounded-full px-3 py-1 text-sm font-semibold ${
+                      reviewFilter === "video" ? "bg-white text-purple-700" : "bg-white/10 text-white/80"
+                    }`}
+                  >
+                    🎥 Video Only
+                  </button>
+                  <button
+                    onClick={() => setReviewFilter("text")}
+                    className={`rounded-full px-3 py-1 text-sm font-semibold ${
+                      reviewFilter === "text" ? "bg-white text-purple-700" : "bg-white/10 text-white/80"
+                    }`}
+                  >
+                    📝 Text Only
+                  </button>
+                </div>
+
+                {/* Search box aligned to right */}
+                <div className="ml-auto flex items-center gap-2 max-w-md w-full sm:w-auto">
+                  <div className="relative w-full sm:w-64">
+                    <span className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                      <Search className="w-4 h-4 text-white/80" />
+                    </span>
+                    <input
+                      type="search"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      placeholder="Search reviews or keywords…"
+                      className="w-full pl-10 pr-3 py-2 rounded-full bg-white/90 text-sm shadow-sm focus:outline-none"
+                    />
+                  </div>
+                  <div className="hidden sm:block text-sm text-white/80">
+                    {filteredRecommendations.length} result{filteredRecommendations.length !== 1 ? "s" : ""}
+                  </div>
+                </div>
+              </div>
+
+              {/* Reviews list (text / mixed) */}
+              <div className="space-y-6">
+                {filteredRecommendations.length === 0 ? (
+                  <div className="text-center text-white/90 py-8">No reviews found.</div>
+                ) : (
+                  filteredRecommendations.map((rec) => (
+                    <div key={rec.id}>
+                      <RecommendationCard
+                        recommendation={rec}
+                        onLike={(id) => handleLike(id)}
+                        onDislike={(id) => handleDislike(id)}
+                      />
+                      {rec.videoUrl && rec.videoUrl.trim() !== ""? (
+                        <div className="mt-2 flex items-center gap-2">
+                          <button
+                            onClick={() =>
+                              setSelectedVideo({
+                                videoUrl: rec.videoUrl,
+                                businessName: rec.productName,
+                                thumbnail: rec.thumbnail,
+                              })
+                            }
+                            className="text-sm font-semibold text-white/90 underline"
+                            aria-label={`Play video for ${rec.productName}`}
+                          >
+                            ▶ Watch video
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ))
+                )}
+              </div>
 
               {/* Disclaimer */}
               <div className="mt-6 p-4 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20">
                 <p className="text-white/80 text-sm text-center italic">
-                  These recommendations are for informational purposes only and not a
-                  substitute for medical advice.
+                  These recommendations are for informational purposes only and not a substitute for medical advice.
                 </p>
               </div>
             </div>
@@ -939,6 +1242,79 @@ const ExpertProfile = () => {
           )}
         </div>
       </div>
+
+      {/* Video Modal — REPLACE existing modal iframe block with this */}
+      {selectedVideo && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setSelectedVideo(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="relative w-full max-w-3xl bg-transparent rounded-lg overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setSelectedVideo(null)}
+              className="absolute right-2 top-2 z-50 bg-white/90 rounded-full p-2"
+              aria-label="Close"
+            >
+              ✕
+            </button>
+
+            <div className="aspect-video bg-black">
+              {(() => {
+                const raw = selectedVideo.videoUrl || "";
+                const src = ensureProtocol(String(raw));
+                const ytId = getYouTubeId(src);
+                const driveId = getDriveFileId(src);
+
+                if (ytId) {
+                  // embed YouTube
+                  const embed = `https://www.youtube.com/embed/${ytId}?autoplay=1&rel=0`;
+                  return (
+                    <iframe
+                      title={selectedVideo.businessName || "Video"}
+                      src={embed}
+                      className="w-full h-full"
+                      allow="autoplay; encrypted-media; picture-in-picture"
+                      allowFullScreen
+                    />
+                  );
+                }
+
+                if (driveId) {
+                  // Google Drive preview/embed URL
+                  const embed = `https://drive.google.com/file/d/${driveId}/preview`;
+                  return (
+                    <iframe
+                      title={selectedVideo.businessName || "Video"}
+                      src={embed}
+                      className="w-full h-full"
+                      allow="autoplay; encrypted-media; picture-in-picture"
+                      allowFullScreen
+                    />
+                  );
+                }
+
+                // fallback to raw URL in an iframe (ensure protocol)
+                return (
+                  <iframe
+                    title={selectedVideo.businessName || "Video"}
+                    src={ensureProtocol(String(raw))}
+                    className="w-full h-full"
+                    allow="autoplay; encrypted-media; picture-in-picture"
+                    allowFullScreen
+                  />
+                );
+              })()}
+            </div>
+
+            <div className="p-3 bg-white/90 text-gray-800 font-semibold">{selectedVideo.businessName}</div>
+          </div>
+        </div>
+      )}
 
       {/* Styles */}
       <style>{`
