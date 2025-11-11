@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link} from "react-router-dom";
 import {
   Star,
   Share2,
@@ -419,11 +419,11 @@ interface Recommendation {
   productName: string;
   category: string;
   rating: number;
-  date: Date;
+  date: Date | null;
   description: string;
   likes: number;
   dislikes: number;
-  videoUrl?: string;
+  videoUrl?: string | null;
   thumbnail?: string;
   userLiked?: boolean;
   userDisliked?: boolean;
@@ -457,24 +457,37 @@ const RecommendationCard = ({
       className="flex flex-col rounded-2xl shadow transition hover:shadow-xl overflow-hidden"
       style={{ background: "#FFF7E6" }}
     >
-      <div className="w-full px-5 pt-5">
+      <div className="w-full px-4 pt-4">
         {/* Title row */}
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex-1">
-            <h3 className="font-bold text-base sm:text-lg text-black break-words">
+          <div className="flex-1 min-w-0">
+            <Link
+              to={`/business/${slugify(recommendation.productName)}`}
+              className="w-full font-bold text-base sm:text-lg text-black hover:underline hover:text-purple-700 break-words whitespace-normal leading-tight"
+              title={recommendation.productName}
+              style={{ hyphens: "auto" }}
+            >
               {recommendation.productName}
-            </h3>
+            </Link>
             <p className="text-sm text-purple-700 font-medium mt-1">
               {recommendation.category}
             </p>
           </div>
 
           {/* Desktop meta */}
-          <div className="hidden sm:flex items-center gap-3">
-            <span className="flex items-center leading-none">
-              <Star className="w-4 h-4 text-yellow-400 fill-yellow-400 mr-1" />
-              <span className="text-lg font-bold">{recommendation.rating}</span>
-            </span>
+          <div className="hidden sm:flex items-center gap-3 sm:ml-auto">
+            {recommendation.rating ? (
+              <span className="flex items-center leading-none">
+                {Array.from({ length: Math.max(0, Math.round(recommendation.rating)) }).map((_, i) => (
+                  <span key={i} className="text-yellow-400 text-sm sm:text-lg leading-none">
+                    ★
+                  </span>
+                ))}
+                <span className="ml-2 text-lg sm:text-2xl leading-none">
+                  {emojiForScore(recommendation.rating)}
+                </span>
+              </span>
+            ) : null}
 
             <span className="text-gray-500 text-xs sm:text-sm font-medium">
               {formatDate(recommendation.date)}
@@ -482,7 +495,7 @@ const RecommendationCard = ({
 
             <button
               onClick={handleShare}
-              className="inline-flex items-center justify-center rounded-md p-2 bg-transparent hover:bg-gray-100 transition"
+              className="inline-flex items-center justify-center rounded-md p-2 bg-transparent hover:bg-transparent transition"
               aria-label="Share this recommendation"
             >
               <Share2 className="w-4 h-4 text-gray-700" />
@@ -493,10 +506,16 @@ const RecommendationCard = ({
         {/* Mobile meta */}
         <div className="sm:hidden mt-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="flex items-center">
-              <Star className="w-4 h-4 text-yellow-400 fill-yellow-400 mr-1" />
-              <span className="text-base font-bold">{recommendation.rating}</span>
-            </span>
+            {recommendation.rating ? (
+              <span className="flex items-center leading-none">
+                {Array.from({ length: Math.max(0, Math.round(recommendation.rating)) }).map((_, i) => (
+                  <span key={i} className="text-yellow-400 text-sm leading-none">
+                    ★
+                  </span>
+                ))}
+                <span className="ml-2 text-xl leading-none">{emojiForScore(recommendation.rating)}</span>
+              </span>
+            ) : null}
             <span className="text-gray-600 text-xs font-medium">
               {formatDate(recommendation.date)}
             </span>
@@ -515,7 +534,7 @@ const RecommendationCard = ({
       {/* Recommendation body */}
       <div className="mt-3 w-full">
         <div
-          className="w-full px-5 py-4 text-gray-900 text-base font-medium break-words"
+          className="w-full px-4 py-3 text-gray-900 text-base font-medium break-words"
           style={{ background: "#DCF8C6" }}
         >
           <span style={{ display: "block", wordBreak: "break-word" }}>
@@ -534,7 +553,7 @@ const RecommendationCard = ({
       </div>
 
       {/* Helpful section */}
-      <div className="px-5 py-4 flex items-center gap-4">
+      <div className="px-4 py-3 flex items-center gap-4">
         <span className="text-sm text-gray-600">Was this helpful?</span>
         <div className="flex items-center gap-3">
           <button
@@ -549,24 +568,11 @@ const RecommendationCard = ({
             <ThumbsUp className="w-4 h-4" />
             <span className="text-sm font-semibold">{recommendation.likes}</span>
           </button>
-          {/* <button
-            onClick={() => onDislike(recommendation.id)}
-            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg transition ${
-              recommendation.userDisliked
-                ? "bg-red-100 text-red-700"
-                : "bg-gray-100 text-gray-700 hover:bg-red-50"
-            }`}
-            aria-label="Dislike this recommendation"
-          >
-            <ThumbsDown className="w-4 h-4" />
-            <span className="text-sm font-semibold">{recommendation.dislikes}</span>
-          </button> */}
         </div>
       </div>
     </div>
   );
 };
-
 /* ===================== Page ===================== */
 const ExpertProfile = () => {
   const { id } = useParams();
@@ -843,6 +849,7 @@ const ExpertProfile = () => {
     rec.description,
     rec.category,
     rec.rating?.toString(),
+    rec.date ? formatDate(rec.date) : "",
   ]
     .filter(Boolean)
     .join(" ")
