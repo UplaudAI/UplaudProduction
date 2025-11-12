@@ -429,14 +429,20 @@ interface Recommendation {
   userDisliked?: boolean;
 }
 
+// Replace the existing RecommendationCard definition in src/pages/ExpertProfile.tsx with this block.
+// This version reduces outer white padding and green box padding slightly (px-3/py-3) so the cards look less "white everywhere".
+// Paste the entire block in place of the current RecommendationCard component.
+
 const RecommendationCard = ({
   recommendation,
   onLike,
   onDislike,
+  onPlay, // invoked when the thumbnail/play area is clicked
 }: {
   recommendation: Recommendation;
   onLike: (id: string) => void;
   onDislike: (id: string) => void;
+  onPlay?: (payload: { videoUrl: string; businessName: string; thumbnail?: string }) => void;
 }) => {
   const [showFullText, setShowFullText] = useState(false);
   const descriptionLimit = 200;
@@ -457,8 +463,8 @@ const RecommendationCard = ({
       className="flex flex-col rounded-2xl shadow transition hover:shadow-xl overflow-hidden"
       style={{ background: "#FFF7E6" }}
     >
-      <div className="w-full px-4 pt-4">
-        {/* Title row */}
+      {/* Title row (reduced outer padding) */}
+      <div className="w-full px-3 pt-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex-1 min-w-0">
             <Link
@@ -475,7 +481,7 @@ const RecommendationCard = ({
           </div>
 
           {/* Desktop meta */}
-          <div className="hidden sm:flex items-center gap-3 sm:ml-auto">
+          <div className="hidden sm:flex items-center gap-3">
             {recommendation.rating ? (
               <span className="flex items-center leading-none">
                 {Array.from({ length: Math.max(0, Math.round(recommendation.rating)) }).map((_, i) => (
@@ -531,37 +537,76 @@ const RecommendationCard = ({
         </div>
       </div>
 
-      {/* Recommendation body */}
+      {/* Body: green box with thumbnail left (only when video exists) and text on right.
+          Green box padding reduced to px-3/py-3 to make less white. */}
       <div className="mt-3 w-full">
         <div
-          className="w-full px-4 py-3 text-gray-900 text-base font-medium break-words"
+          className="w-full px-3 py-3 text-gray-900 text-base font-medium break-words"
           style={{ background: "#DCF8C6" }}
         >
-          <span style={{ display: "block", wordBreak: "break-word" }}>
-            {displayText}
-            {needsTruncation && !showFullText && "..."}
-          </span>
-          {needsTruncation && (
-            <button
-              onClick={() => setShowFullText(!showFullText)}
-              className="text-purple-700 hover:text-purple-900 text-sm font-semibold mt-2 underline"
-            >
-              {showFullText ? "See Less" : "See More"}
-            </button>
-          )}
+          <div className="flex items-start gap-3">
+            {/* Thumbnail only when videoUrl exists. No placeholder if absent. */}
+            {recommendation.videoUrl ? (
+              <div className="flex-shrink-0">
+                <button
+                  onClick={() =>
+                    onPlay &&
+                    onPlay({
+                      videoUrl: recommendation.videoUrl || "",
+                      businessName: recommendation.productName,
+                      thumbnail: recommendation.thumbnail || "",
+                    })
+                  }
+                  aria-label={`Play video for ${recommendation.productName}`}
+                  className="w-20 h-20 sm:w-24 sm:h-24 rounded-md overflow-hidden shadow-sm focus:outline-none"
+                >
+                  {recommendation.thumbnail ? (
+                    <img
+                      src={recommendation.thumbnail}
+                      alt={`${recommendation.productName} thumbnail`}
+                      className="w-full h-full object-cover"
+                      style={{ display: "block" }}
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                      <div className="bg-black/40 rounded-full p-1.5">
+                        <span className="text-white font-bold text-base">▶</span>
+                      </div>
+                    </div>
+                  )}
+                </button>
+              </div>
+            ) : null}
+
+            {/* Text area (keeps original green-box structure) */}
+            <div className="min-w-0 flex-1">
+              <span style={{ display: "block", wordBreak: "break-word" }}>
+                {displayText}
+                {needsTruncation && !showFullText && "..."}
+              </span>
+              {needsTruncation && (
+                <div className="mt-2">
+                  <button
+                    onClick={() => setShowFullText(!showFullText)}
+                    className="text-purple-700 hover:text-purple-900 text-sm font-semibold underline"
+                  >
+                    {showFullText ? "See Less" : "See More"}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Helpful section */}
-      <div className="px-4 py-3 flex items-center gap-4">
+      {/* Helpful section (reduced padding to match green box) */}
+      <div className="px-3 py-3 flex items-center gap-4">
         <span className="text-sm text-gray-600">Was this helpful?</span>
         <div className="flex items-center gap-3">
           <button
             onClick={() => onLike(recommendation.id)}
             className={`flex items-center gap-1 px-3 py-1.5 rounded-lg transition ${
-              recommendation.userLiked
-                ? "bg-green-100 text-green-700"
-                : "bg-gray-100 text-gray-700 hover:bg-green-50"
+              recommendation.userLiked ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700 hover:bg-green-50"
             }`}
             aria-label="Like this recommendation"
           >
@@ -1113,43 +1158,6 @@ const videoItems = (recommendations || [])
 
           {activeTab === "Recommendations" && (
             <div>
-              {/* Video Carousel (shows when there are videos) */}
-              {videoItems.length > 0 && (
-                <div className="mb-6">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-white font-semibold">Video Reviews</div>
-                    <div className="text-sm text-white/80">{videoItems.length} video{videoItems.length !== 1 ? "s" : ""}</div>
-                  </div>
-                  <div className="flex gap-3 overflow-x-auto py-2">
-                    {videoItems.map((v) => (
-                      <button
-                        key={v.id}
-                        onClick={() =>
-                          setSelectedVideo({
-                            videoUrl: v.videoUrl,
-                            businessName: v.businessName,
-                            thumbnail: v.thumbnail,
-                          })
-                        }
-                        className="flex-shrink-0 rounded-lg overflow-hidden shadow-sm"
-                        style={{ minWidth: 220 }}
-                        aria-label={`Play ${v.businessName}`}
-                      >
-                        <div
-                          className="w-[220px] h-[120px] bg-gray-100 flex items-center justify-center"
-                          style={{
-                            backgroundImage: v.thumbnail ? `url(${v.thumbnail})` : undefined,
-                            backgroundSize: "cover",
-                            backgroundPosition: "center",
-                          }}
-                        />
-                        <div className="p-2 bg-white/90 text-sm text-gray-800">{v.businessName}</div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {/* Filter bar + Search */}
               <div className="flex items-center gap-3 mb-4 flex-wrap">
                 <div className="flex items-center gap-2">
@@ -1210,24 +1218,8 @@ const videoItems = (recommendations || [])
                         recommendation={rec}
                         onLike={(id) => handleLike(id)}
                         onDislike={(id) => handleDislike(id)}
+                        onPlay={(payload) => setSelectedVideo(payload)} // <-- pass modal opener
                       />
-                      {rec.videoUrl && rec.videoUrl.trim() !== ""? (
-                        <div className="mt-2 flex items-center gap-2">
-                          <button
-                            onClick={() =>
-                              setSelectedVideo({
-                                videoUrl: rec.videoUrl,
-                                businessName: rec.productName,
-                                thumbnail: rec.thumbnail,
-                              })
-                            }
-                            className="text-sm font-semibold text-white/90 underline"
-                            aria-label={`Play video for ${rec.productName}`}
-                          >
-                            ▶ Watch video
-                          </button>
-                        </div>
-                      ) : null}
                     </div>
                   ))
                 )}
