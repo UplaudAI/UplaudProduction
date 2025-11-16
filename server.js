@@ -264,60 +264,40 @@ app.get("/api/circles", async (req, res) => {
   }
 });
 
-/* ===================== API: Dynamic Sitemap ===================== */
-/**
- * GET /api/sitemap.xml
- * Dynamically generates sitemap from Airtable business names.
- * On Vercel, writing to the filesystem is not persistent, so we serve it dynamically.
- */
-app.get("/api/sitemap.xml", async (req, res) => {
-  try {
-    const proto = String(req.headers["x-forwarded-proto"] || req.protocol || "https").split(",")[0];
-    const hostHeader = String(req.headers["x-forwarded-host"] || req.headers.host || "").split(",")[0];
-    const SITE_URL = process.env.SITE_URL || (hostHeader ? `${proto}://${hostHeader}` : "https://uplaud-production.vercel.app");
-    const fields = ["business_name"]; 
-    const records = await airtableList(REVIEWS_TABLE, { fields });
-    const slugs = Array.from(
-      new Set(
-        records
-          .map((r) => r?.fields?.business_name || "")
-          .filter(Boolean)
-          .map((name) => slugify(name))
-      )
-    );
-
-    const urls = slugs
-      .map((slug) => `  <url>\n    <loc>${SITE_URL}/business/${slug}</loc>\n    <changefreq>daily</changefreq>\n    <priority>0.8</priority>\n  </url>`) 
-      .join("\n");
-
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n` +
-      `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
-      `${urls}\n` +
-      `</urlset>`;
-
-    res.set("Content-Type", "application/xml");
-    // Reduce cache during validation: 60s; allow stale for 1 day
-    res.set("Cache-Control", "public, s-maxage=60, stale-while-revalidate=86400");
-    return res.status(200).send(xml);
-  } catch (err) {
-    const details = err?.response?.data || err.message || String(err);
-    console.error("GET /api/sitemap.xml error:", details);
-    return res.status(500).send("<error>Failed to build sitemap</error>");
-  }
-});
-
-/* ===================== API: Airtable Webhook (no-op) ===================== */
+/* ===================== API: Airtable Webhook ===================== */
 /**
  * POST /api/airtable-webhook
- * Kept for compatibility; sitemap is now dynamic and does not write to disk.
+ * Adds new business to sitemap.xml file incrementally
  */
-app.post("/api/airtable-webhook", (req, res) => {
+app.post("/api/airtable-webhook", async (req, res) => {
   try {
     const businessName = req?.body?.businessName || null;
     console.log("📬 Webhook received", { businessName });
-    return res.json({ ok: true, message: "Webhook received. Sitemap is generated dynamically." });
+    
+    if (!businessName) {
+      return res.status(400).json({ error: "businessName is required" });
+    }
+
+    // Import sitemap utility
+    const { addBusinessToSitemap } = await import("./src/utils/sitemapUtils.js");
+    const result = await addBusinessToSitemap(businessName);
+    
+    if (result.added) {
+      return res.json({ 
+        ok: true, 
+        message: "Business added to sitemap", 
+        url: result.url 
+      });
+    } else {
+      return res.json({ 
+        ok: false, 
+        message: `Not added: ${result.reason}`,
+        reason: result.reason 
+      });
+    }
   } catch (err) {
-    return res.status(500).json({ error: "Webhook error" });
+    console.error("Webhook error:", err);
+    return res.status(500).json({ error: "Webhook error", details: err.message });
   }
 });
 
