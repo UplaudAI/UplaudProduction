@@ -296,8 +296,8 @@ app.get("/api/sitemap.xml", async (req, res) => {
       `</urlset>`;
 
     res.set("Content-Type", "application/xml");
-    // Cache at the edge for 10 minutes; allow stale for 1 day
-    res.set("Cache-Control", "public, s-maxage=600, stale-while-revalidate=86400");
+    // Reduce cache during validation: 60s; allow stale for 1 day
+    res.set("Cache-Control", "public, s-maxage=60, stale-while-revalidate=86400");
     return res.status(200).send(xml);
   } catch (err) {
     const details = err?.response?.data || err.message || String(err);
