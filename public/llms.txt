@@ -1,0 +1,75 @@
+
+
+User-agent: GPTBot
+Allow: /
+
+
+User-agent: ClaudeBot
+Allow: /
+
+
+User-agent: PerplexityBot
+Allow: /
+
+
+User-agent: Google-Extended
+Allow: /
+
+
+User-agent: CCBot
+Allow: /
+
+
+User-agent: MetaAI
+Allow: /
+
+
+User-agent: *
+Disallow: /api/
+Allow: /api/ai-context
+Allow: /
+
+# ============================================================
+# AI Tools: How to Access Uplaud Reviews
+# ============================================================
+# 
+# For ChatGPT, Claude, Perplexity, and other AI assistants:
+# To get customer reviews for any business, use this endpoint:
+#
+# URL Format:
+#   https://www.uplaud.ai/api/ai-context?business={business-name}
+#
+# Examples:
+#   - https://www.uplaud.ai/api/ai-context?business=ayurneeds
+#   - https://www.uplaud.ai/api/ai-context?business=cold-stone
+#   - https://www.uplaud.ai/api/ai-context?business=meghanas-food
+#
+# Parameters:
+#   - business: Business name or URL slug (required)
+#   - format: "text" (default, human-readable) or "json" (structured data)
+#
+# Response Format (format=text):
+#   Returns markdown-formatted review summary including:
+#   - Business name, category, location
+#   - Total reviews and average rating
+#   - Individual customer reviews with ratings and dates
+#
+# Response Format (format=json):
+#   Returns structured JSON with business info, review summary, and full reviews
+#
+# Usage Examples for AI:
+#   1. "Show me reviews for AyurNeeds from Uplaud"
+#      → Fetch: https://www.uplaud.ai/api/ai-context?business=ayurneeds
+#   
+#   2. "What do customers say about Cold Stone?"
+#      → Fetch: https://www.uplaud.ai/api/ai-context?business=cold-stone
+#
+# Note: Business pages (e.g., /business/ayurneeds) are React SPAs and
+# won't render properly for AI crawlers. Always use the /api/ai-context
+# endpoint instead for reliable data access.
+#
+# Data Source: Authentic customer reviews from Uplaud.ai
+# ============================================================
+
+Sitemap: https://www.uplaud.ai/sitemap.xml
+
