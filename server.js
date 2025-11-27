@@ -267,7 +267,8 @@ app.get("/api/circles", async (req, res) => {
 /* ===================== API: Airtable Webhook ===================== */
 /**
  * POST /api/airtable-webhook
- * Store new business to queue - GitHub Actions will append to sitemap hourly
+ * Trigger GitHub Actions workflow to immediately add business to sitemap
+ * This bypasses the hourly schedule for real-time updates
  */
 app.post("/api/airtable-webhook", async (req, res) => {
   try {
@@ -278,27 +279,54 @@ app.post("/api/airtable-webhook", async (req, res) => {
       return res.status(400).json({ error: "businessName is required" });
     }
 
-    // Import and store new business
-    const { storeNewBusiness } = await import("./src/utils/sitemapUtils.js");
-    const result = await storeNewBusiness(businessName);
-    
-    if (result.stored) {
+    const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+    if (!GITHUB_TOKEN) {
+      console.warn("⚠️ GITHUB_TOKEN not set - workflow won't trigger");
       return res.json({ 
         ok: true, 
-        message: "Business queued for sitemap update. GitHub Actions will append it within the hour.",
-        businessName: result.businessName,
-        queuedCount: result.queuedCount
-      });
-    } else {
-      return res.json({ 
-        ok: false, 
-        message: `Not queued: ${result.reason}`,
-        reason: result.reason 
+        message: "✅ Received. Set GITHUB_TOKEN env var to auto-trigger sitemap updates.",
+        businessName: businessName
       });
     }
+
+    // Trigger GitHub Actions workflow
+    const response = await axios.post(
+      "https://api.github.com/repos/UplaudAI/UplaudProduction/actions/workflows/append-sitemap.yml/dispatches",
+      { ref: "main" },
+      {
+        headers: {
+          Authorization: `Bearer ${GITHUB_TOKEN}`,
+          Accept: "application/vnd.github+json",
+        },
+      }
+    );
+
+    if (response.status === 204) {
+      console.log(`✅ GitHub Actions triggered for: ${businessName}`);
+      return res.json({ 
+        ok: true, 
+        message: "✅ Sitemap update triggered immediately via GitHub Actions",
+        businessName: businessName,
+        workflowTriggered: true
+      });
+    }
+
+    return res.json({ 
+      ok: true, 
+      message: "✅ Received",
+      businessName: businessName,
+      note: "GitHub Actions will append to sitemap within the hour (or manually trigger with GITHUB_TOKEN env var)"
+    });
+
   } catch (err) {
-    console.error("❌ Webhook error:", err);
-    return res.status(500).json({ error: "Webhook error", details: err.message });
+    console.error("❌ Webhook error:", err.message);
+    // Don't fail - just log. Airtable will retry if we return 5xx
+    return res.json({ 
+      ok: true, 
+      message: "✅ Received (workflow trigger failed, but hourly sync will catch it)",
+      businessName: req?.body?.businessName,
+      error: err.message 
+    });
   }
 });
 
