@@ -271,34 +271,24 @@ app.get("/api/circles", async (req, res) => {
  */
 app.post("/api/airtable-webhook", async (req, res) => {
   try {
-    console.log("🎯 Webhook invoked");
-    console.log("Request body type:", typeof req.body, Array.isArray(req.body) ? "array" : "object");
-    console.log("Request body:", JSON.stringify(req.body));
-    
     const businessName = req?.body?.businessName || null;
-    console.log("📬 Webhook received", { businessName });
     
     if (!businessName) {
-      console.warn("❌ No businessName in request");
+      console.warn("❌ Webhook: No businessName in request", req.body);
       return res.status(400).json({ error: "businessName is required", received: req.body });
     }
 
     const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-    console.log("🔑 GITHUB_TOKEN status:", GITHUB_TOKEN ? "✅ SET" : "❌ MISSING");
-    
     if (!GITHUB_TOKEN) {
-      console.warn("⚠️ GITHUB_TOKEN not set");
+      console.warn("⚠️ Webhook: GITHUB_TOKEN not set");
       return res.json({ ok: true, message: "⚠️ No GITHUB_TOKEN" });
     }
 
-    const slugify = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
     const slug = slugify(businessName);
     const businessUrl = `https://www.uplaud.ai/business/${slug}`;
-    console.log(`🔗 Business URL: ${businessUrl}`);
 
     try {
       // Get current sitemap.xml from GitHub
-      console.log("📥 Fetching current sitemap from GitHub...");
       const getResp = await axios.get(
         "https://api.github.com/repos/UplaudAI/UplaudProduction/contents/public/sitemap.xml",
         {
@@ -308,10 +298,7 @@ app.post("/api/airtable-webhook", async (req, res) => {
           },
         }
       );
-      console.log("✅ Sitemap fetched, SHA:", getResp.data.sha.substring(0, 8));
-
       let sitemapContent = Buffer.from(getResp.data.content, "base64").toString("utf8");
-      console.log("📄 Sitemap size:", sitemapContent.length, "bytes");
       
       // Check if already exists
       if (sitemapContent.includes(`<loc>${businessUrl}</loc>`)) {
@@ -341,11 +328,8 @@ app.post("/api/airtable-webhook", async (req, res) => {
         sitemapContent.slice(0, closingIndex) +
         entry +
         sitemapContent.slice(closingIndex);
-      
-      console.log("📝 New sitemap size:", sitemapContent.length, "bytes");
 
       // Commit updated sitemap to GitHub
-      console.log("📤 Pushing to GitHub...");
       const commitResp = await axios.put(
         "https://api.github.com/repos/UplaudAI/UplaudProduction/contents/public/sitemap.xml",
         {
@@ -362,10 +346,7 @@ app.post("/api/airtable-webhook", async (req, res) => {
         }
       );
 
-      console.log(`✅ GitHub commit successful!`, {
-        commit: commitResp.data.commit.message,
-        sha: commitResp.data.commit.sha.substring(0, 8),
-      });
+      console.log(`✅ Webhook: Sitemap updated for "${businessName}"`);
       
       return res.json({ 
         ok: true, 
