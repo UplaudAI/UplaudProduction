@@ -267,8 +267,7 @@ app.get("/api/circles", async (req, res) => {
 /* ===================== API: Airtable Webhook ===================== */
 /**
  * POST /api/airtable-webhook
- * Trigger GitHub Actions workflow to immediately add business to sitemap
- * This bypasses the hourly schedule for real-time updates
+ * Directly update sitemap.xml on GitHub when new business added
  */
 app.post("/api/airtable-webhook", async (req, res) => {
   try {
@@ -281,55 +280,95 @@ app.post("/api/airtable-webhook", async (req, res) => {
 
     const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
     if (!GITHUB_TOKEN) {
-      console.warn("⚠️ GITHUB_TOKEN not set - workflow won't trigger");
-      return res.json({ 
-        ok: true, 
-        message: "✅ Received. Set GITHUB_TOKEN env var to auto-trigger sitemap updates.",
-        businessName: businessName
-      });
+      console.warn("⚠️ GITHUB_TOKEN not set");
+      return res.json({ ok: true, message: "⚠️ No GITHUB_TOKEN" });
     }
 
-    // Trigger GitHub Actions workflow via dispatch
+    const slugify = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
+    const slug = slugify(businessName);
+    const businessUrl = `https://www.uplaud.ai/business/${slug}`;
+
     try {
-      const response = await axios.post(
-        "https://api.github.com/repos/UplaudAI/UplaudProduction/actions/workflows/append-sitemap.yml/dispatches",
-        { ref: "main" },
+      // Get current sitemap.xml from GitHub
+      const getResp = await axios.get(
+        "https://api.github.com/repos/UplaudAI/UplaudProduction/contents/public/sitemap.xml",
         {
           headers: {
             Authorization: `Bearer ${GITHUB_TOKEN}`,
             Accept: "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
           },
         }
       );
 
-      if (response.status === 204) {
-        console.log(`✅ GitHub Actions triggered for: ${businessName}`);
-        return res.json({ 
-          ok: true, 
-          message: "✅ Sitemap update triggered immediately via GitHub Actions",
-          businessName: businessName,
-          workflowTriggered: true
-        });
+      let sitemapContent = Buffer.from(getResp.data.content, "base64").toString("utf8");
+      
+      // Check if already exists
+      if (sitemapContent.includes(`<loc>${businessUrl}</loc>`)) {
+        console.log(`ℹ️ Already in sitemap: ${businessName}`);
+        return res.json({ ok: true, message: "Already in sitemap", businessName });
       }
-    } catch (dispatchErr) {
-      console.warn(`⚠️ Workflow dispatch failed: ${dispatchErr.message}`);
-    }
 
-    return res.json({ 
-      ok: true, 
-      message: "✅ Received. GitHub Actions will append to sitemap within the hour (hourly schedule).",
-      businessName: businessName,
-      note: "Webhook received - sitemap will update on next scheduled run at top of hour"
-    });
+      // Add new entry before closing tag
+      const today = new Date().toISOString().split("T")[0];
+      const entry = `  <url>
+    <loc>${businessUrl}</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+`;
+      
+      const closingTag = "</urlset>";
+      const closingIndex = sitemapContent.lastIndexOf(closingTag);
+      
+      if (closingIndex === -1) {
+        return res.json({ ok: false, message: "Invalid sitemap format" });
+      }
+
+      sitemapContent = 
+        sitemapContent.slice(0, closingIndex) +
+        entry +
+        sitemapContent.slice(closingIndex);
+
+      // Commit updated sitemap to GitHub
+      const commitResp = await axios.put(
+        "https://api.github.com/repos/UplaudAI/UplaudProduction/contents/public/sitemap.xml",
+        {
+          message: `✨ Add: ${businessName} to sitemap`,
+          content: Buffer.from(sitemapContent).toString("base64"),
+          sha: getResp.data.sha,
+          branch: "main",
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${GITHUB_TOKEN}`,
+            Accept: "application/vnd.github+json",
+          },
+        }
+      );
+
+      console.log(`✅ Updated sitemap: ${businessName}`);
+      return res.json({ 
+        ok: true, 
+        message: "✅ Sitemap updated on GitHub",
+        businessName: businessName,
+        updated: true
+      });
+
+    } catch (githubErr) {
+      console.error("❌ GitHub error:", githubErr.message);
+      return res.json({ 
+        ok: false, 
+        message: "Failed to update GitHub",
+        error: githubErr.message 
+      });
+    }
 
   } catch (err) {
     console.error("❌ Webhook error:", err.message);
-    // Don't fail - just log. Airtable will retry if we return 5xx
     return res.json({ 
-      ok: true, 
-      message: "✅ Received (workflow trigger failed, but hourly sync will catch it)",
-      businessName: req?.body?.businessName,
+      ok: false, 
+      message: "Webhook error",
       error: err.message 
     });
   }
