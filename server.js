@@ -289,33 +289,38 @@ app.post("/api/airtable-webhook", async (req, res) => {
       });
     }
 
-    // Trigger GitHub Actions workflow
-    const response = await axios.post(
-      "https://api.github.com/repos/UplaudAI/UplaudProduction/actions/workflows/append-sitemap.yml/dispatches",
-      { ref: "main" },
-      {
-        headers: {
-          Authorization: `Bearer ${GITHUB_TOKEN}`,
-          Accept: "application/vnd.github+json",
-        },
-      }
-    );
+    // Trigger GitHub Actions workflow via dispatch
+    try {
+      const response = await axios.post(
+        "https://api.github.com/repos/UplaudAI/UplaudProduction/actions/workflows/append-sitemap.yml/dispatches",
+        { ref: "main" },
+        {
+          headers: {
+            Authorization: `Bearer ${GITHUB_TOKEN}`,
+            Accept: "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+          },
+        }
+      );
 
-    if (response.status === 204) {
-      console.log(`✅ GitHub Actions triggered for: ${businessName}`);
-      return res.json({ 
-        ok: true, 
-        message: "✅ Sitemap update triggered immediately via GitHub Actions",
-        businessName: businessName,
-        workflowTriggered: true
-      });
+      if (response.status === 204) {
+        console.log(`✅ GitHub Actions triggered for: ${businessName}`);
+        return res.json({ 
+          ok: true, 
+          message: "✅ Sitemap update triggered immediately via GitHub Actions",
+          businessName: businessName,
+          workflowTriggered: true
+        });
+      }
+    } catch (dispatchErr) {
+      console.warn(`⚠️ Workflow dispatch failed: ${dispatchErr.message}`);
     }
 
     return res.json({ 
       ok: true, 
-      message: "✅ Received",
+      message: "✅ Received. GitHub Actions will append to sitemap within the hour (hourly schedule).",
       businessName: businessName,
-      note: "GitHub Actions will append to sitemap within the hour (or manually trigger with GITHUB_TOKEN env var)"
+      note: "Webhook received - sitemap will update on next scheduled run at top of hour"
     });
 
   } catch (err) {
