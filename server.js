@@ -267,7 +267,7 @@ app.get("/api/circles", async (req, res) => {
 /* ===================== API: Airtable Webhook ===================== */
 /**
  * POST /api/airtable-webhook
- * Adds new business to sitemap.xml file incrementally
+ * Store new business to queue - GitHub Actions will append to sitemap hourly
  */
 app.post("/api/airtable-webhook", async (req, res) => {
   try {
@@ -278,25 +278,26 @@ app.post("/api/airtable-webhook", async (req, res) => {
       return res.status(400).json({ error: "businessName is required" });
     }
 
-    // Import sitemap utility
-    const { addBusinessToSitemap } = await import("./src/utils/sitemapUtils.js");
-    const result = await addBusinessToSitemap(businessName);
+    // Import and store new business
+    const { storeNewBusiness } = await import("./src/utils/sitemapUtils.js");
+    const result = await storeNewBusiness(businessName);
     
-    if (result.added) {
+    if (result.stored) {
       return res.json({ 
         ok: true, 
-        message: "Business added to sitemap", 
-        url: result.url 
+        message: "Business queued for sitemap update. GitHub Actions will append it within the hour.",
+        businessName: result.businessName,
+        queuedCount: result.queuedCount
       });
     } else {
       return res.json({ 
         ok: false, 
-        message: `Not added: ${result.reason}`,
+        message: `Not queued: ${result.reason}`,
         reason: result.reason 
       });
     }
   } catch (err) {
-    console.error("Webhook error:", err);
+    console.error("❌ Webhook error:", err);
     return res.status(500).json({ error: "Webhook error", details: err.message });
   }
 });
