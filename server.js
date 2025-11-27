@@ -31,7 +31,7 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 app.use(morgan("dev"));
 
 console.log("Boot:", {
@@ -271,14 +271,21 @@ app.get("/api/circles", async (req, res) => {
  */
 app.post("/api/airtable-webhook", async (req, res) => {
   try {
+    console.log("🎯 Webhook invoked");
+    console.log("Request body type:", typeof req.body, Array.isArray(req.body) ? "array" : "object");
+    console.log("Request body:", JSON.stringify(req.body));
+    
     const businessName = req?.body?.businessName || null;
     console.log("📬 Webhook received", { businessName });
     
     if (!businessName) {
-      return res.status(400).json({ error: "businessName is required" });
+      console.warn("❌ No businessName in request");
+      return res.status(400).json({ error: "businessName is required", received: req.body });
     }
 
     const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+    console.log("🔑 GITHUB_TOKEN status:", GITHUB_TOKEN ? "✅ SET" : "❌ MISSING");
+    
     if (!GITHUB_TOKEN) {
       console.warn("⚠️ GITHUB_TOKEN not set");
       return res.json({ ok: true, message: "⚠️ No GITHUB_TOKEN" });
@@ -287,9 +294,11 @@ app.post("/api/airtable-webhook", async (req, res) => {
     const slugify = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
     const slug = slugify(businessName);
     const businessUrl = `https://www.uplaud.ai/business/${slug}`;
+    console.log(`🔗 Business URL: ${businessUrl}`);
 
     try {
       // Get current sitemap.xml from GitHub
+      console.log("📥 Fetching current sitemap from GitHub...");
       const getResp = await axios.get(
         "https://api.github.com/repos/UplaudAI/UplaudProduction/contents/public/sitemap.xml",
         {
@@ -299,8 +308,10 @@ app.post("/api/airtable-webhook", async (req, res) => {
           },
         }
       );
+      console.log("✅ Sitemap fetched, SHA:", getResp.data.sha.substring(0, 8));
 
       let sitemapContent = Buffer.from(getResp.data.content, "base64").toString("utf8");
+      console.log("📄 Sitemap size:", sitemapContent.length, "bytes");
       
       // Check if already exists
       if (sitemapContent.includes(`<loc>${businessUrl}</loc>`)) {
@@ -322,6 +333,7 @@ app.post("/api/airtable-webhook", async (req, res) => {
       const closingIndex = sitemapContent.lastIndexOf(closingTag);
       
       if (closingIndex === -1) {
+        console.error("❌ Invalid sitemap format - no </urlset> tag");
         return res.json({ ok: false, message: "Invalid sitemap format" });
       }
 
@@ -329,8 +341,11 @@ app.post("/api/airtable-webhook", async (req, res) => {
         sitemapContent.slice(0, closingIndex) +
         entry +
         sitemapContent.slice(closingIndex);
+      
+      console.log("📝 New sitemap size:", sitemapContent.length, "bytes");
 
       // Commit updated sitemap to GitHub
+      console.log("📤 Pushing to GitHub...");
       const commitResp = await axios.put(
         "https://api.github.com/repos/UplaudAI/UplaudProduction/contents/public/sitemap.xml",
         {
@@ -347,25 +362,39 @@ app.post("/api/airtable-webhook", async (req, res) => {
         }
       );
 
-      console.log(`✅ Updated sitemap: ${businessName}`);
+      console.log(`✅ GitHub commit successful!`, {
+        commit: commitResp.data.commit.message,
+        sha: commitResp.data.commit.sha.substring(0, 8),
+      });
+      
       return res.json({ 
         ok: true, 
         message: "✅ Sitemap updated on GitHub",
         businessName: businessName,
-        updated: true
+        updated: true,
+        commitSha: commitResp.data.commit.sha
       });
 
     } catch (githubErr) {
-      console.error("❌ GitHub error:", githubErr.message);
+      console.error("❌ GitHub error:", {
+        message: githubErr.message,
+        status: githubErr.response?.status,
+        statusText: githubErr.response?.statusText,
+        data: githubErr.response?.data,
+      });
       return res.json({ 
         ok: false, 
         message: "Failed to update GitHub",
-        error: githubErr.message 
+        error: githubErr.message,
+        details: githubErr.response?.data
       });
     }
 
   } catch (err) {
-    console.error("❌ Webhook error:", err.message);
+    console.error("❌ Webhook error:", {
+      message: err.message,
+      stack: err.stack,
+    });
     return res.json({ 
       ok: false, 
       message: "Webhook error",
@@ -377,6 +406,12 @@ app.post("/api/airtable-webhook", async (req, res) => {
 /* ===================== 404 ===================== */
 app.use((req, res) => {
   res.status(404).json({ error: "Not found" });
+});
+
+/* ===================== Error Handler ===================== */
+app.use((err, req, res, next) => {
+  console.error("❌ Unhandled error:", err);
+  res.status(500).json({ error: "Internal server error", message: err.message });
 });
 
 /* ===================== Export & Local Start ===================== */
