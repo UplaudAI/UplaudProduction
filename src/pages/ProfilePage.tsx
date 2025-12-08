@@ -606,10 +606,9 @@ const ProfilePage = () => {
     async function fetchUserAndReviews() {
       setLoading(true);
       try {
-        const rawParam = decodeURIComponent((id || "").trim());
-        const idParamSlug = slugify(rawParam);
-        const m = idParamSlug.match(/^(.+?)(?:-(\d{3}))?$/);
-        const targetBase = m ? m[1] : idParamSlug;
+        const idParam = (id || "").trim();
+        const m = idParam.match(/^(.+?)(?:-(\d{3}))?$/);
+        const targetBase = m ? m[1] : idParam;
         const targetSuffix = m && m[2] ? m[2] : null;
 
         // 1) Find user by slug of Name; then verify canonical with -last3 suffix
@@ -617,15 +616,11 @@ const ProfilePage = () => {
 
         // Pull all users (paged)
         const users = await fetchAllPages<any>(USERS_TABLE, {});
-        console.log("👥 Total users in Airtable:", users.length);
-        console.log("🎯 Looking for slug:", { targetBase, targetSuffix, idParamSlug });
-        
         const candidates = users.filter((rec: any) => {
           const nm = rec.fields?.Name || "";
           const s = slugify(nm);
-          return s === targetBase || s === idParamSlug; // support /name or /name-123 resolving
+          return s === targetBase || s === idParam; // support /name or /name-123 resolving
         });
-        console.log("✅ Candidates found:", candidates.length, candidates.map(c => c.fields?.Name));
 
         for (const rec of candidates) {
           const name = rec.fields?.Name || "";
@@ -650,24 +645,16 @@ const ProfilePage = () => {
             l3 = await fetchLast3FromReviews({ id: candidate.id, name: candidate.name });
           }
           const canonical = `${baseSlug}-${l3 || "000"}`;
-          
-          // Match logic: if URL has suffix, check canonical match; otherwise just base slug match
-          const isExact = targetSuffix ? canonical === idParamSlug : baseSlug === targetBase;
-          console.log("🔎 Checking candidate:", { name, baseSlug, l3, canonical, targetSuffix, idParamSlug, isExact });
+          const isExact = targetSuffix ? canonical === idParam : baseSlug === targetBase;
 
           if (isExact) {
             foundUser = { ...candidate, handle: baseSlug, canonicalSlug: canonical };
-            console.log("✨ Found user match!", foundUser);
             break;
           }
         }
-        
-        if (!foundUser) {
-          console.warn("❌ No user found matching the slug");
-        }
 
         if (foundUser) {
-          const currentIsCanonical = idParamSlug === foundUser.canonicalSlug;
+          const currentIsCanonical = idParam === foundUser.canonicalSlug;
           if (!currentIsCanonical) {
             navigate(`/profile/${foundUser.canonicalSlug}`, { replace: true });
           }
@@ -678,50 +665,18 @@ const ProfilePage = () => {
         // 2) Reviews for user (by Creator ID, then by Name fallback) — fully paged
         let allReviews: any[] = [];
         if (foundUser) {
-          console.log("🔍 Fetching reviews for:", { 
-            id: foundUser.id, 
-            name: foundUser.name, 
-            canonicalSlug: foundUser.canonicalSlug 
+          const byIdFormula = `{ID (from Creator)}=${escapeAirtableString(foundUser.id || "")}`;
+          const byId = await fetchAllPages<any>(REVIEWS_TABLE, {
+            filterByFormula: byIdFormula,
           });
-          
-          // Skip ID search if ID is empty/null
-          if (foundUser.id && foundUser.id !== "undefined") {
-            const byIdFormula = `{ID (from Creator)}=${escapeAirtableString(foundUser.id || "")}`;
-            console.log("📊 Query by ID:", byIdFormula);
-            const byId = await fetchAllPages<any>(REVIEWS_TABLE, {
-              filterByFormula: byIdFormula,
-            });
-            console.log("✅ Reviews by ID found:", byId.length);
-            allReviews = allReviews.concat(byId);
-          } else {
-            console.warn("⚠️ User ID is empty, skipping ID-based query");
-          }
+          allReviews = allReviews.concat(byId);
 
           if (allReviews.length === 0) {
-            // Try exact name match first
             const byNameFormula = `{Name_Creator}=${escapeAirtableString(foundUser.name || "")}`;
-            console.log("📊 Query by Name (exact):", byNameFormula);
             const byName = await fetchAllPages<any>(REVIEWS_TABLE, {
               filterByFormula: byNameFormula,
             });
-            console.log("✅ Reviews by Name found:", byName.length);
             allReviews = allReviews.concat(byName);
-            
-            // If still no results, try case-insensitive search by fetching all and filtering locally
-            if (allReviews.length === 0) {
-              console.log("📊 Falling back to local case-insensitive search...");
-              const lowerUserName = (foundUser.name || "").toLowerCase().trim();
-              const allReviewsData = await fetchAllPages<any>(REVIEWS_TABLE, {});
-              const caseInsensitiveMatches = allReviewsData.filter((r: any) => {
-                const reviewerName = (r.fields?.Name_Creator || "").toLowerCase().trim();
-                return reviewerName === lowerUserName;
-              });
-              console.log("✅ Reviews by case-insensitive match found:", caseInsensitiveMatches.length);
-              if (caseInsensitiveMatches.length > 0) {
-                console.log("📝 Sample matching name from reviews:", caseInsensitiveMatches[0].fields?.Name_Creator);
-              }
-              allReviews = allReviews.concat(caseInsensitiveMatches);
-            }
           }
 
           const validReviews = allReviews
@@ -746,7 +701,6 @@ const ProfilePage = () => {
               const bt = b.date ? b.date.getTime() : 0;
               return bt - at;
             });
-          console.log("✨ Valid reviews after filtering:", validReviews.length);
           setReviews(validReviews);
         } else {
           setReviews([]);
@@ -760,23 +714,9 @@ const ProfilePage = () => {
         let rawForBadges: any[] = [];
 
         if (foundUser && foundUser.name) {
-          // Try exact match first
-          let circles = await fetchAllPages<any>(CIRCLES_TABLE, {
+          const circles = await fetchAllPages<any>(CIRCLES_TABLE, {
             filterByFormula: `{Initiator}=${escapeAirtableString(foundUser.name)}`,
           });
-          console.log("🔗 Referral circles (exact) found:", circles.length);
-          
-          // If no results, try case-insensitive by fetching all and filtering locally
-          if (circles.length === 0) {
-            console.log("📊 Falling back to local case-insensitive search for circles...");
-            const lowerUserName = (foundUser.name || "").toLowerCase().trim();
-            const allCircles = await fetchAllPages<any>(CIRCLES_TABLE, {});
-            circles = allCircles.filter((c: any) => {
-              const initiatorName = (c.fields?.Initiator || "").toLowerCase().trim();
-              return initiatorName === lowerUserName;
-            });
-            console.log("🔗 Referral circles (case-insensitive) found:", circles.length);
-          }
 
           for (const c of circles) {
             const receivers = Array.isArray(c.fields?.Receiver)
