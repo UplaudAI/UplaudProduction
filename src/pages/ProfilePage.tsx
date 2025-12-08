@@ -666,19 +666,46 @@ const ProfilePage = () => {
         // 2) Reviews for user (by Creator ID, then by Name fallback) — fully paged
         let allReviews: any[] = [];
         if (foundUser) {
+          console.log("🔍 Fetching reviews for:", { 
+            id: foundUser.id, 
+            name: foundUser.name, 
+            canonicalSlug: foundUser.canonicalSlug 
+          });
+          
           const byIdFormula = `{ID (from Creator)}=${escapeAirtableString(foundUser.id || "")}`;
+          console.log("📊 Query by ID:", byIdFormula);
           const byId = await fetchAllPages<any>(REVIEWS_TABLE, {
             filterByFormula: byIdFormula,
           });
+          console.log("✅ Reviews by ID found:", byId.length);
           allReviews = allReviews.concat(byId);
 
           if (allReviews.length === 0) {
+            // Try exact name match first
             const byNameFormula = `{Name_Creator}=${escapeAirtableString(foundUser.name || "")}`;
+            console.log("📊 Query by Name (exact):", byNameFormula);
             const byName = await fetchAllPages<any>(REVIEWS_TABLE, {
               filterByFormula: byNameFormula,
             });
+            console.log("✅ Reviews by Name found:", byName.length);
             allReviews = allReviews.concat(byName);
+            
+            // If still no results, try case-insensitive search using LOWER()
+            if (allReviews.length === 0) {
+              const lowerName = (foundUser.name || "").toLowerCase();
+              const caseInsensitiveFormula = `LOWER({Name_Creator})=${escapeAirtableString(lowerName)}`;
+              console.log("📊 Query by Name (case-insensitive):", caseInsensitiveFormula);
+              const byNameCI = await fetchAllPages<any>(REVIEWS_TABLE, {
+                filterByFormula: caseInsensitiveFormula,
+              });
+              console.log("✅ Reviews by Name (case-insensitive) found:", byNameCI.length);
+              allReviews = allReviews.concat(byNameCI);
+            }
           }
+
+          console.log("📦 Total reviews before filtering:", allReviews.length);
+
+          console.log("📦 Total reviews before filtering:", allReviews.length);
 
           const validReviews = allReviews
             .filter(
@@ -702,6 +729,7 @@ const ProfilePage = () => {
               const bt = b.date ? b.date.getTime() : 0;
               return bt - at;
             });
+          console.log("✨ Valid reviews after filtering:", validReviews.length);
           setReviews(validReviews);
         } else {
           setReviews([]);
@@ -715,9 +743,19 @@ const ProfilePage = () => {
         let rawForBadges: any[] = [];
 
         if (foundUser && foundUser.name) {
-          const circles = await fetchAllPages<any>(CIRCLES_TABLE, {
+          // Try exact match first
+          let circles = await fetchAllPages<any>(CIRCLES_TABLE, {
             filterByFormula: `{Initiator}=${escapeAirtableString(foundUser.name)}`,
           });
+          
+          // If no results, try case-insensitive
+          if (circles.length === 0) {
+            const lowerName = (foundUser.name || "").toLowerCase();
+            circles = await fetchAllPages<any>(CIRCLES_TABLE, {
+              filterByFormula: `LOWER({Initiator})=${escapeAirtableString(lowerName)}`,
+            });
+          }
+          console.log("🔗 Referral circles found:", circles.length);
 
           for (const c of circles) {
             const receivers = Array.isArray(c.fields?.Receiver)
