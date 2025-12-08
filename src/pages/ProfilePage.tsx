@@ -617,11 +617,15 @@ const ProfilePage = () => {
 
         // Pull all users (paged)
         const users = await fetchAllPages<any>(USERS_TABLE, {});
+        console.log("👥 Total users in Airtable:", users.length);
+        console.log("🎯 Looking for slug:", { targetBase, targetSuffix, idParamSlug });
+        
         const candidates = users.filter((rec: any) => {
           const nm = rec.fields?.Name || "";
           const s = slugify(nm);
           return s === targetBase || s === idParamSlug; // support /name or /name-123 resolving
         });
+        console.log("✅ Candidates found:", candidates.length, candidates.map(c => c.fields?.Name));
 
         for (const rec of candidates) {
           const name = rec.fields?.Name || "";
@@ -646,12 +650,20 @@ const ProfilePage = () => {
             l3 = await fetchLast3FromReviews({ id: candidate.id, name: candidate.name });
           }
           const canonical = `${baseSlug}-${l3 || "000"}`;
+          
+          // Match logic: if URL has suffix, check canonical match; otherwise just base slug match
           const isExact = targetSuffix ? canonical === idParamSlug : baseSlug === targetBase;
+          console.log("🔎 Checking candidate:", { name, baseSlug, l3, canonical, targetSuffix, idParamSlug, isExact });
 
           if (isExact) {
             foundUser = { ...candidate, handle: baseSlug, canonicalSlug: canonical };
+            console.log("✨ Found user match!", foundUser);
             break;
           }
+        }
+        
+        if (!foundUser) {
+          console.warn("❌ No user found matching the slug");
         }
 
         if (foundUser) {
@@ -672,13 +684,18 @@ const ProfilePage = () => {
             canonicalSlug: foundUser.canonicalSlug 
           });
           
-          const byIdFormula = `{ID (from Creator)}=${escapeAirtableString(foundUser.id || "")}`;
-          console.log("📊 Query by ID:", byIdFormula);
-          const byId = await fetchAllPages<any>(REVIEWS_TABLE, {
-            filterByFormula: byIdFormula,
-          });
-          console.log("✅ Reviews by ID found:", byId.length);
-          allReviews = allReviews.concat(byId);
+          // Skip ID search if ID is empty/null
+          if (foundUser.id && foundUser.id !== "undefined") {
+            const byIdFormula = `{ID (from Creator)}=${escapeAirtableString(foundUser.id || "")}`;
+            console.log("📊 Query by ID:", byIdFormula);
+            const byId = await fetchAllPages<any>(REVIEWS_TABLE, {
+              filterByFormula: byIdFormula,
+            });
+            console.log("✅ Reviews by ID found:", byId.length);
+            allReviews = allReviews.concat(byId);
+          } else {
+            console.warn("⚠️ User ID is empty, skipping ID-based query");
+          }
 
           if (allReviews.length === 0) {
             // Try exact name match first
@@ -690,16 +707,20 @@ const ProfilePage = () => {
             console.log("✅ Reviews by Name found:", byName.length);
             allReviews = allReviews.concat(byName);
             
-            // If still no results, try case-insensitive search using LOWER()
+            // If still no results, try case-insensitive search by fetching all and filtering locally
             if (allReviews.length === 0) {
-              const lowerName = (foundUser.name || "").toLowerCase();
-              const caseInsensitiveFormula = `LOWER({Name_Creator})=${escapeAirtableString(lowerName)}`;
-              console.log("📊 Query by Name (case-insensitive):", caseInsensitiveFormula);
-              const byNameCI = await fetchAllPages<any>(REVIEWS_TABLE, {
-                filterByFormula: caseInsensitiveFormula,
+              console.log("📊 Falling back to local case-insensitive search...");
+              const lowerUserName = (foundUser.name || "").toLowerCase().trim();
+              const allReviewsData = await fetchAllPages<any>(REVIEWS_TABLE, {});
+              const caseInsensitiveMatches = allReviewsData.filter((r: any) => {
+                const reviewerName = (r.fields?.Name_Creator || "").toLowerCase().trim();
+                return reviewerName === lowerUserName;
               });
-              console.log("✅ Reviews by Name (case-insensitive) found:", byNameCI.length);
-              allReviews = allReviews.concat(byNameCI);
+              console.log("✅ Reviews by case-insensitive match found:", caseInsensitiveMatches.length);
+              if (caseInsensitiveMatches.length > 0) {
+                console.log("📝 Sample matching name from reviews:", caseInsensitiveMatches[0].fields?.Name_Creator);
+              }
+              allReviews = allReviews.concat(caseInsensitiveMatches);
             }
           }
 
@@ -745,15 +766,19 @@ const ProfilePage = () => {
           let circles = await fetchAllPages<any>(CIRCLES_TABLE, {
             filterByFormula: `{Initiator}=${escapeAirtableString(foundUser.name)}`,
           });
+          console.log("🔗 Referral circles (exact) found:", circles.length);
           
-          // If no results, try case-insensitive
+          // If no results, try case-insensitive by fetching all and filtering locally
           if (circles.length === 0) {
-            const lowerName = (foundUser.name || "").toLowerCase();
-            circles = await fetchAllPages<any>(CIRCLES_TABLE, {
-              filterByFormula: `LOWER({Initiator})=${escapeAirtableString(lowerName)}`,
+            console.log("📊 Falling back to local case-insensitive search for circles...");
+            const lowerUserName = (foundUser.name || "").toLowerCase().trim();
+            const allCircles = await fetchAllPages<any>(CIRCLES_TABLE, {});
+            circles = allCircles.filter((c: any) => {
+              const initiatorName = (c.fields?.Initiator || "").toLowerCase().trim();
+              return initiatorName === lowerUserName;
             });
+            console.log("🔗 Referral circles (case-insensitive) found:", circles.length);
           }
-          console.log("🔗 Referral circles found:", circles.length);
 
           for (const c of circles) {
             const receivers = Array.isArray(c.fields?.Receiver)
