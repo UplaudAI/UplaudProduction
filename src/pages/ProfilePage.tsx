@@ -606,9 +606,10 @@ const ProfilePage = () => {
     async function fetchUserAndReviews() {
       setLoading(true);
       try {
-        const idParam = (id || "").trim();
-        const m = idParam.match(/^(.+?)(?:-(\d{3}))?$/);
-        const targetBase = m ? m[1] : idParam;
+        const rawParam = decodeURIComponent((id || "").trim());
+        const idParamSlug = slugify(rawParam);
+        const m = idParamSlug.match(/^(.+?)(?:-(\d{3}))?$/);
+        const targetBase = m ? m[1] : idParamSlug;
         const targetSuffix = m && m[2] ? m[2] : null;
 
         // 1) Find user by slug of Name; then verify canonical with -last3 suffix
@@ -619,7 +620,7 @@ const ProfilePage = () => {
         const candidates = users.filter((rec: any) => {
           const nm = rec.fields?.Name || "";
           const s = slugify(nm);
-          return s === targetBase || s === idParam; // support /name or /name-123 resolving
+          return s === targetBase || s === idParamSlug; // support /name or /name-123 resolving
         });
 
         for (const rec of candidates) {
@@ -645,7 +646,7 @@ const ProfilePage = () => {
             l3 = await fetchLast3FromReviews({ id: candidate.id, name: candidate.name });
           }
           const canonical = `${baseSlug}-${l3 || "000"}`;
-          const isExact = targetSuffix ? canonical === idParam : baseSlug === targetBase;
+          const isExact = targetSuffix ? canonical === idParamSlug : baseSlug === targetBase;
 
           if (isExact) {
             foundUser = { ...candidate, handle: baseSlug, canonicalSlug: canonical };
@@ -654,7 +655,7 @@ const ProfilePage = () => {
         }
 
         if (foundUser) {
-          const currentIsCanonical = idParam === foundUser.canonicalSlug;
+          const currentIsCanonical = idParamSlug === foundUser.canonicalSlug;
           if (!currentIsCanonical) {
             navigate(`/profile/${foundUser.canonicalSlug}`, { replace: true });
           }
