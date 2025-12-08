@@ -606,9 +606,10 @@ const ProfilePage = () => {
     async function fetchUserAndReviews() {
       setLoading(true);
       try {
-        const idParam = (id || "").trim();
-        const m = idParam.match(/^(.+?)(?:-(\d{3}))?$/);
-        const targetBase = m ? m[1] : idParam;
+        const rawParam = decodeURIComponent((id || "").trim());
+        const idParamSlug = slugify(rawParam); // Normalize the URL param by slugifying
+        const m = idParamSlug.match(/^(.+?)(?:-(\d{3}))?$/);
+        const targetBase = m ? m[1] : idParamSlug;
         const targetSuffix = m && m[2] ? m[2] : null;
 
         // 1) Find user by slug of Name; then verify canonical with -last3 suffix
@@ -619,7 +620,7 @@ const ProfilePage = () => {
         const candidates = users.filter((rec: any) => {
           const nm = rec.fields?.Name || "";
           const s = slugify(nm);
-          return s === targetBase || s === idParam; // support /name or /name-123 resolving
+          return s === targetBase || s === idParamSlug; // support /name or /name-123 resolving
         });
 
         for (const rec of candidates) {
@@ -645,7 +646,7 @@ const ProfilePage = () => {
             l3 = await fetchLast3FromReviews({ id: candidate.id, name: candidate.name });
           }
           const canonical = `${baseSlug}-${l3 || "000"}`;
-          const isExact = targetSuffix ? canonical === idParam : baseSlug === targetBase;
+          const isExact = targetSuffix ? canonical === idParamSlug : baseSlug === targetBase;
 
           if (isExact) {
             foundUser = { ...candidate, handle: baseSlug, canonicalSlug: canonical };
@@ -654,7 +655,7 @@ const ProfilePage = () => {
         }
 
         if (foundUser) {
-          const currentIsCanonical = idParam === foundUser.canonicalSlug;
+          const currentIsCanonical = idParamSlug === foundUser.canonicalSlug;
           if (!currentIsCanonical) {
             navigate(`/profile/${foundUser.canonicalSlug}`, { replace: true });
           }
@@ -677,6 +678,17 @@ const ProfilePage = () => {
               filterByFormula: byNameFormula,
             });
             allReviews = allReviews.concat(byName);
+            
+            // If still no results, try case-insensitive search by fetching all and filtering locally
+            if (allReviews.length === 0) {
+              const lowerUserName = (foundUser.name || "").toLowerCase().trim();
+              const allReviewsData = await fetchAllPages<any>(REVIEWS_TABLE, {});
+              const caseInsensitiveMatches = allReviewsData.filter((r: any) => {
+                const reviewerName = (r.fields?.Name_Creator || "").toLowerCase().trim();
+                return reviewerName === lowerUserName;
+              });
+              allReviews = allReviews.concat(caseInsensitiveMatches);
+            }
           }
 
           const validReviews = allReviews
@@ -714,9 +726,19 @@ const ProfilePage = () => {
         let rawForBadges: any[] = [];
 
         if (foundUser && foundUser.name) {
-          const circles = await fetchAllPages<any>(CIRCLES_TABLE, {
+          let circles = await fetchAllPages<any>(CIRCLES_TABLE, {
             filterByFormula: `{Initiator}=${escapeAirtableString(foundUser.name)}`,
           });
+          
+          // If no results, try case-insensitive by fetching all and filtering locally
+          if (circles.length === 0) {
+            const lowerUserName = (foundUser.name || "").toLowerCase().trim();
+            const allCircles = await fetchAllPages<any>(CIRCLES_TABLE, {});
+            circles = allCircles.filter((c: any) => {
+              const initiatorName = (c.fields?.Initiator || "").toLowerCase().trim();
+              return initiatorName === lowerUserName;
+            });
+          }
 
           for (const c of circles) {
             const receivers = Array.isArray(c.fields?.Receiver)
