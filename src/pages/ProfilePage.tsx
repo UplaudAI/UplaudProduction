@@ -705,8 +705,6 @@ const ProfilePage = () => {
 
           console.log("📦 Total reviews before filtering:", allReviews.length);
 
-          console.log("📦 Total reviews before filtering:", allReviews.length);
-
           const validReviews = allReviews
             .filter(
               (r: any) =>
