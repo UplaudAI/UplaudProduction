@@ -26,12 +26,11 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 /* ===================== Airtable Config ===================== */
-const API_KEY =
-  "patZS8GyNhkwoP4wY.2beddc214f4dd2a5e4c220ae654f62652a5e02a47bae2287c54fced7bb97c07e";
-const BASE_ID = "appFUJWWTaoJ3YiWt";
-const USERS_TABLE = "tblWIFgwTz3Gn3idV";
-const REVIEWS_TABLE = "tblef0n1hQXiKPHxI";
-const CIRCLES_TABLE = "tbldL8H5T4qYKUzLV";
+const API_KEY = import.meta.env.VITE_AIRTABLE_API_KEY || "";
+const BASE_ID = import.meta.env.VITE_AIRTABLE_BASE_ID || "";
+const USERS_TABLE = import.meta.env.VITE_AIRTABLE_USERS_TABLE || "";
+const REVIEWS_TABLE = import.meta.env.VITE_AIRTABLE_REVIEWS_TABLE || "";
+const CIRCLES_TABLE = import.meta.env.VITE_AIRTABLE_CIRCLES_TABLE || "";
 
 /* ===================== HTTP helpers ===================== */
 const AIRTABLE = axios.create({
