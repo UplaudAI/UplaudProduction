@@ -657,9 +657,10 @@ const handleDislike = (reviewIndex: number) => {
     async function fetchUserAndReviews() {
       setLoading(true);
       try {
-        const idParam = (id || "").trim();
-        const m = idParam.match(/^(.+?)(?:-(\d{3}))?$/);
-        const targetBase = m ? m[1] : idParam;
+        const rawParam = decodeURIComponent((id || "").trim());
+        const idParamSlug = slugify(rawParam); // Normalize the URL param by slugifying
+        const m = idParamSlug.match(/^(.+?)(?:-(\d{3}))?$/);
+        const targetBase = m ? m[1] : idParamSlug;
         const targetSuffix = m && m[2] ? m[2] : null;
 
         // 1) Find user by slug of Name; then verify canonical with -last3 suffix
@@ -670,7 +671,7 @@ const handleDislike = (reviewIndex: number) => {
         const candidates = users.filter((rec: any) => {
           const nm = rec.fields?.Name || "";
           const s = slugify(nm);
-          return s === targetBase || s === idParam; // support /name or /name-123 resolving
+          return s === targetBase || s === idParamSlug; // support /name or /name-123 resolving
         });
 
         // --- replace the loop body with this block ---
@@ -717,7 +718,7 @@ const handleDislike = (reviewIndex: number) => {
           // Attach canonical slug as well
           (candidate as any).canonicalSlug = canonical;
 
-          const isExact = targetSuffix ? canonical === idParam : baseSlug === targetBase;
+          const isExact = targetSuffix ? canonical === idParamSlug : baseSlug === targetBase;
 
           // If this candidate matches, set foundUser and stop
           if (isExact) {
@@ -733,7 +734,7 @@ const handleDislike = (reviewIndex: number) => {
             return; // Prevent further execution so we don't fetch normal profile data
           }
 
-          const currentIsCanonical = idParam === foundUser.canonicalSlug;
+          const currentIsCanonical = idParamSlug === foundUser.canonicalSlug;
           if (!currentIsCanonical) {
             navigate(`/profile/${foundUser.canonicalSlug}`, { replace: true });
             return;
@@ -759,6 +760,17 @@ const handleDislike = (reviewIndex: number) => {
               filterByFormula: byNameFormula,
             });
             allReviews = allReviews.concat(byName);
+            
+            // If still no results, try case-insensitive search by fetching all and filtering locally
+            if (allReviews.length === 0) {
+              const lowerUserName = (foundUser.name || "").toLowerCase().trim();
+              const allReviewsData = await fetchAllPages<any>(REVIEWS_TABLE, {});
+              const caseInsensitiveMatches = allReviewsData.filter((r: any) => {
+                const reviewerName = (r.fields?.Name_Creator || "").toLowerCase().trim();
+                return reviewerName === lowerUserName;
+              });
+              allReviews = allReviews.concat(caseInsensitiveMatches);
+            }
           }
 
           const validReviews = allReviews
@@ -796,9 +808,19 @@ const handleDislike = (reviewIndex: number) => {
         let rawForBadges: any[] = [];
 
         if (foundUser && foundUser.name) {
-          const circles = await fetchAllPages<any>(CIRCLES_TABLE, {
+          let circles = await fetchAllPages<any>(CIRCLES_TABLE, {
             filterByFormula: `{Initiator}=${escapeAirtableString(foundUser.name)}`,
           });
+          
+          // If no results, try case-insensitive by fetching all and filtering locally
+          if (circles.length === 0) {
+            const lowerUserName = (foundUser.name || "").toLowerCase().trim();
+            const allCircles = await fetchAllPages<any>(CIRCLES_TABLE, {});
+            circles = allCircles.filter((c: any) => {
+              const initiatorName = (c.fields?.Initiator || "").toLowerCase().trim();
+              return initiatorName === lowerUserName;
+            });
+          }
 
           for (const c of circles) {
             const receivers = Array.isArray(c.fields?.Receiver)

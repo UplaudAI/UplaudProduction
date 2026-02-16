@@ -31,7 +31,7 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 app.use(morgan("dev"));
 
 console.log("Boot:", {
@@ -264,9 +264,135 @@ app.get("/api/circles", async (req, res) => {
   }
 });
 
+/* ===================== API: Airtable Webhook ===================== */
+/**
+ * POST /api/airtable-webhook
+ * Directly update sitemap.xml on GitHub when new business added
+ */
+app.post("/api/airtable-webhook", async (req, res) => {
+  try {
+    const businessName = req?.body?.businessName || null;
+    
+    if (!businessName) {
+      console.warn("❌ Webhook: No businessName in request", req.body);
+      return res.status(400).json({ error: "businessName is required", received: req.body });
+    }
+
+    const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+    if (!GITHUB_TOKEN) {
+      console.warn("⚠️ Webhook: GITHUB_TOKEN not set");
+      return res.json({ ok: true, message: "⚠️ No GITHUB_TOKEN" });
+    }
+
+    const slug = slugify(businessName);
+    const businessUrl = `https://www.uplaud.ai/business/${slug}`;
+
+    try {
+      // Get current sitemap.xml from GitHub
+      const getResp = await axios.get(
+        "https://api.github.com/repos/UplaudAI/UplaudProduction/contents/public/sitemap.xml",
+        {
+          headers: {
+            Authorization: `Bearer ${GITHUB_TOKEN}`,
+            Accept: "application/vnd.github+json",
+          },
+        }
+      );
+      let sitemapContent = Buffer.from(getResp.data.content, "base64").toString("utf8");
+      
+      // Check if already exists
+      if (sitemapContent.includes(`<loc>${businessUrl}</loc>`)) {
+        console.log(`ℹ️ Already in sitemap: ${businessName}`);
+        return res.json({ ok: true, message: "Already in sitemap", businessName });
+      }
+
+      // Add new entry before closing tag
+      const today = new Date().toISOString().split("T")[0];
+      const entry = `  <url>
+    <loc>${businessUrl}</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+`;
+      
+      const closingTag = "</urlset>";
+      const closingIndex = sitemapContent.lastIndexOf(closingTag);
+      
+      if (closingIndex === -1) {
+        console.error("❌ Invalid sitemap format - no </urlset> tag");
+        return res.json({ ok: false, message: "Invalid sitemap format" });
+      }
+
+      sitemapContent = 
+        sitemapContent.slice(0, closingIndex) +
+        entry +
+        sitemapContent.slice(closingIndex);
+
+      // Commit updated sitemap to GitHub
+      const commitResp = await axios.put(
+        "https://api.github.com/repos/UplaudAI/UplaudProduction/contents/public/sitemap.xml",
+        {
+          message: `✨ Add: ${businessName} to sitemap`,
+          content: Buffer.from(sitemapContent).toString("base64"),
+          sha: getResp.data.sha,
+          branch: "main",
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${GITHUB_TOKEN}`,
+            Accept: "application/vnd.github+json",
+          },
+        }
+      );
+
+      console.log(`✅ Webhook: Sitemap updated for "${businessName}"`);
+      
+      return res.json({ 
+        ok: true, 
+        message: "✅ Sitemap updated on GitHub",
+        businessName: businessName,
+        updated: true,
+        commitSha: commitResp.data.commit.sha
+      });
+
+    } catch (githubErr) {
+      console.error("❌ GitHub error:", {
+        message: githubErr.message,
+        status: githubErr.response?.status,
+        statusText: githubErr.response?.statusText,
+        data: githubErr.response?.data,
+      });
+      return res.json({ 
+        ok: false, 
+        message: "Failed to update GitHub",
+        error: githubErr.message,
+        details: githubErr.response?.data
+      });
+    }
+
+  } catch (err) {
+    console.error("❌ Webhook error:", {
+      message: err.message,
+      stack: err.stack,
+    });
+    return res.json({ 
+      ok: false, 
+      message: "Webhook error",
+      error: err.message 
+    });
+  }
+});
+
 /* ===================== 404 ===================== */
 app.use((req, res) => {
   res.status(404).json({ error: "Not found" });
+});
+
+/* ===================== Error Handler ===================== */
+app.use((err, req, res, next) => {
+  console.error("❌ Unhandled error:", err);
+  res.status(500).json({ error: "Internal server error", message: err.message });
 });
 
 /* ===================== Export & Local Start ===================== */
