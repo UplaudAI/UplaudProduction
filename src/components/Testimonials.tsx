@@ -3,9 +3,9 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
 const MINT = "#5EEAD4";
-const API_KEY = 'patZS8GyNhkwoP4wY.2beddc214f4dd2a5e4c220ae654f62652a5e02a47bae2287c54fced7bb97c07e';
-const BASE_ID = 'appFUJWWTaoJ3YiWt';
-const REVIEWS_TABLE = 'tblef0n1hQXiKPHxI';
+const API_KEY = import.meta.env.VITE_AIRTABLE_API_KEY || '';
+const BASE_ID = import.meta.env.VITE_AIRTABLE_BASE_ID || '';
+const REVIEWS_TABLE = import.meta.env.VITE_AIRTABLE_REVIEWS_TABLE || '';
 
 const COMPANY_USERS = [
   "Deepthi Rao", "Rohan Vibhuti ", "Shreya Shinde", "Gargi", "Pranali", "Vansh Desai", "Hitanshi"

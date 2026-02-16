@@ -1,39 +1,29 @@
 import React, { useEffect, useState } from "react";
-import { useParams, useNavigate, Link} from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   Star,
   Share2,
   ArrowLeft,
   CheckCircle,
   ThumbsUp,
-  ThumbsDown,
   Users,
   Award,
   Linkedin,
   Instagram,
   Globe,
   Search,
+  BadgeCheck,
 } from "lucide-react";
 import axios from "axios";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
-// import { Card } from "@/components/ui/card";
-// import {
-//   Tooltip,
-//   TooltipContent,
-//   TooltipProvider,
-//   TooltipTrigger,
-// } from "@/components/ui/tooltip";
-// import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-
 /* ===================== Airtable Config ===================== */
-const API_KEY =
-  "patZS8GyNhkwoP4wY.2beddc214f4dd2a5e4c220ae654f62652a5e02a47bae2287c54fced7bb97c07e";
-const BASE_ID = "appFUJWWTaoJ3YiWt";
-const USERS_TABLE = "tblWIFgwTz3Gn3idV";
-const REVIEWS_TABLE = "tblef0n1hQXiKPHxI";
-const CIRCLES_TABLE = "tbldL8H5T4qYKUzLV";
+const API_KEY = import.meta.env.VITE_AIRTABLE_API_KEY || "";
+const BASE_ID = import.meta.env.VITE_AIRTABLE_BASE_ID || "";
+const USERS_TABLE = import.meta.env.VITE_AIRTABLE_USERS_TABLE || "";
+const REVIEWS_TABLE = import.meta.env.VITE_AIRTABLE_REVIEWS_TABLE || "";
+const CIRCLES_TABLE = import.meta.env.VITE_AIRTABLE_CIRCLES_TABLE || "";
 
 /* ===================== HTTP helpers ===================== */
 const AIRTABLE = axios.create({
@@ -42,7 +32,6 @@ const AIRTABLE = axios.create({
 });
 
 function escapeAirtableString(v: string) {
-  // Wrap in double quotes and escape embedded double quotes
   return `"${(v || "").replace(/"/g, '\\"')}"`;
 }
 
@@ -52,7 +41,7 @@ async function fetchAllPages<T = any>(
 ): Promise<T[]> {
   const out: T[] = [];
   let offset: string | undefined = undefined;
-  let safety = 0; // avoid infinite loops
+  let safety = 0;
   do {
     const resp = await AIRTABLE.get(table, {
       params: { ...params, offset, pageSize: 100 },
@@ -64,6 +53,7 @@ async function fetchAllPages<T = any>(
   } while (offset && safety < 100);
   return out;
 }
+
 /* ===================== Utilities ===================== */
 function slugify(name = "") {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
@@ -78,13 +68,6 @@ function formatDate(date?: Date | null) {
   });
 }
 
-/**
- * Return a compact label for UI from a social URL or handle:
- * - If value is a URL, return last meaningful path segment or hostname.
- * - If it's a handle like '@name' return as-is.
- * - If it's a path like 'in/username' return the last segment.
- */
-
 function ensureProtocol(url: string) {
   if (!url) return "";
   const trimmed = url.trim();
@@ -97,28 +80,21 @@ function buildSocialHref(provider: "linkedin" | "instagram" | "website", raw?: s
   const v = String(raw).trim();
   if (!v) return null;
 
-  // If full URL already provided, ensure it has protocol
   if (/^https?:\/\//i.test(v)) return ensureProtocol(v);
-
-  // If it looks like a domain (contains a dot) assume website-like and add protocol
   if (provider === "website" || /\./.test(v)) return ensureProtocol(v);
 
   if (provider === "linkedin") {
-    // possible inputs: "in/username", "/in/username", "username", "https://linkedin.com/in/username"
-    const path = v.replace(/^\/+/, ""); // remove leading slashes
-    // if user provided something like 'linkedin.com/in/xyz', just add protocol
+    const path = v.replace(/^\/+/, "");
     if (path.toLowerCase().includes("linkedin.com")) return ensureProtocol(path);
     return `https://www.linkedin.com/${path}`;
   }
 
   if (provider === "instagram") {
-    // inputs: "@username", "username", "/username", "instagram.com/username"
     const withoutAt = v.startsWith("@") ? v.slice(1) : v.replace(/^\/+/, "");
     if (withoutAt.toLowerCase().includes("instagram.com")) return ensureProtocol(withoutAt);
     return `https://www.instagram.com/${withoutAt}`;
   }
 
-  // fallback — treat as website
   return ensureProtocol(v);
 }
 
@@ -126,9 +102,8 @@ function getDisplayFromUrl(url?: string) {
   if (!url) return "";
   const v = String(url).trim();
   try {
-    // If not a URL, show a compact version of the raw value
     if (!/^https?:\/\//i.test(v)) {
-      if (v.startsWith("@")) return v; // show @handle
+      if (v.startsWith("@")) return v;
       const parts = v.replace(/\/+$/g, "").split("/").filter(Boolean);
       return parts.length ? parts[parts.length - 1] : v;
     }
@@ -140,18 +115,13 @@ function getDisplayFromUrl(url?: string) {
   }
 }
 
-// REPLACE the existing normalizeVideoUrl with this block (paste into the utilities area,
-// next to ensureProtocol / getDisplayFromUrl).
-
-/** Extract YouTube video id from many common YouTube URL shapes */
+/** Video helpers (YouTube / Drive) */
 function getYouTubeId(url?: string): string | null {
   if (!url) return null;
   try {
     const u = url.trim();
-    // youtu.be/ID
     const m1 = u.match(/youtu\.be\/([A-Za-z0-9_-]{6,})/i);
     if (m1 && m1[1]) return m1[1];
-    // youtube.com/watch?v=ID or youtube.com/embed/ID
     const m2 = u.match(/[?&]v=([A-Za-z0-9_-]{6,})/i) || u.match(/\/embed\/([A-Za-z0-9_-]{6,})/i);
     if (m2 && m2[1]) return m2[1];
     return null;
@@ -159,22 +129,15 @@ function getYouTubeId(url?: string): string | null {
     return null;
   }
 }
-
-/** Return a best-effort YouTube thumbnail url (maxresfallback -> hqdefault) */
 function getYouTubeThumbnail(url?: string): string | null {
   const id = getYouTubeId(url || "");
   if (!id) return null;
-  // maxresdefault may not exist for all videos; UI will still show image URL; browser will fallback to broken image
-  // We use maxresdefault first and fall back to hqdefault when necessary by using a second check in code if you like.
   return `https://img.youtube.com/vi/${id}/maxresdefault.jpg`;
 }
-
-/** Extract Google Drive file id from common Drive link forms. */
 function getDriveFileId(url?: string): string | null {
   if (!url) return null;
   try {
     const u = url.trim();
-    // patterns: /file/d/ID/, open?id=ID, drive.google.com/drive/folders/ID (folders not embeddable)
     const m1 = u.match(/\/file\/d\/([A-Za-z0-9_-]{10,})/);
     if (m1 && m1[1]) return m1[1];
     const m2 = u.match(/[?&]id=([A-Za-z0-9_-]{10,})/);
@@ -184,17 +147,9 @@ function getDriveFileId(url?: string): string | null {
     return null;
   }
 }
-
-/**
- * Normalize various Airtable/field shapes into a usable video URL string or null.
- * - Accepts attachment arrays, attachment objects, or plain strings.
- * - Recognizes YouTube and Google Drive links and returns a canonical URL that can be embedded.
- */
 function normalizeVideoUrl(raw?: any): string | null {
   if (!raw || (typeof raw === "string" && raw.trim() === "")) return null;
 
-
-  // 1) If Airtable attachment array: take first file url
   if (Array.isArray(raw)) {
     const first = raw[0];
     if (first && typeof first === "object" && first.url) {
@@ -206,44 +161,34 @@ function normalizeVideoUrl(raw?: any): string | null {
     return null;
   }
 
-  // 2) If object with url property
   if (typeof raw === "object") {
     if (raw.url && String(raw.url).trim()) return ensureProtocol(String(raw.url).trim());
-    // guard for nested shapes
-    if (raw.fields && raw.fields.url && String(raw.fields.url).trim()) return ensureProtocol(String(raw.fields.url).trim());
+    if (raw.fields && raw.fields.url && String(raw.fields.url).trim())
+      return ensureProtocol(String(raw.fields.url).trim());
     return null;
   }
 
-  // 3) If string - try to normalize:
   if (typeof raw === "string") {
     const s = raw.trim();
     if (!s) return null;
-
-    // If it's a YouTube id/path like "in/username" unlikely for video; check full URL patterns
-    // If it already includes youtube or youtu.be -> return canonical https watch link
     const ytId = getYouTubeId(s);
     if (ytId) {
-      // return canonical watch URL (we will convert to embed later)
       return `https://www.youtube.com/watch?v=${ytId}`;
     }
-
-    // Check Google Drive file id -> return preview URL for embedding
     const driveId = getDriveFileId(s);
     if (driveId) {
       return `https://drive.google.com/file/d/${driveId}/preview`;
     }
-
-    // If it looks like a URL (contains dot or protocol), ensure protocol and return
     if (/^https?:\/\//i.test(s) || /\./.test(s)) {
       return ensureProtocol(s);
     }
-
-    // Otherwise not a usable video link
     return null;
   }
 
   return null;
 }
+
+/* Small helpers */
 function emojiForScore(score?: number) {
   if (!score) return "🤍";
   if (score >= 5) return "🔥";
@@ -252,14 +197,6 @@ function emojiForScore(score?: number) {
   if (score === 2) return "😐";
   return "😶";
 }
-function getWhatsAppShareLink(user?: any) {
-  let phone = user?.autogenInvite || "";
-  const urlMatch = phone.match(/(?:wa\.me\/|\/)(\d{10,15})/);
-  if (urlMatch && urlMatch[1]) phone = urlMatch[1];
-  phone = (phone || "").replace(/[^0-9]/g, "");
-  const msg = `Add me to ${user?.name || "your"}'s circle`;
-  return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
-}
 const digitsOnly = (s = "") => (s || "").toString().replace(/\D/g, "");
 const last3 = (s = "") => {
   const d = digitsOnly(s);
@@ -267,7 +204,6 @@ const last3 = (s = "") => {
   return d.slice(-3).padStart(3, "0");
 };
 async function fetchLast3FromReviews(foundUser: any) {
-  // Try by Creator ID, then by Name
   try {
     const idFormula = `{ID (from Creator)}=${escapeAirtableString(foundUser.id || "")}`;
     const byId = await fetchAllPages<any>(REVIEWS_TABLE, { filterByFormula: idFormula });
@@ -288,8 +224,6 @@ async function fetchLast3FromReviews(foundUser: any) {
     return "000";
   }
 }
-
-/* Helpers */
 function timeAgo(from?: Date | null) {
   if (!from) return "just now";
   const ms = Date.now() - from.getTime();
@@ -351,69 +285,71 @@ function StickyLogoNavbar() {
   );
 }
 
-/* ===================== Colored stat pills ===================== */
-const ColoredStatsTabs = ({
-  rating,
+/* ===================== Stats Row (conditional rendering) ===================== */
+const StatsRow = ({
   recommendations,
   followers,
 }: {
-  rating: number;
   recommendations: number;
   followers: number;
 }) => {
-  const Pill = ({
+  const Box = ({
     bg,
-    ring,
     icon,
     label,
     value,
   }: {
     bg: string;
-    ring: string;
-    icon: React.ReactNode;
+    icon?: React.ReactNode;
     label: string;
-    value: number | string;
+    value: string | number;
   }) => (
     <div
-      className={`rounded-xl ${bg} ${ring} px-2.5 py-1.5 sm:px-4 sm:py-3 shadow-sm flex items-center justify-center gap-2 sm:gap-3`}
-      style={{ backdropFilter: "blur(4px)" }}
+      className={`flex-1 ${bg} rounded-xl shadow-md p-4 sm:p-5 flex flex-col items-center justify-center`}
+      style={{ minHeight: 92, backdropFilter: "blur(4px)" }}
     >
-      {icon}
-      <span className="text-base sm:text-lg font-extrabold tabular-nums">{value}</span>
-      <span className="text-[12px] sm:text-[13px] font-semibold whitespace-nowrap">
-        {label}
-      </span>
+      <div className="flex items-center gap-2">
+        {icon}
+        <div className="text-lg sm:text-xl font-extrabold tabular-nums">{value}</div>
+      </div>
+      <div className="text-[13px] text-gray-700 mt-1 font-medium">{label}</div>
     </div>
   );
 
+  // Show only recommendations if followers is 0
+  if (followers === 0) {
+    return (
+      <div className="flex gap-4">
+        <Box
+          bg="bg-violet-50 text-violet-800"
+          icon={<Award className="w-4 h-4 text-violet-800" />}
+          label="Recommendations"
+          value={recommendations ?? 0}
+        />
+      </div>
+    );
+  }
+
+  // Show both if followers > 0
   return (
-    <div className="grid grid-cols-3 gap-2 sm:gap-3">
-      <Pill
-        bg="bg-amber-50 text-amber-800"
-        ring="ring-1 ring-amber-200"
-        icon={<Star className="w-3 h-3" />}
-        label="Rating"
-        value={rating.toFixed(1)}
-      />
-      <Pill
+    <div className="flex gap-4">
+      <Box
         bg="bg-violet-50 text-violet-800"
-        ring="ring-1 ring-violet-200"
-        icon={<Award className="w-3 h-3" />}
+        icon={<Award className="w-4 h-4 text-violet-800" />}
         label="Recommendations"
-        value={recommendations}
+        value={recommendations ?? 0}
       />
-      <Pill
+      <Box
         bg="bg-rose-50 text-rose-800"
-        ring="ring-1 ring-rose-200"
-        icon={<Users className="w-3 h-3" />}
+        icon={<Users className="w-4 h-4 text-rose-800" />}
         label="Followers"
-        value={followers.toLocaleString()}
+        value={(followers || 0).toLocaleString()}
       />
     </div>
   );
 };
 
-/* ===================== Recommendation Card ===================== */
+/* ===================== Recommendation Card (unchanged) ===================== */
 interface Recommendation {
   id: string;
   productName: string;
@@ -429,15 +365,11 @@ interface Recommendation {
   userDisliked?: boolean;
 }
 
-// Replace the existing RecommendationCard definition in src/pages/ExpertProfile.tsx with this block.
-// This version reduces outer white padding and green box padding slightly (px-3/py-3) so the cards look less "white everywhere".
-// Paste the entire block in place of the current RecommendationCard component.
-
 const RecommendationCard = ({
   recommendation,
   onLike,
   onDislike,
-  onPlay, // invoked when the thumbnail/play area is clicked
+  onPlay,
 }: {
   recommendation: Recommendation;
   onLike: (id: string) => void;
@@ -463,7 +395,6 @@ const RecommendationCard = ({
       className="flex flex-col rounded-2xl shadow transition hover:shadow-xl overflow-hidden"
       style={{ background: "#FFF7E6" }}
     >
-      {/* Title row (reduced outer padding) */}
       <div className="w-full px-3 pt-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex-1 min-w-0">
@@ -480,7 +411,6 @@ const RecommendationCard = ({
             </p>
           </div>
 
-          {/* Desktop meta */}
           <div className="hidden sm:flex items-center gap-3">
             {recommendation.rating ? (
               <span className="flex items-center leading-none">
@@ -509,7 +439,6 @@ const RecommendationCard = ({
           </div>
         </div>
 
-        {/* Mobile meta */}
         <div className="sm:hidden mt-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
             {recommendation.rating ? (
@@ -537,15 +466,12 @@ const RecommendationCard = ({
         </div>
       </div>
 
-      {/* Body: green box with thumbnail left (only when video exists) and text on right.
-          Green box padding reduced to px-3/py-3 to make less white. */}
       <div className="mt-3 w-full">
         <div
           className="w-full px-3 py-3 text-gray-900 text-base font-medium break-words"
           style={{ background: "#DCF8C6" }}
         >
           <div className="flex items-start gap-3">
-            {/* Thumbnail only when videoUrl exists. No placeholder if absent. */}
             {recommendation.videoUrl ? (
               <div className="flex-shrink-0">
                 <button
@@ -578,7 +504,6 @@ const RecommendationCard = ({
               </div>
             ) : null}
 
-            {/* Text area (keeps original green-box structure) */}
             <div className="min-w-0 flex-1">
               <span style={{ display: "block", wordBreak: "break-word" }}>
                 {displayText}
@@ -599,7 +524,6 @@ const RecommendationCard = ({
         </div>
       </div>
 
-      {/* Helpful section (reduced padding to match green box) */}
       <div className="px-3 py-3 flex items-center gap-4">
         <span className="text-sm text-gray-600">Was this helpful?</span>
         <div className="flex items-center gap-3">
@@ -618,6 +542,7 @@ const RecommendationCard = ({
     </div>
   );
 };
+
 /* ===================== Page ===================== */
 const ExpertProfile = () => {
   const { id } = useParams();
@@ -626,7 +551,6 @@ const ExpertProfile = () => {
   const [expert, setExpert] = useState<any>(null);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [loading, setLoading] = useState(true);
-  // const [recommendations, setRecommendations] = useState<Recommendation[]>([ ... ]);
 
   const [activeTab, setActiveTab] = useState<"Recommendations" | "Activity">(
     "Recommendations"
@@ -676,29 +600,20 @@ const ExpertProfile = () => {
     async function fetchExpertAndRecommendations() {
       setLoading(true);
       try {
-        // 1. Find expert user from USERS_TABLE (not experts table)
         const idParam = (id || "").trim();
         const users = await fetchAllPages<any>(USERS_TABLE, {});
         const m = idParam.match(/^(.+?)(?:-(\d{3}))?$/);
         const targetBase = m ? m[1] : idParam;
         const targetSuffix = m && m[2] ? m[2] : null;
 
-        // Find by slug or id
         let foundExpert: any = null;
         for (const rec of users) {
           const name = rec.fields?.Name || "";
           const baseSlug = slugify(name);
           let l3 = last3(rec.fields?.Phone || "");
-          if (l3 === "000") {
-            // fallback: try to obtain from reviews if needed
-            // optional: you can enable this if many users lack phone
-            // l3 = await fetchLast3FromReviews({ id: rec.fields?.ID?.toString(), name });
-          }
           const canonical = `${baseSlug}-${l3 || "000"}`;
           const isExact = targetSuffix ? canonical === idParam : baseSlug === targetBase;
 
-          // Read the exact "Expert" column and normalize to boolean:
-          // Accept numeric 1, string "1", or boolean true as expert.
           const expertRaw = rec.fields?.Expert;
           const isExpert =
             typeof expertRaw === "number"
@@ -708,7 +623,6 @@ const ExpertProfile = () => {
               : String(expertRaw ?? "").trim() === "1";
 
           if (isExact && isExpert) {
-            // build full expert object with more fields (match ProfilePage)
             foundExpert = {
               id: rec.fields?.ID?.toString(),
               airtableId: rec.id,
@@ -716,13 +630,10 @@ const ExpertProfile = () => {
               phone: rec.fields?.Phone || "",
               autogenInvite: rec.fields?.["Autogen Invite"] ?? "",
               bio: rec.fields?.bio ?? rec.fields?.Bio ?? "",
-              fullBio:
-                rec.fields?.About ??
-                "",
+              fullBio: rec.fields?.About ?? "",
               location: rec.fields?.Location ?? rec.fields?.location ?? "",
               gender: rec.fields?.Gender || rec.fields?.gender || "Male",
               isVerified: !!rec.fields?.verified,
-              // rating and recommendationsCount we'll compute from reviews if not present
               rating: typeof rec.fields?.rating === "number" ? rec.fields?.rating : 0,
               recommendationsCount:
                 typeof rec.fields?.recommendationsCount === "number"
@@ -732,18 +643,16 @@ const ExpertProfile = () => {
               image: Array.isArray(rec.fields?.image)
                 ? rec.fields?.image[0]?.url
                 : rec.fields?.image,
-              linkedin:
-                rec.fields?.["LinkedIn Profile"] ??
-                "",
-              instagram:
-                rec.fields?.["Instagram Profile"] ??
-                "",
+              linkedin: rec.fields?.["LinkedIn Profile"] ?? "",
+              instagram: rec.fields?.["Instagram Profile"] ?? "",
               website:
                 rec.fields?.Website ??
                 rec.fields?.["Website URL"] ??
                 rec.fields?.["Personal Website"] ??
                 "",
-              expert: rec.fields?.Expert ??"",
+              expert: rec.fields?.Expert ?? "",
+              credentials: rec.fields?.Credentials ?? rec.fields?.credentials ?? "",
+              expertiseAreas: rec.fields?.["Expertise Areas"] ?? "",
             };
             break;
           }
@@ -756,13 +665,10 @@ const ExpertProfile = () => {
           return;
         }
 
-        // 2. Fetch recommendations (reviews) for this expert using REVIEWS_TABLE.
-        // Use Creator ID (field name used in your reviews) — mirror ProfilePage logic.
         const recs = await fetchAllPages<any>(REVIEWS_TABLE, {
           filterByFormula: `{ID (from Creator)}=${escapeAirtableString(foundExpert.id || "")}`,
         });
 
-        // If no reviews found by ID, fallback to Name_Creator lookup (same as ProfilePage)
         let allRecs = recs;
         if (!allRecs || allRecs.length === 0) {
           const byName = await fetchAllPages<any>(REVIEWS_TABLE, {
@@ -771,12 +677,8 @@ const ExpertProfile = () => {
           allRecs = byName;
         }
 
-        // Replace existing mapping with this version that normalizes videoUrl and thumbnail
-        // REPLACE the mappedRecs mapping inside fetchExpertAndRecommendations() with this block
-
         const mappedRecs: Recommendation[] = (allRecs || [])
           .map((r: any) => {
-            // prefer VideoURL field (attachment or string)
             const rawVideo =
               r.fields?.VideoURL ??
               r.fields?.Video ??
@@ -784,9 +686,8 @@ const ExpertProfile = () => {
               r.fields?.["Share Link"] ??
               r.fields?.["ShareLink"];
 
-            const normalizedVideo = normalizeVideoUrl(rawVideo); // string or null
+            const normalizedVideo = normalizeVideoUrl(rawVideo);
 
-            // normalize thumbnail: attachments array or URL string
             let thumb: string | null = null;
             if (Array.isArray(r.fields?.Thumbnail) && r.fields.Thumbnail[0]?.url) {
               thumb = r.fields.Thumbnail[0].url;
@@ -800,7 +701,6 @@ const ExpertProfile = () => {
               thumb = r.fields["Thumbnail URL"].trim();
             }
 
-            // If no thumbnail provided but we have a YouTube URL, use YouTube thumbnail
             if (!thumb && normalizedVideo) {
               const ytId = getYouTubeId(normalizedVideo);
               if (ytId) {
@@ -825,7 +725,6 @@ const ExpertProfile = () => {
                 r.fields.Uplaud || r.fields?.Review || r.fields?.Description || "",
               likes: r.fields.Likes || 0,
               dislikes: r.fields.Dislikes || 0,
-              // normalized videoUrl (string or null)
               videoUrl: (() => {
                 if (!normalizedVideo) return null;
                 const ytId = getYouTubeId(normalizedVideo);
@@ -835,14 +734,14 @@ const ExpertProfile = () => {
               thumbnail: thumb || "",
             };
           })
-          .filter((r) => !!r.productName && !!r.description);  // Sort mappedRecs by date (newest first)
-          
-          const sortedRecs = mappedRecs.slice().sort((a, b) => {
-            const at = a.date ? a.date.getTime() : 0;
-            const bt = b.date ? b.date.getTime() : 0;
-            return bt - at;
-          });
-        // Compute rating average from mapped reviews if we didn't get rating from the user record
+          .filter((r) => !!r.productName && !!r.description);
+
+        const sortedRecs = mappedRecs.slice().sort((a, b) => {
+          const at = a.date ? a.date.getTime() : 0;
+          const bt = b.date ? b.date.getTime() : 0;
+          return bt - at;
+        });
+
         let rating = foundExpert.rating || 0;
         if ((!rating || rating === 0) && mappedRecs.length > 0) {
           const sum = mappedRecs.reduce((s, x) => s + (x.rating || 0), 0);
@@ -851,13 +750,11 @@ const ExpertProfile = () => {
 
         const recommendationsCount = mappedRecs.length || foundExpert.recommendationsCount || 0;
 
-        // Compute joinDate same as ProfilePage: earliest review date (i.e. last element after descending sort)
         const joinDate =
           sortedRecs.length > 0 && sortedRecs[sortedRecs.length - 1].date
             ? formatDate(sortedRecs[sortedRecs.length - 1].date)
             : "—";
 
-        // Attach computed values to expert object
         const expertWithData = {
           ...foundExpert,
           rating: rating || 0,
@@ -867,7 +764,6 @@ const ExpertProfile = () => {
 
         setExpert(expertWithData);
         setRecommendations(sortedRecs);
-
       } catch (err) {
         console.error("Error loading expert:", err);
         setExpert(null);
@@ -881,46 +777,42 @@ const ExpertProfile = () => {
   }, [id]);
 
   const filteredRecommendations = (recommendations || []).filter((rec) => {
-  // filter by video/text/all
-  if (reviewFilter === "video" && !rec.videoUrl) return false;
-  if (reviewFilter === "text" && rec.videoUrl) return false;
+    if (reviewFilter === "video" && !rec.videoUrl) return false;
+    if (reviewFilter === "text" && rec.videoUrl) return false;
 
-  const term = (searchTerm || "").trim().toLowerCase();
-  if (!term) return true;
-
-  // search on productName, description, category, rating
-  const hay = [
-    rec.productName,
-    rec.description,
-    rec.category,
-    rec.rating?.toString(),
-    rec.date ? formatDate(rec.date) : "",
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-
-  return hay.includes(term);
-});
-
-// videos used for carousel: records that have videoUrl and match search term
-const videoItems = (recommendations || [])
-  .filter((r) => r.videoUrl && r.videoUrl.trim() !== "")
-  .filter((r) => {
     const term = (searchTerm || "").trim().toLowerCase();
     if (!term) return true;
-    const hay = [r.productName, r.description].filter(Boolean).join(" ").toLowerCase();
+
+    const hay = [
+      rec.productName,
+      rec.description,
+      rec.category,
+      rec.rating?.toString(),
+      rec.date ? formatDate(rec.date) : "",
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
     return hay.includes(term);
-  })
-  .map((r) => ({
-    id: r.id,
-    businessName: r.productName,
-    videoUrl: r.videoUrl,
-    thumbnail: r.thumbnail || "",
-  }));
+  });
+
+  const videoItems = (recommendations || [])
+    .filter((r) => r.videoUrl && r.videoUrl.trim() !== "")
+    .filter((r) => {
+      const term = (searchTerm || "").trim().toLowerCase();
+      if (!term) return true;
+      const hay = [r.productName, r.description].filter(Boolean).join(" ").toLowerCase();
+      return hay.includes(term);
+    })
+    .map((r) => ({
+      id: r.id,
+      businessName: r.productName,
+      videoUrl: r.videoUrl,
+      thumbnail: r.thumbnail || "",
+    }));
 
   const handleFollow = () => {
-    // Implement follow functionality
     console.log("Follow clicked");
   };
 
@@ -941,6 +833,7 @@ const videoItems = (recommendations || [])
       </>
     );
   }
+
   if (!expert)
     return (
       <>
@@ -950,6 +843,7 @@ const videoItems = (recommendations || [])
         </div>
       </>
     );
+
   return (
     <div
       className="min-h-screen w-full font-sans text-gray-800 relative"
@@ -960,7 +854,7 @@ const videoItems = (recommendations || [])
     >
       <StickyLogoNavbar />
 
-      <div className="max-w-4xl mx-auto space-y-6 relative z-10 px-2 sm:px-0 pt-24">
+      <div className="max-w-6xl mx-auto space-y-6 relative z-10 px-4 sm:px-6 lg:px-8 pt-24">
         {/* Back Button */}
         <div className="flex items-center justify-start">
           <button
@@ -980,147 +874,189 @@ const videoItems = (recommendations || [])
           </button>
         </div>
 
-        {/* Expert Profile Card */}
+        {/* Header Card */}
         <div
-          className="shadow-lg rounded-2xl p-5 sm:p-6 flex flex-col gap-5 border mt-2"
+          className="rounded-2xl shadow-lg overflow-hidden border"
           style={{
             background: "rgba(255,255,255,0.75)",
             backdropFilter: "blur(8px)",
             borderColor: "rgba(255,255,255,0.6)",
           }}
         >
-          <div className="flex flex-col items-center text-center">
-            {/* Avatar */}
-            <div className="relative w-20 h-20 sm:w-24 sm:h-24 bg-purple-600 rounded-full flex items-center justify-center text-3xl sm:text-4xl font-extrabold text-white select-none mb-4">
-              {expert?.image ? (
-                <img
-                  src={expert.image}
-                  alt={expert?.name || "Expert"}
-                  className="w-full h-full object-cover rounded-full"
-                />
-              ) : (
-                expert?.name
-                  ?.split(" ")
-                  .map((n: string) => n[0])
-                  .join("")
-              )}
-            </div>
-
-                        {/* Name, Join Date, Actions, Social Links */}
-            <div className="flex flex-col items-center text-center">
-              <div className="flex items-center justify-center gap-2 mb-1">
-                <h2 className="font-extrabold text-2xl sm:text-3xl">{expert?.name}</h2>
-                {expert?.isVerified && (
-                  <CheckCircle className="w-6 h-6 text-green-600 fill-green-600" />
-                )}
-              </div>
-
-              {/* Join date (small line under name) */}
-              <div className="text-sm text-gray-700 mb-3">
-                Joined {expert?.joinDate ?? "—"}
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex gap-3 mb-3">
-                <Button
-                  onClick={handleFollow}
-                  className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-lg font-semibold"
-                >
-                  Follow
-                </Button>
-                <button
-                  onClick={handleShare}
-                  className="inline-flex items-center justify-center border border-gray-300 text-gray-700 px-4 py-2 rounded-lg shadow hover:bg-gray-50"
-                  style={{ background: "rgba(255,255,255,0.9)" }}
-                >
-                  <Share2 className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Social links row (icons + compact label) */}
-              <div className="flex items-center gap-4 text-sm text-gray-800 mb-3">
-                {expert?.linkedin ? (
-                  <a
-                    href={buildSocialHref("linkedin", expert.linkedin) || undefined}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 hover:underline"
-                    title={expert.linkedin}
-                  >
-                    <Linkedin className="w-4 h-4 text-gray-800" />
-                    <span className="truncate" style={{ maxWidth: 220 }}>
-                      {getDisplayFromUrl(expert.linkedin)}
-                    </span>
-                  </a>
-                ) : null}
-
-                {expert?.instagram ? (
-                  <a
-                    href={buildSocialHref("instagram", expert.instagram) || undefined}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 hover:underline"
-                    title={expert.instagram}
-                  >
-                    <Instagram className="w-4 h-4 text-pink-600" />
-                    <span className="truncate" style={{ maxWidth: 220 }}>
-                      {getDisplayFromUrl(expert.instagram)}
-                    </span>
-                  </a>
-                ) : null}
-                {expert?.website ? (
-                  <a
-                    href={buildSocialHref("website", expert.website) || undefined}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 hover:underline"
-                    title={expert.website}
-                  >
-                    <Globe className="w-4 h-4 text-gray-700" />
-                    <span className="truncate" style={{ maxWidth: 220 }}>
-                      {getDisplayFromUrl(expert.website)}
-                    </span>
-                  </a>
-                ) : null}
-              </div>
-
-              {/* Credentials (kept below socials) */}
-              {expert?.credentials && (
-                <p className="text-sm sm:text-base text-gray-700 font-medium mb-2">
-                  {expert.credentials}
-                </p>
-              )}
-
-              {/* Short bio */}
-              {expert?.bio && (
-                <p className="text-sm sm:text-base text-gray-600 mb-2">{expert?.bio}</p>
-              )}
-            </div>
-          </div>
-
-          {/* Stats */}
-          <ColoredStatsTabs
-            rating={expert.rating}
-            recommendations={expert.recommendationsCount}
-            followers={expert.followers}
+          {/* subtle banner / top band */}
+          <div
+            className="h-28 w-full"
+            style={{
+              background:
+                "linear-gradient(90deg, rgba(98,20,168,0.10), rgba(140,56,196,0.06))",
+            }}
           />
+
+          {/* content area */}
+          <div className="px-6 -mt-12 pb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-6 items-start">
+              {/* Left: avatar + vertical info */}
+              <div className="sm:col-span-7 flex">
+                <div className="flex-shrink-0 mr-4">
+                  <div className="relative w-28 h-28 rounded-full overflow-hidden shadow-xl bg-purple-600 flex items-center justify-center">
+                    {expert?.image ? (
+                      <img
+                        src={expert.image}
+                        alt={expert?.name || "Expert"}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="text-white font-extrabold text-2xl">
+                        {expert?.name
+                          ?.split(" ")
+                          .map((n: string) => n[0])
+                          .join("")}
+                      </div>
+                    )}
+                    {expert?.isVerified && (
+                      <span className="absolute -bottom-2 -right-2 bg-white rounded-full p-1.5 shadow">
+                        <CheckCircle className="w-5 h-5 text-green-600" />
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex-1 flex flex-col justify-center">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h1 className="text-2xl font-extrabold text-gray-900 leading-tight">{expert?.name}</h1>
+                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-gradient-to-r from-purple-600 to-violet-600 text-white text-xs font-bold shadow-md">
+                      <BadgeCheck className="w-3.5 h-3.5" />
+                      Expert
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-700 mt-1">{expert?.bio}</p>
+
+                  <div className="flex items-center gap-3 mt-4">
+                    <Button
+                      onClick={handleFollow}
+                      className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-semibold"
+                    >
+                      Follow
+                    </Button>
+
+                    <button
+                      onClick={handleShare}
+                      className="inline-flex items-center justify-center border border-gray-300 text-gray-700 px-3 py-2 rounded-lg shadow hover:bg-gray-50"
+                      style={{ background: "rgba(255,255,255,0.9)" }}
+                      aria-label="Share profile"
+                    >
+                      <Share2 className="w-4 h-4" />
+                    </button>
+
+                    <div className="ml-2 text-sm text-gray-700">Joined {expert?.joinDate ?? "—"}</div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-3 mt-3 items-center text-sm text-gray-800">
+                    {expert?.linkedin ? (
+                      <a
+                        href={buildSocialHref("linkedin", expert.linkedin) || undefined}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 hover:underline"
+                        title={expert.linkedin}
+                      >
+                        <Linkedin className="w-4 h-4 text-gray-800" />
+                        <span className="truncate max-w-[240px]">{getDisplayFromUrl(expert.linkedin)}</span>
+                      </a>
+                    ) : null}
+
+                    {expert?.instagram ? (
+                      <a
+                        href={buildSocialHref("instagram", expert.instagram) || undefined}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 hover:underline"
+                        title={expert.instagram}
+                      >
+                        <Instagram className="w-4 h-4 text-pink-600" />
+                        <span className="truncate max-w-[240px]">{getDisplayFromUrl(expert.instagram)}</span>
+                      </a>
+                    ) : null}
+
+                    {expert?.website ? (
+                      <a
+                        href={buildSocialHref("website", expert.website) || undefined}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 hover:underline"
+                        title={expert.website}
+                      >
+                        <Globe className="w-4 h-4 text-gray-700" />
+                        <span className="truncate max-w-[240px]">{getDisplayFromUrl(expert.website)}</span>
+                      </a>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+
+              {/* Right: stat boxes (removed rating, conditional followers) */}
+              <div className="sm:col-span-5 flex items-start">
+                <div className="w-full">
+                  <StatsRow
+                    recommendations={expert.recommendationsCount}
+                    followers={expert.followers}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Expertise Areas row */}
+            {expert?.expertiseAreas && (
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">Areas of Expertise</h3>
+                <div className="flex flex-wrap gap-2">
+                  {expert.expertiseAreas.split(',').map((area: string, idx: number) => {
+                    const trimmed = area.trim();
+                    if (!trimmed) return null;
+                    return (
+                      <span
+                        key={idx}
+                        className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium shadow-sm"
+                        style={{
+                          background: "linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(168, 85, 247, 0.15))",
+                          color: "#6214a8",
+                          border: "1px solid rgba(139, 92, 246, 0.3)",
+                        }}
+                      >
+                        {trimmed}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* small credentials / badges row below header (optional) */}
+            {expert?.credentials && (
+              <div className="mt-5 flex flex-wrap gap-3">
+                <span className="px-4 py-2 bg-white/80 rounded-full text-sm shadow text-gray-700">
+                  {expert.credentials}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* About Section */}
+        {/* About Card (neat card below) */}
         <Card
-          className="w-full backdrop-blur-md p-5"
+          className="w-full backdrop-blur-md p-6"
           style={{
             background: "rgba(255,255,255,0.75)",
             border: "1px solid rgba(255,255,255,0.6)",
+            borderRadius: "1rem",
           }}
         >
           <h3 className="text-lg font-bold text-gray-900 mb-3">About</h3>
           <p className="text-gray-700 text-base">
             {showFullBio
               ? expert.fullBio
-              : expert.fullBio.slice(0, 150) +
-                (expert.fullBio.length > 150 ? "..." : "")}
-            {expert.fullBio.length > 150 && (
+              : (expert.fullBio || "").slice(0, 250) + ((expert.fullBio || "").length > 250 ? "..." : "")}
+            {expert.fullBio && expert.fullBio.length > 250 && (
               <button
                 onClick={() => setShowFullBio(!showFullBio)}
                 className="text-purple-700 hover:text-purple-900 font-semibold ml-1"
@@ -1131,7 +1067,7 @@ const videoItems = (recommendations || [])
           </p>
         </Card>
 
-        {/* Tabs */}
+        {/* Tabs, filters, search, and recommendation list */}
         <div className="rounded-2xl p-4" style={{ background: "transparent" }}>
           <div className="flex gap-6 mb-6 text-base font-semibold border-b border-white/30">
             <button
@@ -1187,7 +1123,6 @@ const videoItems = (recommendations || [])
                   </button>
                 </div>
 
-                {/* Search box aligned to right */}
                 <div className="ml-auto flex items-center gap-2 max-w-md w-full sm:w-auto">
                   <div className="relative w-full sm:w-64">
                     <span className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
@@ -1207,7 +1142,7 @@ const videoItems = (recommendations || [])
                 </div>
               </div>
 
-              {/* Reviews list (text / mixed) */}
+              {/* Reviews list */}
               <div className="space-y-6">
                 {filteredRecommendations.length === 0 ? (
                   <div className="text-center text-white/90 py-8">No reviews found.</div>
@@ -1218,14 +1153,13 @@ const videoItems = (recommendations || [])
                         recommendation={rec}
                         onLike={(id) => handleLike(id)}
                         onDislike={(id) => handleDislike(id)}
-                        onPlay={(payload) => setSelectedVideo(payload)} // <-- pass modal opener
+                        onPlay={(payload) => setSelectedVideo(payload)}
                       />
                     </div>
                   ))
                 )}
               </div>
 
-              {/* Disclaimer */}
               <div className="mt-6 p-4 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20">
                 <p className="text-white/80 text-sm text-center italic">
                   These recommendations are for informational purposes only and not a substitute for medical advice.
@@ -1242,7 +1176,7 @@ const videoItems = (recommendations || [])
         </div>
       </div>
 
-      {/* Video Modal — REPLACE existing modal iframe block with this */}
+      {/* Video Modal */}
       {selectedVideo && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
@@ -1270,7 +1204,6 @@ const videoItems = (recommendations || [])
                 const driveId = getDriveFileId(src);
 
                 if (ytId) {
-                  // embed YouTube
                   const embed = `https://www.youtube.com/embed/${ytId}?autoplay=1&rel=0`;
                   return (
                     <iframe
@@ -1284,7 +1217,6 @@ const videoItems = (recommendations || [])
                 }
 
                 if (driveId) {
-                  // Google Drive preview/embed URL
                   const embed = `https://drive.google.com/file/d/${driveId}/preview`;
                   return (
                     <iframe
@@ -1297,7 +1229,6 @@ const videoItems = (recommendations || [])
                   );
                 }
 
-                // fallback to raw URL in an iframe (ensure protocol)
                 return (
                   <iframe
                     title={selectedVideo.businessName || "Video"}
@@ -1315,7 +1246,6 @@ const videoItems = (recommendations || [])
         </div>
       )}
 
-      {/* Styles */}
       <style>{`
         body {
           background: #6214a8 !important;

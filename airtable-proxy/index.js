@@ -6,10 +6,10 @@ const app = express();
 const PORT = 5000;
 
 // Airtable config
-const API_KEY = 'patgat0IYY3MEpP0E.07c83079a93fcb0f6020e201ae6295542be839697d3eaa107f920a2395abdd6a'; // ← Replace with your real API key
-const BASE_ID = 'appFUJWWTaoJ3YiWt';
-const REVIEW_TABLE_ID = 'tblef0n1hQXiKPHxI';
-const USER_TABLE_ID = 'tblWIFgwTz3Gn3idV';
+const API_KEY = process.env.AIRTABLE_API_KEY;
+const BASE_ID = process.env.AIRTABLE_BASE_ID;
+const REVIEW_TABLE_ID = process.env.AIRTABLE_REVIEWS_TABLE;
+const USER_TABLE_ID = process.env.AIRTABLE_USERS_TABLE;
 
 app.use(cors());
 
