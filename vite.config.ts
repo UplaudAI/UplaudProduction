@@ -46,6 +46,17 @@ export default defineConfig(({ mode }) => ({
     },
   },
 
+  build: {
+    // Generate unique hashes for each build to bust cache
+    rollupOptions: {
+      output: {
+        entryFileNames: `assets/[name].[hash].js`,
+        chunkFileNames: `assets/[name].[hash].js`,
+        assetFileNames: `assets/[name].[hash].[ext]`
+      }
+    }
+  },
+
   plugins: [
     react(),
     mode === "development" && componentTagger(),
