@@ -4480,4 +4480,10 @@
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
+  <url>
+    <loc>https://www.uplaud.ai/business/central-texas-brain-and-spine</loc>
+    <lastmod>2026-02-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
 </urlset>
