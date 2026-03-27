@@ -119,7 +119,7 @@ export async function generateStoryImage(
 
   // ======== BACKGROUND ========
   // Solid purple matching the mockup
-  ctx.fillStyle = "#7C3AED";
+  ctx.fillStyle = "#6214a8";
   ctx.fillRect(0, 0, W, H);
 
   // ======== LOGO (white, centered, upper area) ========
@@ -238,7 +238,7 @@ export async function generateStoryImage(
     ctx.save();
     ctx.beginPath();
     ctx.arc(avatarCX, avatarCY, avatarR, 0, Math.PI * 2);
-    ctx.fillStyle = "#7C3AED";
+    ctx.fillStyle = "#6214a8";
     ctx.fill();
     ctx.font = "700 28px 'DM Sans', Arial, sans-serif";
     ctx.fillStyle = "#FFFFFF";
@@ -272,7 +272,7 @@ export async function generateStoryImage(
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
   ctx.font = "600 43px 'DM Sans', Arial, sans-serif";
-  ctx.fillStyle = "#6B21A8";
+  ctx.fillStyle = "#6214a8";
   ctx.fillText(review.businessName, cardX + cardW / 2, cy);
   ctx.restore();
 
