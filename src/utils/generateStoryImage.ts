@@ -143,29 +143,31 @@ export async function generateStoryImage(
   }
 
   // ======== CALCULATE CARD DIMENSIONS ========
-  const cardMarginX = 64;
+  const cardMarginX = 48;
   const cardX = cardMarginX;
   const cardW = W - cardMarginX * 2;
-  const cardPad = 56;
+  const cardPad = 60;
   const contentW = cardW - cardPad * 2;
 
-  // Measure review text
-  ctx.font = "400 36px 'DM Sans', Arial, sans-serif";
-  const reviewLines = wrapText(ctx, review.reviewText, contentW);
+  // Measure review text (inside the green bubble, with bubble padding)
+  const bubblePadX = 36;
+  const bubblePadY = 28;
+  ctx.font = "400 41px 'DM Sans', Arial, sans-serif";
+  const reviewLines = wrapText(ctx, review.reviewText, contentW - bubblePadX * 2);
 
   // Heights for each section
-  const avatarRowH = 80;
-  const businessNameH = 46;
-  const starsRowH = 62;
-  const reviewTextH = reviewLines.length * 50;
+  const avatarRowH = 86;
+  const businessNameH = 52;
+  const starsRowH = 68;
+  const reviewTextH = reviewLines.length * 55 + bubblePadY * 2;
 
   const totalContentH =
     avatarRowH +
-    26 + // gap after avatar row
+    28 + // gap after avatar row
     businessNameH +
-    14 + // gap after business name
+    16 + // gap after business name
     starsRowH +
-    22 + // gap after stars
+    24 + // gap after stars
     reviewTextH;
 
   const cardH = totalContentH + cardPad * 2;
@@ -207,7 +209,7 @@ export async function generateStoryImage(
   let cy = cardY + cardPad;
 
   // -- Profile photo / avatar --
-  const avatarR = 34;
+  const avatarR = 38;
   const avatarCX = cx + avatarR;
   const avatarCY = cy + avatarR;
 
@@ -238,7 +240,7 @@ export async function generateStoryImage(
     ctx.arc(avatarCX, avatarCY, avatarR, 0, Math.PI * 2);
     ctx.fillStyle = "#7C3AED";
     ctx.fill();
-    ctx.font = "700 24px 'DM Sans', Arial, sans-serif";
+    ctx.font = "700 28px 'DM Sans', Arial, sans-serif";
     ctx.fillStyle = "#FFFFFF";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -251,36 +253,36 @@ export async function generateStoryImage(
   ctx.save();
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  ctx.font = "700 36px 'DM Sans', Arial, sans-serif";
+  ctx.font = "700 41px 'DM Sans', Arial, sans-serif";
   ctx.fillStyle = "#111827";
   ctx.fillText(review.reviewerName, nameX, cy + 2);
 
   // -- Handle --
   if (review.handle) {
-    ctx.font = "400 26px 'DM Sans', Arial, sans-serif";
+    ctx.font = "400 31px 'DM Sans', Arial, sans-serif";
     ctx.fillStyle = "#9CA3AF";
-    ctx.fillText(review.handle, nameX, cy + 42);
+    ctx.fillText(review.handle, nameX, cy + 46);
   }
   ctx.restore();
 
-  cy += avatarRowH + 26;
+  cy += avatarRowH + 28;
 
   // -- Business name (2pt larger than review text) --
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
-  ctx.font = "600 38px 'DM Sans', Arial, sans-serif";
+  ctx.font = "600 43px 'DM Sans', Arial, sans-serif";
   ctx.fillStyle = "#6B21A8";
   ctx.fillText(review.businessName, cardX + cardW / 2, cy);
   ctx.restore();
 
-  cy += businessNameH + 14;
+  cy += businessNameH + 16;
 
   // -- Stars (orange, centered) --
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
-  const starFontSize = 48;
+  const starFontSize = 53;
   let starStr = "";
   for (let i = 0; i < 5; i++) {
     starStr += i < review.score ? "★" : "☆";
@@ -290,16 +292,29 @@ export async function generateStoryImage(
   ctx.fillText(starStr, cardX + cardW / 2, cy);
   ctx.restore();
 
-  cy += starsRowH + 22;
+  cy += starsRowH + 24;
 
-  // -- Review text (green, #25D366 WhatsApp green) --
+  // -- Review text in WhatsApp-style green bubble --
+  const bubbleW = contentW;
+  const bubbleH = reviewLines.length * 55 + bubblePadY * 2;
+  const bubbleX = cx;
+  const bubbleY = cy;
+
+  // Draw the green bubble background
+  ctx.save();
+  roundedRect(ctx, bubbleX, bubbleY, bubbleW, bubbleH, 16);
+  ctx.fillStyle = "#DCF8C6";
+  ctx.fill();
+  ctx.restore();
+
+  // Draw the review text inside the bubble
   ctx.save();
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  ctx.font = "400 36px 'DM Sans', Arial, sans-serif";
-  ctx.fillStyle = "#25D366";
+  ctx.font = "400 41px 'DM Sans', Arial, sans-serif";
+  ctx.fillStyle = "#1A1A1A";
   reviewLines.forEach((line, i) => {
-    ctx.fillText(line, cx, cy + i * 50);
+    ctx.fillText(line, bubbleX + bubblePadX, bubbleY + bubblePadY + i * 55);
   });
   ctx.restore();
 
@@ -307,7 +322,7 @@ export async function generateStoryImage(
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "bottom";
-  ctx.font = "700 36px 'DM Sans', Arial, sans-serif";
+  ctx.font = "700 41px 'DM Sans', Arial, sans-serif";
   ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
   ctx.fillText("@uplaudofficial", W / 2, H - 80);
   ctx.restore();
