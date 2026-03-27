@@ -16,6 +16,7 @@ import {
   ThumbsDown
 } from "lucide-react";
 import axios from "axios";
+import { buildWhatsAppShareUrl } from "@/utils/buildShareUrl";
 import { Card } from "@/components/ui/card";
 import {
   Tooltip,
@@ -919,13 +920,15 @@ const handleDislike = (reviewIndex: number) => {
   const votes = reviewVotes[voteKey] || { likes: 0, dislikes: 0 };
 
   const handleShare = () => {
-    const link =
-      review.referralLink ||
-      review.shareLink ||
-      `${window.location.origin}/business/${slugify(review.businessName)}`;
-
-    const message = `Hey, check out this Real Review for ${review.businessName} on Uplaud. It's a platform where real people give honest reviews on WhatsApp:\n${link}`;
-    const wa = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    const wa = buildWhatsAppShareUrl({
+      reviewerName: user?.name || review.raw?.Name_Creator
+        ? (Array.isArray(review.raw?.Name_Creator) ? review.raw.Name_Creator[0] : (review.raw?.Name_Creator || "Uplaud User"))
+        : "Uplaud User",
+      businessName: review.businessName,
+      reviewText: review.uplaud,
+      score: review.score || 5,
+      handle: user?.handle ? `@${user.handle}` : undefined,
+    });
     window.location.href = wa;
   };
 
