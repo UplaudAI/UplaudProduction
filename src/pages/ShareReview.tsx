@@ -10,17 +10,28 @@
  * This URL is what gets sent via WhatsApp. When opened on mobile,
  * it shows the generated story image with a prominent
  * "Share to Instagram Story" button.
+ *
+ * IMPORTANT: WhatsApp (and most apps) open links in an in-app browser
+ * (WebView) which does NOT support navigator.share with files.
+ * We detect this and prompt the user to open in Safari/Chrome where
+ * the Web Share API works and can hand the image directly to Instagram.
  */
 import React, { useEffect, useState, useRef } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { generateStoryImage, type ReviewData } from "@/utils/generateStoryImage";
 
-/* ===================== Device detection ===================== */
+/* ===================== Device / browser detection ===================== */
 function getDeviceInfo() {
   const ua = navigator.userAgent || (navigator as any).vendor || (window as any).opera;
   const isIOS = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
   const isAndroid = /android/i.test(ua);
   return { isIOS, isAndroid, isMobile: isIOS || isAndroid };
+}
+
+/** Detect if we're in an in-app browser (WhatsApp, Instagram, FB, etc.) */
+function isInAppBrowser(): boolean {
+  const ua = navigator.userAgent || "";
+  return /FBAN|FBAV|Instagram|WhatsApp|Line|Snapchat|Twitter|Weibo|MicroMessenger/i.test(ua);
 }
 
 /* ===================== Component ===================== */
@@ -43,6 +54,20 @@ const ShareReview: React.FC = () => {
   };
 
   const device = getDeviceInfo();
+  const inApp = isInAppBrowser();
+
+  // Check if Web Share API with files is available
+  const [canWebShare, setCanWebShare] = useState(false);
+  useEffect(() => {
+    if (imageBlob && navigator.share && navigator.canShare) {
+      const file = new File([imageBlob], "test.png", { type: "image/png" });
+      try {
+        setCanWebShare(navigator.canShare({ files: [file] }));
+      } catch {
+        setCanWebShare(false);
+      }
+    }
+  }, [imageBlob]);
 
   // Generate the story image on mount
   useEffect(() => {
@@ -82,15 +107,30 @@ const ShareReview: React.FC = () => {
   /** Primary: Web Share API with file ONLY (no title/text).
    *  Passing only the file ensures Instagram shows "Stories" as a
    *  share target. When the user picks Stories, Instagram opens its
-   *  story editor with the image already loaded — zero extra taps. */
+   *  story editor with the image already loaded — zero extra taps.
+   *
+   *  NOTE: Web Share API requires HTTPS (secure context). On local
+   *  dev over plain HTTP, it will be unavailable — falls back to download. */
   const handleShareViaWebShare = async () => {
     if (!imageBlob) return;
     const file = new File([imageBlob], `uplaud-review.png`, { type: "image/png" });
+
+    // Debug: log what's available so we can diagnose issues
+    console.log("[ShareReview] navigator.share exists:", !!navigator.share);
+    console.log("[ShareReview] navigator.canShare exists:", !!navigator.canShare);
+    console.log("[ShareReview] isSecureContext:", window.isSecureContext);
+    console.log("[ShareReview] protocol:", window.location.protocol);
+    if (navigator.canShare) {
+      console.log("[ShareReview] canShare({files}):", navigator.canShare({ files: [file] }));
+    }
 
     try {
       if (navigator.share && navigator.canShare?.({ files: [file] })) {
         await navigator.share({ files: [file] });
         setShareStatus("Shared successfully!");
+      } else if (!window.isSecureContext) {
+        // On HTTP (local dev), Web Share API is blocked
+        setShareStatus("Sharing requires HTTPS. On your deployed Vercel site this will open the share sheet. For now, use Download.");
       } else {
         handleDownload();
       }
@@ -99,6 +139,25 @@ const ShareReview: React.FC = () => {
         console.error("Share failed:", err);
         handleDownload();
       }
+    }
+  };
+
+  /** Open this same page in Safari (iOS) or Chrome (Android) */
+  const handleOpenInBrowser = () => {
+    const currentUrl = window.location.href;
+    if (device.isIOS) {
+      // On iOS, x-safari-https:// opens Safari with the URL
+      // window.open also works in some WebViews
+      window.location.href = currentUrl;
+      // Also try opening via window.open as a fallback
+      setTimeout(() => {
+        window.open(currentUrl, "_blank");
+      }, 300);
+    } else {
+      // On Android, intent:// can open the default browser
+      const intentUrl =
+        `intent://${currentUrl.replace(/^https?:\/\//, "")}#Intent;scheme=https;action=android.intent.action.VIEW;end`;
+      window.location.href = intentUrl;
     }
   };
 
@@ -115,7 +174,6 @@ const ShareReview: React.FC = () => {
     URL.revokeObjectURL(url);
     setShareStatus("Image downloaded! Open Instagram → Your Story → select the image.");
   };
-
 
   /* ---- Render ---- */
 
@@ -167,8 +225,37 @@ const ShareReview: React.FC = () => {
       {/* Share buttons */}
       {!loading && imageBlob && (
         <div className="w-full max-w-md px-4 mt-6 flex flex-col gap-3">
-          {/* Primary: share via Web Share API (best on mobile) */}
-          {device.isMobile && (
+
+          {/* CASE 1: In-app browser (WhatsApp, etc.) — Web Share API won't work */}
+          {device.isMobile && inApp && !canWebShare && (
+            <>
+              <a
+                href={window.location.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-3.5 px-6 rounded-xl font-semibold text-white text-base flex items-center justify-center gap-3 text-center no-underline"
+                style={{
+                  background: "linear-gradient(135deg, #833AB4, #C13584, #E1306C, #F77737)",
+                }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleOpenInBrowser();
+                }}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+                  <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" />
+                </svg>
+                Open in {device.isIOS ? "Safari" : "Browser"} to Share
+              </a>
+              <p className="text-center text-gray-400 text-xs">
+                Sharing to Instagram requires opening in {device.isIOS ? "Safari" : "your browser"}.
+                Tap the button above, then tap "Share to Instagram Story".
+              </p>
+            </>
+          )}
+
+          {/* CASE 2: Real browser with Web Share API support — direct share */}
+          {device.isMobile && canWebShare && (
             <button
               onClick={handleShareViaWebShare}
               className="w-full py-3.5 px-6 rounded-xl font-semibold text-white text-base flex items-center justify-center gap-3"
@@ -183,7 +270,23 @@ const ShareReview: React.FC = () => {
             </button>
           )}
 
-          {/* Download fallback */}
+          {/* CASE 3: Mobile but Web Share not supported and not in-app — show download */}
+          {device.isMobile && !canWebShare && !inApp && (
+            <button
+              onClick={handleShareViaWebShare}
+              className="w-full py-3.5 px-6 rounded-xl font-semibold text-white text-base flex items-center justify-center gap-3"
+              style={{
+                background: "linear-gradient(135deg, #833AB4, #C13584, #E1306C, #F77737)",
+              }}
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z" />
+              </svg>
+              Share to Instagram Story
+            </button>
+          )}
+
+          {/* Download fallback — always visible */}
           <button
             onClick={handleDownload}
             className="w-full py-3 px-6 rounded-xl font-semibold text-sm flex items-center justify-center gap-3 border"
