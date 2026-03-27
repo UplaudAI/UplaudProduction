@@ -1,6 +1,6 @@
 /**
  * generateStoryImage.ts
- * 
+ *
  * Generates a 1080×1920 Instagram Story image on a <canvas>
  * from review data, matching the Uplaud purple-card design.
  *
@@ -12,8 +12,9 @@ export interface ReviewData {
   reviewerName: string;
   businessName: string;
   reviewText: string;
-  score: number;       // 1-5 stars
-  handle?: string;     // e.g. "@lakshsubodh"
+  score: number; // 1-5 stars
+  handle?: string; // e.g. "@lakshsubodh"
+  profileImage?: string; // URL to profile photo
 }
 
 /** Wrap text to fit a given maxWidth, returning an array of lines. */
@@ -61,10 +62,7 @@ function roundedRect(
   ctx.closePath();
 }
 
-/**
- * Load the Uplaud logo PNG and return as an HTMLImageElement.
- * Falls back gracefully if the image can't load.
- */
+/** Load an image and return as HTMLImageElement, or null on failure. */
 function loadImage(src: string): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
     const img = new Image();
@@ -77,10 +75,13 @@ function loadImage(src: string): Promise<HTMLImageElement | null> {
 
 /**
  * Main export: generates a story image and returns a Blob.
- * 
- * @param review - the review data to render
- * @param logoUrl - optional URL to the Uplaud logo PNG
- * @returns Promise<Blob> - the generated PNG image
+ *
+ * Design matches the Uplaud mockup:
+ * - Solid purple background
+ * - Uplaud logo centered near top
+ * - White card vertically centered with profile pic, name, handle,
+ *   "uplaud" branding, stars, review text, heart + likes
+ * - @uplaudofficial at the very bottom
  */
 export async function generateStoryImage(
   review: ReviewData,
@@ -94,64 +95,80 @@ export async function generateStoryImage(
   canvas.height = H;
   const ctx = canvas.getContext("2d")!;
 
-  // ---- Background ----
-  ctx.fillStyle = "#7C3AED";
+  // ---- Background: solid purple ----
+  ctx.fillStyle = "#6B21A8";
   ctx.fillRect(0, 0, W, H);
 
-  // Subtle gradient overlay
-  const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
-  bgGrad.addColorStop(0, "rgba(109, 40, 217, 0.3)");
-  bgGrad.addColorStop(0.5, "rgba(124, 58, 237, 0)");
-  bgGrad.addColorStop(1, "rgba(76, 29, 149, 0.4)");
+  // Subtle vignette gradient
+  const bgGrad = ctx.createRadialGradient(W / 2, H / 2, 200, W / 2, H / 2, H);
+  bgGrad.addColorStop(0, "rgba(107, 33, 168, 0)");
+  bgGrad.addColorStop(1, "rgba(30, 10, 60, 0.4)");
   ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, W, H);
 
-  // ---- Logo ----
+  // ---- Logo at top ----
   const actualLogoUrl = logoUrl || "/lovable-uploads/logo.png";
   const logoImg = await loadImage(actualLogoUrl);
+
+  let logoBottomY = 300; // default if no logo loads
   if (logoImg) {
-    // Draw logo centered at top, scaled to ~280px wide
-    const logoScale = 280 / logoImg.width;
+    const logoTargetW = 260;
+    const logoScale = logoTargetW / logoImg.width;
     const lw = logoImg.width * logoScale;
     const lh = logoImg.height * logoScale;
-    ctx.drawImage(logoImg, (W - lw) / 2, 120, lw, lh);
+    const logoY = 140;
+    ctx.drawImage(logoImg, (W - lw) / 2, logoY, lw, lh);
+    logoBottomY = logoY + lh + 40;
   } else {
-    // Fallback: text logo
+    // Fallback text logo
     ctx.save();
-    ctx.font = "700 72px 'DM Sans', sans-serif";
+    ctx.font = "700 64px 'DM Sans', sans-serif";
     ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
     ctx.textAlign = "center";
-    ctx.fillText("uplaud", W / 2, 260);
+    ctx.textBaseline = "top";
+    ctx.fillText("uplaud", W / 2, 160);
     ctx.restore();
+    logoBottomY = 260;
   }
 
-  // ---- Calculate card dimensions ----
-  const cardMargin = 80;
+  // ---- Load profile image (if available) ----
+  let profileImg: HTMLImageElement | null = null;
+  if (review.profileImage) {
+    profileImg = await loadImage(review.profileImage);
+  }
+
+  // ---- Pre-calculate card dimensions ----
+  const cardMargin = 72;
   const cardX = cardMargin;
   const cardW = W - cardMargin * 2;
-  const cardPadding = 50;
+  const cardPadding = 48;
   const contentW = cardW - cardPadding * 2;
 
-  // Pre-calculate text lines for card height
-  ctx.font = "400 34px 'DM Sans', Arial, sans-serif";
+  // Measure review text lines
+  ctx.font = "400 32px 'DM Sans', Arial, sans-serif";
   const reviewLines = wrapText(ctx, review.reviewText, contentW);
-  const cardContentHeight =
-    100 +  // header (avatar + name)
-    70 +   // stars
-    reviewLines.length * 48 + // review text
-    30 +   // gap
-    50 +   // @uplaudofficial tag
-    40;    // padding bottom
 
-  const cardY = Math.max(logoImg ? 120 + 280 * (logoImg.height / logoImg.width) + 40 : 320, (H - cardContentHeight) / 2 - 80);
-  const cardH = cardContentHeight;
+  // Card content layout heights
+  const headerH = 80; // avatar row (name + handle)
+  const starsH = 60; // star row
+  const textH = reviewLines.length * 44; // review body
+  const likesH = 50; // heart + likes row
+  const gaps = 24 + 20 + 24 + 20; // gaps between sections
+
+  const cardContentH = headerH + starsH + textH + likesH + gaps;
+  const cardH = cardContentH + cardPadding * 2;
+
+  // Center the card vertically between logo and bottom text
+  const availTop = logoBottomY;
+  const availBottom = H - 180; // leave room for @uplaudofficial at bottom
+  const cardY = Math.max(availTop, (availTop + availBottom - cardH) / 2);
 
   // ---- Card shadow + fill ----
   ctx.save();
-  ctx.shadowColor = "rgba(0, 0, 0, 0.15)";
-  ctx.shadowBlur = 40;
-  ctx.shadowOffsetY = 10;
-  roundedRect(ctx, cardX, cardY, cardW, cardH, 28);
+  ctx.shadowColor = "rgba(0, 0, 0, 0.2)";
+  ctx.shadowBlur = 50;
+  ctx.shadowOffsetY = 8;
+  roundedRect(ctx, cardX, cardY, cardW, cardH, 24);
   ctx.fillStyle = "#FFFFFF";
   ctx.fill();
   ctx.restore();
@@ -160,106 +177,125 @@ export async function generateStoryImage(
   const cx = cardX + cardPadding;
   let cy = cardY + cardPadding;
 
-  // Avatar circle
-  const avatarR = 28;
-  const initials = review.reviewerName
-    .split(" ")
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+  // -- Avatar --
+  const avatarR = 30;
+  const avatarCX = cx + avatarR;
+  const avatarCY = cy + avatarR;
 
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(cx + avatarR, cy + avatarR, avatarR, 0, Math.PI * 2);
-  ctx.fillStyle = "#7C3AED";
-  ctx.fill();
-  ctx.font = "700 22px 'DM Sans', Arial, sans-serif";
-  ctx.fillStyle = "#FFFFFF";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(initials, cx + avatarR, cy + avatarR + 1);
-  ctx.restore();
+  if (profileImg) {
+    // Draw profile photo in a circle
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(avatarCX, avatarCY, avatarR, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
+    ctx.drawImage(
+      profileImg,
+      avatarCX - avatarR,
+      avatarCY - avatarR,
+      avatarR * 2,
+      avatarR * 2
+    );
+    ctx.restore();
+  } else {
+    // Initials fallback
+    const initials = review.reviewerName
+      .split(" ")
+      .map((w) => w[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
 
-  // Name + handle
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(avatarCX, avatarCY, avatarR, 0, Math.PI * 2);
+    ctx.fillStyle = "#7C3AED";
+    ctx.fill();
+    ctx.font = "700 24px 'DM Sans', Arial, sans-serif";
+    ctx.fillStyle = "#FFFFFF";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(initials, avatarCX, avatarCY + 1);
+    ctx.restore();
+  }
+
+  // -- Name + handle --
+  const textX = cx + avatarR * 2 + 18;
   ctx.save();
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  ctx.font = "700 34px 'DM Sans', Arial, sans-serif";
+  ctx.font = "700 32px 'DM Sans', Arial, sans-serif";
   ctx.fillStyle = "#111827";
-  ctx.fillText(review.reviewerName, cx + avatarR * 2 + 18, cy + 2);
+  ctx.fillText(review.reviewerName, textX, cy + 2);
 
   if (review.handle) {
-    ctx.font = "400 26px 'DM Sans', Arial, sans-serif";
+    ctx.font = "400 24px 'DM Sans', Arial, sans-serif";
     ctx.fillStyle = "#9CA3AF";
-    ctx.fillText(review.handle, cx + avatarR * 2 + 18, cy + 38);
+    ctx.fillText(review.handle, textX, cy + 38);
   }
   ctx.restore();
 
-  // "uplaud" branding top-right
+  // -- "uplaud" branding top-right of card with clap emoji --
   ctx.save();
   ctx.textAlign = "right";
   ctx.textBaseline = "top";
-  ctx.font = "600 26px 'DM Sans', Arial, sans-serif";
+  ctx.font = "600 24px 'DM Sans', Arial, sans-serif";
   ctx.fillStyle = "#B39DDB";
-  ctx.fillText("uplaud", cardX + cardW - cardPadding, cy + 10);
+  ctx.fillText("uplaud 👏", cardX + cardW - cardPadding, cy + 10);
   ctx.restore();
 
-  cy += 100;
+  cy += headerH + 24;
 
-  // Star rating
-  const starStr = "★".repeat(review.score) + "☆".repeat(5 - review.score);
+  // -- Star rating (orange/amber) --
+  const starSize = 38;
+  for (let i = 0; i < 5; i++) {
+    const filled = i < review.score;
+    ctx.save();
+    ctx.font = `400 ${starSize}px 'DM Sans', Arial, sans-serif`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillStyle = filled ? "#F59E0B" : "#E5E7EB";
+    ctx.fillText("★", cx + i * (starSize + 4), cy);
+    ctx.restore();
+  }
+
+  cy += starsH + 20;
+
+  // -- Review text --
   ctx.save();
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  ctx.font = "400 42px 'DM Sans', Arial, sans-serif";
-  ctx.fillStyle = "#F59E0B";
-  ctx.fillText(starStr, cx, cy);
-  ctx.restore();
-
-  cy += 70;
-
-  // Review text
-  ctx.save();
-  ctx.textAlign = "left";
-  ctx.textBaseline = "top";
-  ctx.font = "400 34px 'DM Sans', Arial, sans-serif";
+  ctx.font = "400 32px 'DM Sans', Arial, sans-serif";
   ctx.fillStyle = "#374151";
   reviewLines.forEach((line, i) => {
-    ctx.fillText(line, cx, cy + i * 48);
+    ctx.fillText(line, cx, cy + i * 44);
   });
   ctx.restore();
 
-  cy += reviewLines.length * 48 + 30;
+  cy += textH + 24;
 
-  // @uplaudofficial tag inside the card
+  // -- Heart + likes (green heart like the mockup) --
   ctx.save();
+  ctx.font = "400 28px 'DM Sans', Arial, sans-serif";
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  ctx.font = "600 28px 'DM Sans', Arial, sans-serif";
-  ctx.fillStyle = "#7C3AED";
-  ctx.fillText("@uplaudofficial", cx, cy);
+  ctx.fillStyle = "#34D399"; // green
+  ctx.fillText("💚", cx, cy);
+  ctx.fillStyle = "#6B7280";
+  ctx.font = "500 26px 'DM Sans', Arial, sans-serif";
+  ctx.fillText("21", cx + 40, cy + 2);
   ctx.restore();
 
-  // ---- Below card: business name ----
-  ctx.save();
-  ctx.textAlign = "center";
-  ctx.textBaseline = "top";
-  ctx.font = "500 30px 'DM Sans', Arial, sans-serif";
-  ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
-  ctx.fillText(`Review for ${review.businessName}`, W / 2, cardY + cardH + 40);
-  ctx.restore();
-
-  // ---- Bottom: @uplaudofficial + tagline ----
+  // ---- Bottom area: @uplaudofficial ----
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "bottom";
-  ctx.font = "600 30px 'DM Sans', Arial, sans-serif";
-  ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
-  ctx.fillText("@uplaudofficial", W / 2, H - 130);
-  ctx.font = "400 24px 'DM Sans', Arial, sans-serif";
-  ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
-  ctx.fillText("Real reviews from real people", W / 2, H - 90);
+  ctx.font = "600 28px 'DM Sans', Arial, sans-serif";
+  ctx.fillStyle = "rgba(255, 255, 255, 0.75)";
+  ctx.fillText("@uplaudofficial", W / 2, H - 100);
+  ctx.font = "400 22px 'DM Sans', Arial, sans-serif";
+  ctx.fillStyle = "rgba(255, 255, 255, 0.45)";
+  ctx.fillText("Real reviews from real people", W / 2, H - 65);
   ctx.restore();
 
   // ---- Convert to blob ----
