@@ -2,7 +2,7 @@
  * generateStoryImage.ts
  *
  * Generates a 1080×1920 Instagram Story image on a <canvas>
- * from review data, matching the Uplaud purple-card design.
+ * from review data, matching the Uplaud story design.
  *
  * Returns a Blob (image/png) that can be shared via Web Share API
  * or downloaded.
@@ -62,7 +62,7 @@ function roundedRect(
   ctx.closePath();
 }
 
-/** Load an image and return as HTMLImageElement, or null on failure. */
+/** Load an image, returning null on failure. */
 function loadImage(src: string): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
     const img = new Image();
@@ -74,15 +74,36 @@ function loadImage(src: string): Promise<HTMLImageElement | null> {
 }
 
 /**
- * Main export: generates a story image and returns a Blob.
- *
- * Design matches the Uplaud mockup:
- * - Solid purple background
- * - Uplaud logo centered near top
- * - White card vertically centered with profile pic, name, handle,
- *   "uplaud" branding, stars, review text, heart + likes
- * - @uplaudofficial at the very bottom
+ * Draw the logo as white on the canvas.
+ * The source logo is purple on transparent — we draw it to a temp canvas,
+ * then use compositing to turn it white before stamping it.
  */
+function drawLogoWhite(
+  ctx: CanvasRenderingContext2D,
+  logoImg: HTMLImageElement,
+  x: number,
+  y: number,
+  w: number,
+  h: number
+) {
+  // Create a temporary canvas
+  const tmp = document.createElement("canvas");
+  tmp.width = w;
+  tmp.height = h;
+  const tctx = tmp.getContext("2d")!;
+
+  // Draw the logo
+  tctx.drawImage(logoImg, 0, 0, w, h);
+
+  // Turn all visible pixels white using compositing
+  tctx.globalCompositeOperation = "source-in";
+  tctx.fillStyle = "#FFFFFF";
+  tctx.fillRect(0, 0, w, h);
+
+  // Stamp onto main canvas
+  ctx.drawImage(tmp, x, y);
+}
+
 export async function generateStoryImage(
   review: ReviewData,
   logoUrl?: string
@@ -95,95 +116,96 @@ export async function generateStoryImage(
   canvas.height = H;
   const ctx = canvas.getContext("2d")!;
 
-  // ---- Background: solid purple ----
-  ctx.fillStyle = "#6B21A8";
+  // ======== BACKGROUND ========
+  // Solid purple matching the mockup
+  ctx.fillStyle = "#7C3AED";
   ctx.fillRect(0, 0, W, H);
 
-  // Subtle vignette gradient
-  const bgGrad = ctx.createRadialGradient(W / 2, H / 2, 200, W / 2, H / 2, H);
-  bgGrad.addColorStop(0, "rgba(107, 33, 168, 0)");
-  bgGrad.addColorStop(1, "rgba(30, 10, 60, 0.4)");
-  ctx.fillStyle = bgGrad;
-  ctx.fillRect(0, 0, W, H);
-
-  // ---- Logo at top ----
+  // ======== LOGO (white, centered, upper area) ========
   const actualLogoUrl = logoUrl || "/lovable-uploads/logo.png";
   const logoImg = await loadImage(actualLogoUrl);
 
-  let logoBottomY = 300; // default if no logo loads
+  let logoBottomY = 340;
   if (logoImg) {
-    const logoTargetW = 260;
+    const logoTargetW = 300;
     const logoScale = logoTargetW / logoImg.width;
-    const lw = logoImg.width * logoScale;
-    const lh = logoImg.height * logoScale;
-    const logoY = 140;
-    ctx.drawImage(logoImg, (W - lw) / 2, logoY, lw, lh);
-    logoBottomY = logoY + lh + 40;
+    const lw = Math.round(logoImg.width * logoScale);
+    const lh = Math.round(logoImg.height * logoScale);
+    const logoX = Math.round((W - lw) / 2);
+    const logoY = 200;
+    drawLogoWhite(ctx, logoImg, logoX, logoY, lw, lh);
+    logoBottomY = logoY + lh + 50;
   } else {
-    // Fallback text logo
+    // Text fallback
     ctx.save();
-    ctx.font = "700 64px 'DM Sans', sans-serif";
-    ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+    ctx.font = "300 72px 'DM Sans', sans-serif";
+    ctx.fillStyle = "#FFFFFF";
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
-    ctx.fillText("uplaud", W / 2, 160);
+    ctx.fillText("uplaud", W / 2, 220);
     ctx.restore();
-    logoBottomY = 260;
+    logoBottomY = 340;
   }
 
-  // ---- Load profile image (if available) ----
+  // ======== LOAD PROFILE IMAGE ========
   let profileImg: HTMLImageElement | null = null;
   if (review.profileImage) {
     profileImg = await loadImage(review.profileImage);
   }
 
-  // ---- Pre-calculate card dimensions ----
-  const cardMargin = 72;
-  const cardX = cardMargin;
-  const cardW = W - cardMargin * 2;
-  const cardPadding = 48;
-  const contentW = cardW - cardPadding * 2;
+  // ======== CALCULATE CARD DIMENSIONS ========
+  const cardMarginX = 80;
+  const cardX = cardMarginX;
+  const cardW = W - cardMarginX * 2;
+  const cardPad = 48;
+  const contentW = cardW - cardPad * 2;
 
-  // Measure review text lines
+  // Measure review text
   ctx.font = "400 32px 'DM Sans', Arial, sans-serif";
   const reviewLines = wrapText(ctx, review.reviewText, contentW);
 
-  // Card content layout heights
-  const headerH = 80; // avatar row (name + handle)
-  const starsH = 60; // star row
-  const textH = reviewLines.length * 44; // review body
-  const likesH = 50; // heart + likes row
-  const gaps = 24 + 20 + 24 + 20; // gaps between sections
+  // Heights for each section
+  const avatarRowH = 72;
+  const starsRowH = 52;
+  const reviewTextH = reviewLines.length * 44;
+  const likesRowH = 40;
 
-  const cardContentH = headerH + starsH + textH + likesH + gaps;
-  const cardH = cardContentH + cardPadding * 2;
+  const totalContentH =
+    avatarRowH +
+    20 + // gap after avatar row
+    starsRowH +
+    16 + // gap after stars
+    reviewTextH +
+    24 + // gap after text
+    likesRowH;
 
-  // Center the card vertically between logo and bottom text
-  const availTop = logoBottomY;
-  const availBottom = H - 180; // leave room for @uplaudofficial at bottom
-  const cardY = Math.max(availTop, (availTop + availBottom - cardH) / 2);
+  const cardH = totalContentH + cardPad * 2;
 
-  // ---- Card shadow + fill ----
+  // Position card: centered between logo bottom and screen bottom
+  const cardY = Math.round(
+    logoBottomY + (H - logoBottomY - cardH) / 2 - 40
+  );
+
+  // ======== DRAW CARD ========
   ctx.save();
-  ctx.shadowColor = "rgba(0, 0, 0, 0.2)";
-  ctx.shadowBlur = 50;
-  ctx.shadowOffsetY = 8;
-  roundedRect(ctx, cardX, cardY, cardW, cardH, 24);
+  ctx.shadowColor = "rgba(0, 0, 0, 0.15)";
+  ctx.shadowBlur = 40;
+  ctx.shadowOffsetY = 6;
+  roundedRect(ctx, cardX, cardY, cardW, cardH, 20);
   ctx.fillStyle = "#FFFFFF";
   ctx.fill();
   ctx.restore();
 
-  // ---- Card content ----
-  const cx = cardX + cardPadding;
-  let cy = cardY + cardPadding;
+  // ======== CARD CONTENT ========
+  const cx = cardX + cardPad;
+  let cy = cardY + cardPad;
 
-  // -- Avatar --
-  const avatarR = 30;
+  // -- Profile photo / avatar --
+  const avatarR = 28;
   const avatarCX = cx + avatarR;
   const avatarCY = cy + avatarR;
 
   if (profileImg) {
-    // Draw profile photo in a circle
     ctx.save();
     ctx.beginPath();
     ctx.arc(avatarCX, avatarCY, avatarR, 0, Math.PI * 2);
@@ -198,7 +220,6 @@ export async function generateStoryImage(
     );
     ctx.restore();
   } else {
-    // Initials fallback
     const initials = review.reviewerName
       .split(" ")
       .map((w) => w[0])
@@ -211,7 +232,7 @@ export async function generateStoryImage(
     ctx.arc(avatarCX, avatarCY, avatarR, 0, Math.PI * 2);
     ctx.fillStyle = "#7C3AED";
     ctx.fill();
-    ctx.font = "700 24px 'DM Sans', Arial, sans-serif";
+    ctx.font = "700 22px 'DM Sans', Arial, sans-serif";
     ctx.fillStyle = "#FFFFFF";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -219,47 +240,49 @@ export async function generateStoryImage(
     ctx.restore();
   }
 
-  // -- Name + handle --
-  const textX = cx + avatarR * 2 + 18;
+  // -- Name --
+  const nameX = cx + avatarR * 2 + 16;
   ctx.save();
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  ctx.font = "700 32px 'DM Sans', Arial, sans-serif";
+  ctx.font = "700 30px 'DM Sans', Arial, sans-serif";
   ctx.fillStyle = "#111827";
-  ctx.fillText(review.reviewerName, textX, cy + 2);
+  ctx.fillText(review.reviewerName, nameX, cy + 2);
 
+  // -- Handle --
   if (review.handle) {
-    ctx.font = "400 24px 'DM Sans', Arial, sans-serif";
+    ctx.font = "400 22px 'DM Sans', Arial, sans-serif";
     ctx.fillStyle = "#9CA3AF";
-    ctx.fillText(review.handle, textX, cy + 38);
+    ctx.fillText(review.handle, nameX, cy + 36);
   }
   ctx.restore();
 
-  // -- "uplaud" branding top-right of card with clap emoji --
+  // -- Three-dot menu (•••) top-right --
   ctx.save();
   ctx.textAlign = "right";
   ctx.textBaseline = "top";
-  ctx.font = "600 24px 'DM Sans', Arial, sans-serif";
-  ctx.fillStyle = "#B39DDB";
-  ctx.fillText("uplaud 👏", cardX + cardW - cardPadding, cy + 10);
+  ctx.font = "700 32px 'DM Sans', Arial, sans-serif";
+  ctx.fillStyle = "#D1D5DB";
+  ctx.fillText("•••", cardX + cardW - cardPad, cy + 8);
   ctx.restore();
 
-  cy += headerH + 24;
+  cy += avatarRowH + 20;
 
-  // -- Star rating (orange/amber) --
-  const starSize = 38;
+  // -- Stars (orange, centered) --
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  const starFontSize = 38;
+  let starStr = "";
   for (let i = 0; i < 5; i++) {
-    const filled = i < review.score;
-    ctx.save();
-    ctx.font = `400 ${starSize}px 'DM Sans', Arial, sans-serif`;
-    ctx.textAlign = "left";
-    ctx.textBaseline = "top";
-    ctx.fillStyle = filled ? "#F59E0B" : "#E5E7EB";
-    ctx.fillText("★", cx + i * (starSize + 4), cy);
-    ctx.restore();
+    starStr += i < review.score ? "★" : "☆";
   }
+  ctx.font = `400 ${starFontSize}px Arial, sans-serif`;
+  ctx.fillStyle = "#F59E0B";
+  ctx.fillText(starStr, cardX + cardW / 2, cy);
+  ctx.restore();
 
-  cy += starsH + 20;
+  cy += starsRowH + 16;
 
   // -- Review text --
   ctx.save();
@@ -272,33 +295,32 @@ export async function generateStoryImage(
   });
   ctx.restore();
 
-  cy += textH + 24;
+  cy += reviewTextH + 24;
 
-  // -- Heart + likes (green heart like the mockup) --
+  // -- Green heart + likes --
   ctx.save();
-  ctx.font = "400 28px 'DM Sans', Arial, sans-serif";
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  ctx.fillStyle = "#34D399"; // green
+  // Green heart
+  ctx.font = "400 26px Arial, sans-serif";
+  ctx.fillStyle = "#34D399";
   ctx.fillText("💚", cx, cy);
-  ctx.fillStyle = "#6B7280";
-  ctx.font = "500 26px 'DM Sans', Arial, sans-serif";
-  ctx.fillText("21", cx + 40, cy + 2);
+  // Count
+  ctx.font = "500 24px 'DM Sans', Arial, sans-serif";
+  ctx.fillStyle = "#9CA3AF";
+  ctx.fillText("21", cx + 38, cy + 2);
   ctx.restore();
 
-  // ---- Bottom area: @uplaudofficial ----
+  // ======== BOTTOM: @uplaudofficial ========
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "bottom";
-  ctx.font = "600 28px 'DM Sans', Arial, sans-serif";
-  ctx.fillStyle = "rgba(255, 255, 255, 0.75)";
-  ctx.fillText("@uplaudofficial", W / 2, H - 100);
-  ctx.font = "400 22px 'DM Sans', Arial, sans-serif";
-  ctx.fillStyle = "rgba(255, 255, 255, 0.45)";
-  ctx.fillText("Real reviews from real people", W / 2, H - 65);
+  ctx.font = "500 26px 'DM Sans', Arial, sans-serif";
+  ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+  ctx.fillText("@uplaudofficial", W / 2, H - 80);
   ctx.restore();
 
-  // ---- Convert to blob ----
+  // ======== CONVERT TO BLOB ========
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
       (blob) => {
