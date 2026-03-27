@@ -117,20 +117,21 @@ const ShareReview: React.FC = () => {
     setShareStatus("Image downloaded! Open Instagram → Your Story → select the image.");
   };
 
-  /** Deep link: open Instagram Stories composer directly */
+  /** Open Instagram's story camera — image is already saved to gallery */
   const handleOpenInstagram = () => {
     // First download so the image is the most recent in camera roll
     handleDownload();
 
-    // After a delay, try to open Instagram Stories composer
+    // After a short delay, open Instagram's story camera
+    // (instagram://story-camera opens the camera; the user selects
+    // the just-downloaded image from the gallery icon in the bottom-left)
     setTimeout(() => {
-      const igUrl = "instagram-stories://share";
-      window.location.href = igUrl;
+      window.location.href = "instagram://story-camera";
 
-      // If Instagram didn't open after 2s, show guidance
+      // Show guidance after a moment
       setTimeout(() => {
         setShareStatus(
-          "Image saved! Open Instagram → + (new story) → select the review image from your gallery. Don't forget to tag @uplaudofficial!"
+          "Image saved! In Instagram's story camera, tap the gallery icon (bottom-left) and select the Uplaud review image. Don't forget to tag @uplaudofficial!"
         );
       }, 2000);
     }, 800);
@@ -212,7 +213,7 @@ const ShareReview: React.FC = () => {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
                 <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" />
               </svg>
-              Open Instagram Stories
+              Save & Open Instagram Camera
             </button>
           )}
 
