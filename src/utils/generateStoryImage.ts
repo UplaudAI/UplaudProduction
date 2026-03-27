@@ -157,26 +157,26 @@ export async function generateStoryImage(
   const cardMarginX = 80;
   const cardX = cardMarginX;
   const cardW = W - cardMarginX * 2;
-  const cardPad = 48;
+  const cardPad = 52;
   const contentW = cardW - cardPad * 2;
 
   // Measure review text
-  ctx.font = "400 32px 'DM Sans', Arial, sans-serif";
+  ctx.font = "400 34px 'DM Sans', Arial, sans-serif";
   const reviewLines = wrapText(ctx, review.reviewText, contentW);
 
   // Heights for each section
-  const avatarRowH = 72;
-  const starsRowH = 52;
-  const reviewTextH = reviewLines.length * 44;
-  const likesRowH = 40;
+  const avatarRowH = 76;
+  const starsRowH = 56;
+  const reviewTextH = reviewLines.length * 46;
+  const likesRowH = 44;
 
   const totalContentH =
     avatarRowH +
-    20 + // gap after avatar row
+    24 + // gap after avatar row
     starsRowH +
-    16 + // gap after stars
+    20 + // gap after stars
     reviewTextH +
-    24 + // gap after text
+    28 + // gap after text
     likesRowH;
 
   const cardH = totalContentH + cardPad * 2;
@@ -201,7 +201,7 @@ export async function generateStoryImage(
   let cy = cardY + cardPad;
 
   // -- Profile photo / avatar --
-  const avatarR = 28;
+  const avatarR = 32;
   const avatarCX = cx + avatarR;
   const avatarCY = cy + avatarR;
 
@@ -245,34 +245,25 @@ export async function generateStoryImage(
   ctx.save();
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  ctx.font = "700 30px 'DM Sans', Arial, sans-serif";
+  ctx.font = "700 34px 'DM Sans', Arial, sans-serif";
   ctx.fillStyle = "#111827";
   ctx.fillText(review.reviewerName, nameX, cy + 2);
 
   // -- Handle --
   if (review.handle) {
-    ctx.font = "400 22px 'DM Sans', Arial, sans-serif";
+    ctx.font = "400 24px 'DM Sans', Arial, sans-serif";
     ctx.fillStyle = "#9CA3AF";
-    ctx.fillText(review.handle, nameX, cy + 36);
+    ctx.fillText(review.handle, nameX, cy + 40);
   }
   ctx.restore();
 
-  // -- Three-dot menu (•••) top-right --
-  ctx.save();
-  ctx.textAlign = "right";
-  ctx.textBaseline = "top";
-  ctx.font = "700 32px 'DM Sans', Arial, sans-serif";
-  ctx.fillStyle = "#D1D5DB";
-  ctx.fillText("•••", cardX + cardW - cardPad, cy + 8);
-  ctx.restore();
-
-  cy += avatarRowH + 20;
+  cy += avatarRowH + 24;
 
   // -- Stars (orange, centered) --
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
-  const starFontSize = 38;
+  const starFontSize = 42;
   let starStr = "";
   for (let i = 0; i < 5; i++) {
     starStr += i < review.score ? "★" : "☆";
@@ -282,33 +273,33 @@ export async function generateStoryImage(
   ctx.fillText(starStr, cardX + cardW / 2, cy);
   ctx.restore();
 
-  cy += starsRowH + 16;
+  cy += starsRowH + 20;
 
   // -- Review text --
   ctx.save();
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  ctx.font = "400 32px 'DM Sans', Arial, sans-serif";
+  ctx.font = "400 34px 'DM Sans', Arial, sans-serif";
   ctx.fillStyle = "#374151";
   reviewLines.forEach((line, i) => {
-    ctx.fillText(line, cx, cy + i * 44);
+    ctx.fillText(line, cx, cy + i * 46);
   });
   ctx.restore();
 
-  cy += reviewTextH + 24;
+  cy += reviewTextH + 28;
 
   // -- Green heart + likes --
   ctx.save();
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
   // Green heart
-  ctx.font = "400 26px Arial, sans-serif";
+  ctx.font = "400 28px Arial, sans-serif";
   ctx.fillStyle = "#34D399";
   ctx.fillText("💚", cx, cy);
   // Count
-  ctx.font = "500 24px 'DM Sans', Arial, sans-serif";
+  ctx.font = "500 26px 'DM Sans', Arial, sans-serif";
   ctx.fillStyle = "#9CA3AF";
-  ctx.fillText("21", cx + 38, cy + 2);
+  ctx.fillText("21", cx + 40, cy + 2);
   ctx.restore();
 
   // ======== BOTTOM: @uplaudofficial ========
