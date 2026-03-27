@@ -13,6 +13,7 @@ const ReviewerList = lazy(() => import("./pages/ReviewerList"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const BusinessPage = lazy(() => import("./pages/BusinessPage"));
 const ExpertPage = lazy(() => import("./pages/ExpertProfile"));
+const ShareReview = lazy(() => import("./pages/ShareReview"));
 
 const Fallback = () => (
   <div className="flex min-h-screen items-center justify-center bg-white text-gray-600">
@@ -33,6 +34,7 @@ const AppRoutes = () => (
       <Route path="/terms-of-service" element={<TermsOfService />} />
       <Route path="/verify-otp" element={<VerifyOtp />} />
       <Route path="/business/:slug" element={<BusinessPage />} />
+      <Route path="/share" element={<ShareReview />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   </Suspense>

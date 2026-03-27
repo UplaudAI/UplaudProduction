@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+import fs from "fs";
 import { componentTagger } from "lovable-tagger";
 
 // Read proxy target from env, default to IPv4 loopback
@@ -13,6 +14,12 @@ export default defineConfig(({ mode }) => ({
     host: true,
     port: 8080,
     strictPort: true,
+
+    // HTTPS for local dev — needed for Web Share API on mobile
+    https: fs.existsSync('.cert/key.pem') ? {
+      key: fs.readFileSync('.cert/key.pem'),
+      cert: fs.readFileSync('.cert/cert.pem'),
+    } : undefined,
 
     // Helpful when testing on LAN devices
     // hmr: { host: 'localhost', protocol: 'ws' },

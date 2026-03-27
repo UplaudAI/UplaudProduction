@@ -13,6 +13,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 import axios from "axios";
+import { buildWhatsAppShareUrl } from "@/utils/buildShareUrl";
 
 // shadcn/ui
 import { Card } from "@/components/ui/card";
@@ -396,19 +397,15 @@ const ReviewCardLocal = ({ review }: any) => {
   if (!review.businessName || !review.uplaud) return null;
 
   const handleShareToWhatsAppOnly = () => {
-    const business = review.businessName;
-    const link =
-      review.referralLink ||
-      review.shareLink ||
-      `${window.location.origin}/business/${slugify(business)}`;
-
-    const text =
-      `Hey, check out this Real Review for ${business} on Uplaud. ` +
-      `It’s a platform where real people give honest reviews on WhatsApp:\n` +
-      `${link}`;
-
-    const wa = `https://wa.me/?text=${encodeURIComponent(text)}`;
-    window.location.href = wa; // WhatsApp only, transparent button
+    const wa = buildWhatsAppShareUrl({
+      reviewerName: review.raw?.Name_Creator
+        ? (Array.isArray(review.raw.Name_Creator) ? review.raw.Name_Creator[0] : review.raw.Name_Creator)
+        : "Uplaud User",
+      businessName: review.businessName,
+      reviewText: review.uplaud,
+      score: review.score || 5,
+    });
+    window.location.href = wa;
   };
 
   return (
