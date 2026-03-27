@@ -181,10 +181,9 @@ export async function generateStoryImage(
 
   const cardH = totalContentH + cardPad * 2;
 
-  // Position card: centered between logo bottom and screen bottom
-  const cardY = Math.round(
-    logoBottomY + (H - logoBottomY - cardH) / 2 - 40
-  );
+  // Position card right below the logo with a small gap
+  // This keeps the logo + card as one tight visual unit
+  const cardY = logoBottomY + 60;
 
   // ======== DRAW CARD ========
   ctx.save();
