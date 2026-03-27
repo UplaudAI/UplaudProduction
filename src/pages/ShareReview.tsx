@@ -51,6 +51,7 @@ const ShareReview: React.FC = () => {
     reviewText: searchParams.get("text") || "",
     score: Math.min(5, Math.max(1, parseInt(searchParams.get("score") || "5", 10))),
     handle: searchParams.get("handle") || undefined,
+    likes: searchParams.get("likes") ? parseInt(searchParams.get("likes")!, 10) : undefined,
   };
 
   const device = getDeviceInfo();

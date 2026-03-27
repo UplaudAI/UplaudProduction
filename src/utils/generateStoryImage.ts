@@ -15,6 +15,7 @@ export interface ReviewData {
   score: number; // 1-5 stars
   handle?: string; // e.g. "@lakshsubodh"
   profileImage?: string; // URL to profile photo
+  likes?: number; // number of likes/hearts
 }
 
 /** Wrap text to fit a given maxWidth, returning an array of lines. */
@@ -311,14 +312,17 @@ export async function generateStoryImage(
   ctx.save();
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  // Green heart
-  ctx.font = "400 28px Arial, sans-serif";
-  ctx.fillStyle = "#34D399";
-  ctx.fillText("💚", cx, cy);
-  // Count
-  ctx.font = "500 26px 'DM Sans', Arial, sans-serif";
-  ctx.fillStyle = "#9CA3AF";
-  ctx.fillText("21", cx + 40, cy + 2);
+  const likeCount = review.likes ?? 0;
+  if (likeCount > 0) {
+    // Green heart
+    ctx.font = "400 28px Arial, sans-serif";
+    ctx.fillStyle = "#34D399";
+    ctx.fillText("💚", cx, cy);
+    // Count
+    ctx.font = "500 26px 'DM Sans', Arial, sans-serif";
+    ctx.fillStyle = "#9CA3AF";
+    ctx.fillText(String(likeCount), cx + 40, cy + 2);
+  }
   ctx.restore();
 
   // ======== BOTTOM: @uplaudofficial ========
