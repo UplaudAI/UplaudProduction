@@ -127,10 +127,10 @@ export async function generateStoryImage(
   const logoImg = await loadImage(actualLogoUrl);
 
   // We need the logo dimensions for centering, so compute them first
-  let logoDrawH = 140; // fallback
-  let logoDrawW = 300;
+  let logoDrawH = 180; // fallback
+  let logoDrawW = 380;
   if (logoImg) {
-    const logoTargetW = 300;
+    const logoTargetW = 380;
     const logoScale = logoTargetW / logoImg.width;
     logoDrawW = Math.round(logoImg.width * logoScale);
     logoDrawH = Math.round(logoImg.height * logoScale);
@@ -143,33 +143,30 @@ export async function generateStoryImage(
   }
 
   // ======== CALCULATE CARD DIMENSIONS ========
-  const cardMarginX = 80;
+  const cardMarginX = 64;
   const cardX = cardMarginX;
   const cardW = W - cardMarginX * 2;
-  const cardPad = 52;
+  const cardPad = 56;
   const contentW = cardW - cardPad * 2;
 
   // Measure review text
-  ctx.font = "400 34px 'DM Sans', Arial, sans-serif";
+  ctx.font = "400 36px 'DM Sans', Arial, sans-serif";
   const reviewLines = wrapText(ctx, review.reviewText, contentW);
 
   // Heights for each section
-  const avatarRowH = 76;
-  const businessNameH = 38;
-  const starsRowH = 56;
-  const reviewTextH = reviewLines.length * 46;
-  const likesRowH = 44;
+  const avatarRowH = 80;
+  const businessNameH = 46;
+  const starsRowH = 62;
+  const reviewTextH = reviewLines.length * 50;
 
   const totalContentH =
     avatarRowH +
-    24 + // gap after avatar row
+    26 + // gap after avatar row
     businessNameH +
-    12 + // gap after business name
+    14 + // gap after business name
     starsRowH +
-    20 + // gap after stars
-    reviewTextH +
-    28 + // gap after text
-    likesRowH;
+    22 + // gap after stars
+    reviewTextH;
 
   const cardH = totalContentH + cardPad * 2;
 
@@ -210,7 +207,7 @@ export async function generateStoryImage(
   let cy = cardY + cardPad;
 
   // -- Profile photo / avatar --
-  const avatarR = 32;
+  const avatarR = 34;
   const avatarCX = cx + avatarR;
   const avatarCY = cy + avatarR;
 
@@ -241,7 +238,7 @@ export async function generateStoryImage(
     ctx.arc(avatarCX, avatarCY, avatarR, 0, Math.PI * 2);
     ctx.fillStyle = "#7C3AED";
     ctx.fill();
-    ctx.font = "700 22px 'DM Sans', Arial, sans-serif";
+    ctx.font = "700 24px 'DM Sans', Arial, sans-serif";
     ctx.fillStyle = "#FFFFFF";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -254,36 +251,36 @@ export async function generateStoryImage(
   ctx.save();
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  ctx.font = "700 34px 'DM Sans', Arial, sans-serif";
+  ctx.font = "700 36px 'DM Sans', Arial, sans-serif";
   ctx.fillStyle = "#111827";
   ctx.fillText(review.reviewerName, nameX, cy + 2);
 
   // -- Handle --
   if (review.handle) {
-    ctx.font = "400 24px 'DM Sans', Arial, sans-serif";
+    ctx.font = "400 26px 'DM Sans', Arial, sans-serif";
     ctx.fillStyle = "#9CA3AF";
-    ctx.fillText(review.handle, nameX, cy + 40);
+    ctx.fillText(review.handle, nameX, cy + 42);
   }
   ctx.restore();
 
-  cy += avatarRowH + 24;
+  cy += avatarRowH + 26;
 
-  // -- Business name --
+  // -- Business name (2pt larger than review text) --
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
-  ctx.font = "600 32px 'DM Sans', Arial, sans-serif";
+  ctx.font = "600 38px 'DM Sans', Arial, sans-serif";
   ctx.fillStyle = "#6B21A8";
   ctx.fillText(review.businessName, cardX + cardW / 2, cy);
   ctx.restore();
 
-  cy += businessNameH + 12;
+  cy += businessNameH + 14;
 
   // -- Stars (orange, centered) --
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
-  const starFontSize = 42;
+  const starFontSize = 48;
   let starStr = "";
   for (let i = 0; i < 5; i++) {
     starStr += i < review.score ? "★" : "☆";
@@ -293,44 +290,25 @@ export async function generateStoryImage(
   ctx.fillText(starStr, cardX + cardW / 2, cy);
   ctx.restore();
 
-  cy += starsRowH + 20;
+  cy += starsRowH + 22;
 
-  // -- Review text --
+  // -- Review text (green, #25D366 WhatsApp green) --
   ctx.save();
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  ctx.font = "400 34px 'DM Sans', Arial, sans-serif";
-  ctx.fillStyle = "#374151";
+  ctx.font = "400 36px 'DM Sans', Arial, sans-serif";
+  ctx.fillStyle = "#25D366";
   reviewLines.forEach((line, i) => {
-    ctx.fillText(line, cx, cy + i * 46);
+    ctx.fillText(line, cx, cy + i * 50);
   });
-  ctx.restore();
-
-  cy += reviewTextH + 28;
-
-  // -- Green heart + likes --
-  ctx.save();
-  ctx.textAlign = "left";
-  ctx.textBaseline = "top";
-  const likeCount = review.likes ?? 0;
-  if (likeCount > 0) {
-    // Green heart
-    ctx.font = "400 28px Arial, sans-serif";
-    ctx.fillStyle = "#34D399";
-    ctx.fillText("💚", cx, cy);
-    // Count
-    ctx.font = "500 26px 'DM Sans', Arial, sans-serif";
-    ctx.fillStyle = "#9CA3AF";
-    ctx.fillText(String(likeCount), cx + 40, cy + 2);
-  }
   ctx.restore();
 
   // ======== BOTTOM: @uplaudofficial ========
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "bottom";
-  ctx.font = "500 26px 'DM Sans', Arial, sans-serif";
-  ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+  ctx.font = "700 36px 'DM Sans', Arial, sans-serif";
+  ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
   ctx.fillText("@uplaudofficial", W / 2, H - 80);
   ctx.restore();
 
