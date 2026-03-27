@@ -157,14 +157,17 @@ export async function generateStoryImage(
 
   // Heights for each section
   const avatarRowH = 86;
-  const businessRowH = 58; // business name + stars share one row
+  const businessNameH = 52;
+  const starsRowH = 68;
   const reviewTextH = reviewLines.length * 55 + bubblePadY * 2;
 
   const totalContentH =
     avatarRowH +
     28 + // gap after avatar row
-    businessRowH +
-    24 + // gap after business/stars row
+    businessNameH +
+    16 + // gap after business name
+    starsRowH +
+    24 + // gap after stars
     reviewTextH;
 
   const cardH = totalContentH + cardPad * 2;
@@ -264,29 +267,32 @@ export async function generateStoryImage(
 
   cy += avatarRowH + 28;
 
-  // -- Business name (left) + Stars (right) on same row --
+  // -- Business name (2pt larger than review text) --
   ctx.save();
-  ctx.textAlign = "left";
+  ctx.textAlign = "center";
   ctx.textBaseline = "top";
   ctx.font = "600 43px 'DM Sans', Arial, sans-serif";
   ctx.fillStyle = "#6B21A8";
-  ctx.fillText(review.businessName, cx, cy);
+  ctx.fillText(review.businessName, cardX + cardW / 2, cy);
   ctx.restore();
 
+  cy += businessNameH + 16;
+
+  // -- Stars (orange, centered) --
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
   const starFontSize = 53;
   let starStr = "";
   for (let i = 0; i < 5; i++) {
     starStr += i < review.score ? "★" : "☆";
   }
-  ctx.save();
-  ctx.textAlign = "right";
-  ctx.textBaseline = "top";
   ctx.font = `400 ${starFontSize}px Arial, sans-serif`;
   ctx.fillStyle = "#F59E0B";
-  ctx.fillText(starStr, cardX + cardW - cardPad, cy);
+  ctx.fillText(starStr, cardX + cardW / 2, cy);
   ctx.restore();
 
-  cy += businessRowH + 24;
+  cy += starsRowH + 24;
 
   // -- Review text in WhatsApp-style green bubble --
   const bubbleW = contentW;
