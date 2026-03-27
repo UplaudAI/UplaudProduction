@@ -79,18 +79,17 @@ const ShareReview: React.FC = () => {
 
   /* ---- Share handlers ---- */
 
-  /** Primary: Web Share API with file (opens native share sheet -> Instagram) */
+  /** Primary: Web Share API with file ONLY (no title/text).
+   *  Passing only the file ensures Instagram shows "Stories" as a
+   *  share target. When the user picks Stories, Instagram opens its
+   *  story editor with the image already loaded — zero extra taps. */
   const handleShareViaWebShare = async () => {
     if (!imageBlob) return;
     const file = new File([imageBlob], `uplaud-review.png`, { type: "image/png" });
 
     try {
       if (navigator.share && navigator.canShare?.({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: `Review for ${review.businessName} on Uplaud`,
-          text: `Check out this review by ${review.reviewerName} on @uplaudofficial!\nhttps://www.uplaud.ai`,
-        });
+        await navigator.share({ files: [file] });
         setShareStatus("Shared successfully!");
       } else {
         handleDownload();
@@ -117,25 +116,6 @@ const ShareReview: React.FC = () => {
     setShareStatus("Image downloaded! Open Instagram → Your Story → select the image.");
   };
 
-  /** Open Instagram's story camera — image is already saved to gallery */
-  const handleOpenInstagram = () => {
-    // First download so the image is the most recent in camera roll
-    handleDownload();
-
-    // After a short delay, open Instagram's story camera
-    // (instagram://story-camera opens the camera; the user selects
-    // the just-downloaded image from the gallery icon in the bottom-left)
-    setTimeout(() => {
-      window.location.href = "instagram://story-camera";
-
-      // Show guidance after a moment
-      setTimeout(() => {
-        setShareStatus(
-          "Image saved! In Instagram's story camera, tap the gallery icon (bottom-left) and select the Uplaud review image. Don't forget to tag @uplaudofficial!"
-        );
-      }, 2000);
-    }, 800);
-  };
 
   /* ---- Render ---- */
 
@@ -203,21 +183,7 @@ const ShareReview: React.FC = () => {
             </button>
           )}
 
-          {/* Secondary: open Instagram directly (mobile) */}
-          {device.isMobile && (
-            <button
-              onClick={handleOpenInstagram}
-              className="w-full py-3 px-6 rounded-xl font-semibold text-white text-sm flex items-center justify-center gap-3 border border-white/20"
-              style={{ background: "rgba(255,255,255,0.08)" }}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
-                <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" />
-              </svg>
-              Save & Open Instagram Camera
-            </button>
-          )}
-
-          {/* Always show download */}
+          {/* Download fallback */}
           <button
             onClick={handleDownload}
             className="w-full py-3 px-6 rounded-xl font-semibold text-sm flex items-center justify-center gap-3 border"
