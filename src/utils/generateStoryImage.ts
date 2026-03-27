@@ -125,26 +125,14 @@ export async function generateStoryImage(
   const actualLogoUrl = logoUrl || "/lovable-uploads/logo.png";
   const logoImg = await loadImage(actualLogoUrl);
 
-  let logoBottomY = 340;
+  // We need the logo dimensions for centering, so compute them first
+  let logoDrawH = 140; // fallback
+  let logoDrawW = 300;
   if (logoImg) {
     const logoTargetW = 300;
     const logoScale = logoTargetW / logoImg.width;
-    const lw = Math.round(logoImg.width * logoScale);
-    const lh = Math.round(logoImg.height * logoScale);
-    const logoX = Math.round((W - lw) / 2);
-    const logoY = 200;
-    drawLogoWhite(ctx, logoImg, logoX, logoY, lw, lh);
-    logoBottomY = logoY + lh + 50;
-  } else {
-    // Text fallback
-    ctx.save();
-    ctx.font = "300 72px 'DM Sans', sans-serif";
-    ctx.fillStyle = "#FFFFFF";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "top";
-    ctx.fillText("uplaud", W / 2, 220);
-    ctx.restore();
-    logoBottomY = 340;
+    logoDrawW = Math.round(logoImg.width * logoScale);
+    logoDrawH = Math.round(logoImg.height * logoScale);
   }
 
   // ======== LOAD PROFILE IMAGE ========
@@ -166,6 +154,7 @@ export async function generateStoryImage(
 
   // Heights for each section
   const avatarRowH = 76;
+  const businessNameH = 38;
   const starsRowH = 56;
   const reviewTextH = reviewLines.length * 46;
   const likesRowH = 44;
@@ -173,6 +162,8 @@ export async function generateStoryImage(
   const totalContentH =
     avatarRowH +
     24 + // gap after avatar row
+    businessNameH +
+    12 + // gap after business name
     starsRowH +
     20 + // gap after stars
     reviewTextH +
@@ -181,9 +172,27 @@ export async function generateStoryImage(
 
   const cardH = totalContentH + cardPad * 2;
 
-  // Position card right below the logo with a small gap
-  // This keeps the logo + card as one tight visual unit
-  const cardY = logoBottomY + 60;
+  // Center the entire logo+card group vertically on the canvas
+  const gap = 60;
+  const groupH = logoDrawH + gap + cardH;
+  const groupTopY = Math.round((H - groupH) / 2);
+
+  // Draw the logo at the top of the centered group
+  const logoY = groupTopY;
+  if (logoImg) {
+    const logoX = Math.round((W - logoDrawW) / 2);
+    drawLogoWhite(ctx, logoImg, logoX, logoY, logoDrawW, logoDrawH);
+  } else {
+    ctx.save();
+    ctx.font = "300 72px 'DM Sans', sans-serif";
+    ctx.fillStyle = "#FFFFFF";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillText("uplaud", W / 2, logoY);
+    ctx.restore();
+  }
+
+  const cardY = groupTopY + logoDrawH + gap;
 
   // ======== DRAW CARD ========
   ctx.save();
@@ -257,6 +266,17 @@ export async function generateStoryImage(
   ctx.restore();
 
   cy += avatarRowH + 24;
+
+  // -- Business name --
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  ctx.font = "600 32px 'DM Sans', Arial, sans-serif";
+  ctx.fillStyle = "#6B21A8";
+  ctx.fillText(review.businessName, cardX + cardW / 2, cy);
+  ctx.restore();
+
+  cy += businessNameH + 12;
 
   // -- Stars (orange, centered) --
   ctx.save();
