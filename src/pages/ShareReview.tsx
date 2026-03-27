@@ -227,65 +227,19 @@ const ShareReview: React.FC = () => {
       {!loading && imageBlob && (
         <div className="w-full max-w-md px-4 mt-6 flex flex-col gap-3">
 
-          {/* CASE 1: In-app browser (WhatsApp, etc.) — Web Share API won't work */}
-          {device.isMobile && inApp && !canWebShare && (
-            <>
-              <a
-                href={window.location.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-3.5 px-6 rounded-xl font-semibold text-white text-base flex items-center justify-center gap-3 text-center no-underline"
-                style={{
-                  background: "linear-gradient(135deg, #7C3AED, #6D28D9, #5B21B6)",
-                }}
-                onClick={(e) => {
-                  e.preventDefault();
-                  handleOpenInBrowser();
-                }}
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
-                  <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" />
-                </svg>
-                Open in {device.isIOS ? "Safari" : "Browser"} to Share
-              </a>
-              <p className="text-center text-gray-400 text-xs">
-                Sharing requires opening in {device.isIOS ? "Safari" : "your browser"}.
-                Tap the button above, then tap "Share".
-              </p>
-            </>
-          )}
-
-          {/* CASE 2: Real browser with Web Share API support — direct share */}
-          {device.isMobile && canWebShare && (
-            <button
-              onClick={handleShareViaWebShare}
-              className="w-full py-3.5 px-6 rounded-xl font-semibold text-white text-base flex items-center justify-center gap-3"
-              style={{
-                background: "linear-gradient(135deg, #7C3AED, #6D28D9, #5B21B6)",
-              }}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-                <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13" />
-              </svg>
-              Share Review
-            </button>
-          )}
-
-          {/* CASE 3: Mobile but Web Share not supported and not in-app — show download */}
-          {device.isMobile && !canWebShare && !inApp && (
-            <button
-              onClick={handleShareViaWebShare}
-              className="w-full py-3.5 px-6 rounded-xl font-semibold text-white text-base flex items-center justify-center gap-3"
-              style={{
-                background: "linear-gradient(135deg, #7C3AED, #6D28D9, #5B21B6)",
-              }}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-                <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13" />
-              </svg>
-              Share Review
-            </button>
-          )}
+          {/* Share button — always visible */}
+          <button
+            onClick={handleShareViaWebShare}
+            className="w-full py-3.5 px-6 rounded-xl font-semibold text-white text-base flex items-center justify-center gap-3"
+            style={{
+              background: "linear-gradient(135deg, #6214a8, #4c0e82)",
+            }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+              <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13" />
+            </svg>
+            Share Review
+          </button>
 
           {/* Download fallback — always visible */}
           <button
