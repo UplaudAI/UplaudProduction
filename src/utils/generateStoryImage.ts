@@ -200,7 +200,7 @@ export async function generateStoryImage(
   ctx.shadowBlur = 40;
   ctx.shadowOffsetY = 6;
   roundedRect(ctx, cardX, cardY, cardW, cardH, 20);
-  ctx.fillStyle = "#FFFFFF";
+  ctx.fillStyle = "#FFF7E6";
   ctx.fill();
   ctx.restore();
 
@@ -322,8 +322,8 @@ export async function generateStoryImage(
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "bottom";
-  ctx.font = "700 41px 'DM Sans', Arial, sans-serif";
-  ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+  ctx.font = "700 52px 'DM Sans', Arial, sans-serif";
+  ctx.fillStyle = "#FFFFFF";
   ctx.fillText("@uplaudofficial", W / 2, H - 80);
   ctx.restore();
 
