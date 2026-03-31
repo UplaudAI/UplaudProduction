@@ -13,7 +13,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 import axios from "axios";
-import { buildWhatsAppShareUrl } from "@/utils/buildShareUrl";
+import { buildWhatsAppShareUrl, buildSharePageUrl } from "@/utils/buildShareUrl";
 
 // shadcn/ui
 import { Card } from "@/components/ui/card";
@@ -396,16 +396,21 @@ function BadgeTile({
 const ReviewCardLocal = ({ review }: any) => {
   if (!review.businessName || !review.uplaud) return null;
 
+  const reviewParams = {
+    reviewerName: review.raw?.Name_Creator
+      ? (Array.isArray(review.raw.Name_Creator) ? review.raw.Name_Creator[0] : review.raw.Name_Creator)
+      : "Uplaud User",
+    businessName: review.businessName,
+    reviewText: review.uplaud,
+    score: review.score || 5,
+  };
+
   const handleShareToWhatsAppOnly = () => {
-    const wa = buildWhatsAppShareUrl({
-      reviewerName: review.raw?.Name_Creator
-        ? (Array.isArray(review.raw.Name_Creator) ? review.raw.Name_Creator[0] : review.raw.Name_Creator)
-        : "Uplaud User",
-      businessName: review.businessName,
-      reviewText: review.uplaud,
-      score: review.score || 5,
-    });
-    window.location.href = wa;
+    window.location.href = buildWhatsAppShareUrl(reviewParams);
+  };
+
+  const handleShareToStory = () => {
+    window.open(buildSharePageUrl(reviewParams), "_blank");
   };
 
   return (
@@ -452,6 +457,15 @@ const ReviewCardLocal = ({ review }: any) => {
             >
               <Share2 className="w-4 h-4 text-gray-700" />
             </button>
+
+            <button
+              onClick={handleShareToStory}
+              className="inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-semibold text-white shadow-sm"
+              style={{ background: "#6214a8" }}
+              title="Share to Story"
+            >
+              Story
+            </button>
           </div>
         </div>
 
@@ -473,14 +487,25 @@ const ReviewCardLocal = ({ review }: any) => {
             </span>
           </div>
 
-          <button
-            onClick={handleShareToWhatsAppOnly}
-            className="inline-flex items-center justify-center rounded-md p-2 bg-transparent hover:bg-transparent focus:bg-transparent border-0 shadow-none"
-            aria-label="Share this review on WhatsApp"
-            title="Share on WhatsApp"
-          >
-            <Share2 className="w-4 h-4 text-gray-700" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleShareToWhatsAppOnly}
+              className="inline-flex items-center justify-center rounded-md p-2 bg-transparent hover:bg-transparent focus:bg-transparent border-0 shadow-none"
+              aria-label="Share this review on WhatsApp"
+              title="Share on WhatsApp"
+            >
+              <Share2 className="w-4 h-4 text-gray-700" />
+            </button>
+
+            <button
+              onClick={handleShareToStory}
+              className="inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-semibold text-white shadow-sm"
+              style={{ background: "#6214a8" }}
+              title="Share to Story"
+            >
+              Story
+            </button>
+          </div>
         </div>
       </div>
 
