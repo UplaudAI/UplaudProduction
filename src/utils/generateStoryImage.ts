@@ -21,6 +21,10 @@ export interface ReviewData {
   likes?: number; // number of likes/hearts
 }
 
+// Use Arial for all canvas text — it's always available and
+// gives consistent measureText results across all browsers.
+const FONT_FAMILY = "Arial, sans-serif";
+
 /** Wrap text to fit a given maxWidth, returning an array of lines. */
 function wrapText(
   ctx: CanvasRenderingContext2D,
@@ -79,8 +83,6 @@ function loadImage(src: string): Promise<HTMLImageElement | null> {
 
 /**
  * Draw the logo as white on the canvas.
- * The source logo is purple on transparent — we draw it to a temp canvas,
- * then use compositing to turn it white before stamping it.
  */
 function drawLogoWhite(
   ctx: CanvasRenderingContext2D,
@@ -102,39 +104,42 @@ function drawLogoWhite(
 }
 
 /**
- * Compute scaled dimensions for the layout.
- * We start at scale=1.0 (base sizes) and shrink if the total
- * height of logo + gap + card exceeds the available canvas space.
+ * Compute all layout dimensions at a given scale.
+ * Returns whether it fits within the canvas height.
  */
 function computeLayout(
   ctx: CanvasRenderingContext2D,
   reviewText: string,
-  logoDrawH: number,
+  baseLogoH: number,
   W: number,
   H: number,
   scale: number
 ) {
-  const cardMarginX = Math.round(48 * Math.max(scale, 0.7));
+  const s = scale;
+
+  // Card margins get a floor so the card doesn't get too wide
+  const cardMarginX = Math.round(48 * Math.max(s, 0.7));
   const cardW = W - cardMarginX * 2;
-  const cardPad = Math.round(60 * scale);
+  const cardPad = Math.round(60 * s);
   const contentW = cardW - cardPad * 2;
 
-  const bubblePadX = Math.round(36 * scale);
-  const bubblePadY = Math.round(28 * scale);
-  const reviewFontSize = Math.round(41 * scale);
-  const lineHeight = Math.round(55 * scale);
+  const bubblePadX = Math.round(36 * s);
+  const bubblePadY = Math.round(28 * s);
+  const reviewFontSize = Math.round(41 * s);
+  const lineHeight = Math.round(55 * s);
 
-  ctx.font = `400 ${reviewFontSize}px 'DM Sans', Arial, sans-serif`;
+  // IMPORTANT: set font before measuring
+  ctx.font = `400 ${reviewFontSize}px ${FONT_FAMILY}`;
   const reviewLines = wrapText(ctx, reviewText, contentW - bubblePadX * 2);
 
-  const avatarRowH = Math.round(86 * scale);
-  const businessNameH = Math.round(52 * scale);
-  const starsRowH = Math.round(68 * scale);
+  const avatarRowH = Math.round(86 * s);
+  const businessNameH = Math.round(52 * s);
+  const starsRowH = Math.round(68 * s);
   const reviewTextH = reviewLines.length * lineHeight + bubblePadY * 2;
 
-  const gapAfterAvatar = Math.round(28 * scale);
-  const gapAfterBusiness = Math.round(16 * scale);
-  const gapAfterStars = Math.round(24 * scale);
+  const gapAfterAvatar = Math.round(28 * s);
+  const gapAfterBusiness = Math.round(16 * s);
+  const gapAfterStars = Math.round(24 * s);
 
   const totalContentH =
     avatarRowH + gapAfterAvatar +
@@ -144,34 +149,23 @@ function computeLayout(
 
   const cardH = totalContentH + cardPad * 2;
 
-  const logoGap = Math.round(60 * scale);
-  const bottomTagH = Math.round(100 * scale); // space for @uplaudofficial
-  const topBottomPad = 60; // minimum padding top and bottom
+  const logoH = Math.round(baseLogoH * s);
+  const logoGap = Math.round(60 * s);
+  const bottomTagSpace = Math.max(Math.round(100 * s), 80);
+  const topPad = 40; // minimum top padding
 
-  const groupH = logoDrawH * scale + logoGap + cardH + bottomTagH + topBottomPad * 2;
+  // Total height needed
+  const totalNeeded = topPad + logoH + logoGap + cardH + bottomTagSpace;
 
   return {
-    fits: groupH <= H,
-    cardMarginX,
-    cardW,
-    cardPad,
-    contentW,
-    bubblePadX,
-    bubblePadY,
-    reviewFontSize,
-    lineHeight,
+    fits: totalNeeded <= H,
+    totalNeeded,
+    cardMarginX, cardW, cardPad, contentW,
+    bubblePadX, bubblePadY, reviewFontSize, lineHeight,
     reviewLines,
-    avatarRowH,
-    businessNameH,
-    starsRowH,
-    reviewTextH,
-    gapAfterAvatar,
-    gapAfterBusiness,
-    gapAfterStars,
-    cardH,
-    logoGap,
-    bottomTagH,
-    groupH,
+    avatarRowH, businessNameH, starsRowH, reviewTextH,
+    gapAfterAvatar, gapAfterBusiness, gapAfterStars,
+    cardH, logoH, logoGap, bottomTagSpace,
   };
 }
 
@@ -199,9 +193,9 @@ export async function generateStoryImage(
   let baseLogoW = 380;
   if (logoImg) {
     const logoTargetW = 380;
-    const logoScale = logoTargetW / logoImg.width;
-    baseLogoW = Math.round(logoImg.width * logoScale);
-    baseLogoH = Math.round(logoImg.height * logoScale);
+    const s = logoTargetW / logoImg.width;
+    baseLogoW = Math.round(logoImg.width * s);
+    baseLogoH = Math.round(logoImg.height * s);
   }
 
   // ======== LOAD PROFILE IMAGE ========
@@ -211,8 +205,6 @@ export async function generateStoryImage(
   }
 
   // ======== FIND THE RIGHT SCALE ========
-  // Start at 1.0, shrink by 0.05 until everything fits.
-  // Minimum scale 0.5 to keep things readable.
   let scale = 1.0;
   let layout = computeLayout(ctx, review.reviewText, baseLogoH, W, H, scale);
 
@@ -221,32 +213,29 @@ export async function generateStoryImage(
     layout = computeLayout(ctx, review.reviewText, baseLogoH, W, H, scale);
   }
 
-  console.log(`[generateStoryImage] baseLogoH=${baseLogoH} scale=${scale.toFixed(2)} groupH=${layout.groupH} cardH=${layout.cardH} lines=${layout.reviewLines.length} fits=${layout.fits}`);
+  // If still doesn't fit at 0.5, use 0.5 anyway (content will be small but complete)
+  if (!layout.fits) {
+    scale = 0.5;
+    layout = computeLayout(ctx, review.reviewText, baseLogoH, W, H, scale);
+  }
 
-  const s = scale; // shorthand
+  const s = scale;
 
-  // ======== DERIVED DIMENSIONS ========
   const {
     cardMarginX, cardW, cardPad, contentW,
     bubblePadX, bubblePadY, reviewFontSize, lineHeight,
     reviewLines, avatarRowH, businessNameH, starsRowH,
     reviewTextH, gapAfterAvatar, gapAfterBusiness, gapAfterStars,
-    cardH, logoGap,
+    cardH, logoH, logoGap, bottomTagSpace,
   } = layout;
 
   const cardX = cardMarginX;
-
-  // Scaled logo dimensions
   const logoW = Math.round(baseLogoW * s);
-  const logoH = Math.round(baseLogoH * s);
 
-  // Center the logo+card group vertically, reserving space for the bottom tag
-  const bottomTagSpace = Math.max(Math.round(100 * s), 80);
+  // Center the logo+card group vertically in the available space
   const totalGroupH = logoH + logoGap + cardH;
   const availableH = H - bottomTagSpace;
   const groupTopY = Math.max(30, Math.round((availableH - totalGroupH) / 2));
-
-  console.log(`[draw] logoH=${logoH} logoGap=${logoGap} cardH=${cardH} totalGroupH=${totalGroupH} groupTopY=${groupTopY} cardBottom=${groupTopY + totalGroupH} bottomTag=${H - bottomTagSpace} H=${H}`);
 
   // ======== DRAW LOGO ========
   const logoY = groupTopY;
@@ -255,7 +244,7 @@ export async function generateStoryImage(
     drawLogoWhite(ctx, logoImg, logoX, logoY, logoW, logoH);
   } else {
     ctx.save();
-    ctx.font = `300 ${Math.round(72 * s)}px 'DM Sans', sans-serif`;
+    ctx.font = `300 ${Math.round(72 * s)}px ${FONT_FAMILY}`;
     ctx.fillStyle = "#FFFFFF";
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
@@ -311,7 +300,7 @@ export async function generateStoryImage(
     ctx.arc(avatarCX, avatarCY, avatarR, 0, Math.PI * 2);
     ctx.fillStyle = "#6214a8";
     ctx.fill();
-    ctx.font = `700 ${Math.round(28 * s)}px 'DM Sans', Arial, sans-serif`;
+    ctx.font = `700 ${Math.round(28 * s)}px ${FONT_FAMILY}`;
     ctx.fillStyle = "#FFFFFF";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -324,12 +313,12 @@ export async function generateStoryImage(
   ctx.save();
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  ctx.font = `700 ${Math.round(41 * s)}px 'DM Sans', Arial, sans-serif`;
+  ctx.font = `700 ${Math.round(41 * s)}px ${FONT_FAMILY}`;
   ctx.fillStyle = "#111827";
   ctx.fillText(review.reviewerName, nameX, cy + 2);
 
   if (review.handle) {
-    ctx.font = `400 ${Math.round(31 * s)}px 'DM Sans', Arial, sans-serif`;
+    ctx.font = `400 ${Math.round(31 * s)}px ${FONT_FAMILY}`;
     ctx.fillStyle = "#9CA3AF";
     ctx.fillText(review.handle, nameX, cy + Math.round(46 * s));
   }
@@ -341,7 +330,7 @@ export async function generateStoryImage(
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
-  ctx.font = `600 ${Math.round(43 * s)}px 'DM Sans', Arial, sans-serif`;
+  ctx.font = `600 ${Math.round(43 * s)}px ${FONT_FAMILY}`;
   ctx.fillStyle = "#6214a8";
   ctx.fillText(review.businessName, cardX + cardW / 2, cy);
   ctx.restore();
@@ -357,7 +346,7 @@ export async function generateStoryImage(
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
-  ctx.font = `400 ${starFontSize}px Arial, sans-serif`;
+  ctx.font = `400 ${starFontSize}px ${FONT_FAMILY}`;
   ctx.fillStyle = "#F59E0B";
   ctx.fillText(starStr, cardX + cardW / 2, cy);
   ctx.restore();
@@ -379,7 +368,7 @@ export async function generateStoryImage(
   ctx.save();
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  ctx.font = `400 ${reviewFontSize}px 'DM Sans', Arial, sans-serif`;
+  ctx.font = `400 ${reviewFontSize}px ${FONT_FAMILY}`;
   ctx.fillStyle = "#1A1A1A";
   reviewLines.forEach((line, i) => {
     ctx.fillText(line, bubbleX + bubblePadX, bubbleY + bubblePadY + i * lineHeight);
@@ -387,13 +376,13 @@ export async function generateStoryImage(
   ctx.restore();
 
   // ======== BOTTOM: @uplaudofficial ========
-  const tagFontSize = Math.round(52 * s);
+  const tagFontSize = Math.max(Math.round(52 * s), 32);
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "bottom";
-  ctx.font = `700 ${Math.max(tagFontSize, 32)}px 'DM Sans', Arial, sans-serif`;
+  ctx.font = `700 ${tagFontSize}px ${FONT_FAMILY}`;
   ctx.fillStyle = "#FFFFFF";
-  ctx.fillText("@uplaudofficial", W / 2, H - Math.round(60 * s));
+  ctx.fillText("@uplaudofficial", W / 2, H - Math.max(Math.round(40 * s), 30));
   ctx.restore();
 
   // ======== CONVERT TO BLOB ========
