@@ -397,9 +397,7 @@ const ReviewCardLocal = ({ review }: any) => {
   if (!review.businessName || !review.uplaud) return null;
 
   const reviewParams = {
-    reviewerName: review.raw?.Name_Creator
-      ? (Array.isArray(review.raw.Name_Creator) ? review.raw.Name_Creator[0] : review.raw.Name_Creator)
-      : "Uplaud User",
+    reviewerName: review.reviewerName || "Uplaud User",
     businessName: review.businessName,
     reviewText: review.uplaud,
     score: review.score || 5,
@@ -566,6 +564,7 @@ const Dashboard = () => {
             date: f.date ? new Date(f.date) : null,
             shareLink: f.shareLink || "",
             referralLink: f.referralLink || "",
+            reviewerName: f.user || (Array.isArray(f.raw?.Name_Creator) ? f.raw.Name_Creator[0] : f.raw?.Name_Creator) || "Uplaud User",
             raw: f.raw || {},
           }))
           .filter((r: any) => r.businessName && r.uplaud)
