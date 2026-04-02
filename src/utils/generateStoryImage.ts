@@ -310,19 +310,31 @@ export async function generateStoryImage(
 
   // -- Name + handle --
   const nameX = cx + avatarR * 2 + Math.round(16 * s);
-  ctx.save();
-  ctx.textAlign = "left";
-  ctx.textBaseline = "top";
-  ctx.font = `700 ${Math.round(41 * s)}px ${FONT_FAMILY}`;
-  ctx.fillStyle = "#111827";
-  ctx.fillText(review.reviewerName, nameX, cy + 2);
+  const nameFontSize = Math.round(41 * s);
 
   if (review.handle) {
+    // Name on top, handle below — position name near top of avatar
+    ctx.save();
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.font = `700 ${nameFontSize}px ${FONT_FAMILY}`;
+    ctx.fillStyle = "#111827";
+    ctx.fillText(review.reviewerName, nameX, avatarCY - avatarR + Math.round(4 * s));
+
     ctx.font = `400 ${Math.round(31 * s)}px ${FONT_FAMILY}`;
     ctx.fillStyle = "#9CA3AF";
-    ctx.fillText(review.handle, nameX, cy + Math.round(46 * s));
+    ctx.fillText(review.handle, nameX, avatarCY + Math.round(4 * s));
+    ctx.restore();
+  } else {
+    // No handle — vertically center name with avatar
+    ctx.save();
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.font = `700 ${nameFontSize}px ${FONT_FAMILY}`;
+    ctx.fillStyle = "#111827";
+    ctx.fillText(review.reviewerName, nameX, avatarCY);
+    ctx.restore();
   }
-  ctx.restore();
 
   cy += avatarRowH + gapAfterAvatar;
 
