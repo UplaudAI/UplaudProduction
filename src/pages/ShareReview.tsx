@@ -204,6 +204,45 @@ const ShareReview: React.FC = () => {
         <p className="text-gray-400 text-sm">Share this review</p>
       </div>
 
+      {/* Share button — ABOVE the image, prominent green */}
+      {!loading && imageBlob && (
+        <div className="w-full max-w-md px-4 mt-4 flex flex-col gap-2">
+          <button
+            onClick={handleShareViaWebShare}
+            className="w-full py-4 px-6 rounded-xl font-bold text-white text-lg flex items-center justify-center gap-3 shadow-lg active:scale-[0.98] transition-transform"
+            style={{
+              background: "linear-gradient(135deg, #22c55e, #16a34a)",
+            }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+              <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13" />
+            </svg>
+            Share Review
+          </button>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleDownload}
+              className="flex-1 py-2.5 px-4 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 border"
+              style={{
+                color: "#a78bfa",
+                borderColor: "rgba(167, 139, 250, 0.3)",
+                background: "rgba(167, 139, 250, 0.08)",
+              }}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+              </svg>
+              Download
+            </button>
+          </div>
+
+          <p className="text-center text-gray-400 text-xs">
+            Tag <strong className="text-purple-400">@uplaudofficial</strong> if you share to Instagram!
+          </p>
+        </div>
+      )}
+
       {/* Preview */}
       <div className="w-full max-w-md px-4 mt-4">
         {loading ? (
@@ -222,47 +261,6 @@ const ShareReview: React.FC = () => {
           />
         ) : null}
       </div>
-
-      {/* Share buttons */}
-      {!loading && imageBlob && (
-        <div className="w-full max-w-md px-4 mt-6 flex flex-col gap-3">
-
-          {/* Share button — always visible */}
-          <button
-            onClick={handleShareViaWebShare}
-            className="w-full py-3.5 px-6 rounded-xl font-semibold text-white text-base flex items-center justify-center gap-3"
-            style={{
-              background: "linear-gradient(135deg, #6214a8, #4c0e82)",
-            }}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-              <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13" />
-            </svg>
-            Share Review
-          </button>
-
-          {/* Download fallback — always visible */}
-          <button
-            onClick={handleDownload}
-            className="w-full py-3 px-6 rounded-xl font-semibold text-sm flex items-center justify-center gap-3 border"
-            style={{
-              color: "#a78bfa",
-              borderColor: "rgba(167, 139, 250, 0.3)",
-              background: "rgba(167, 139, 250, 0.08)",
-            }}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
-              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
-            </svg>
-            Download Image
-          </button>
-
-          {/* Reminder to tag */}
-          <p className="text-center text-gray-400 text-xs mt-2">
-            Tag <strong className="text-purple-400">@uplaudofficial</strong> if you share to Instagram!
-          </p>
-        </div>
-      )}
 
       {/* Status toast */}
       {shareStatus && (
