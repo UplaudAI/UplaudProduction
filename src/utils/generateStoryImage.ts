@@ -221,6 +221,8 @@ export async function generateStoryImage(
     layout = computeLayout(ctx, review.reviewText, baseLogoH, W, H, scale);
   }
 
+  console.log(`[generateStoryImage] baseLogoH=${baseLogoH} scale=${scale.toFixed(2)} groupH=${layout.groupH} cardH=${layout.cardH} lines=${layout.reviewLines.length} fits=${layout.fits}`);
+
   const s = scale; // shorthand
 
   // ======== DERIVED DIMENSIONS ========
@@ -238,11 +240,13 @@ export async function generateStoryImage(
   const logoW = Math.round(baseLogoW * s);
   const logoH = Math.round(baseLogoH * s);
 
-  // Center the logo+card group vertically
-  const bottomTagSpace = Math.round(100 * s);
+  // Center the logo+card group vertically, reserving space for the bottom tag
+  const bottomTagSpace = Math.max(Math.round(100 * s), 80);
   const totalGroupH = logoH + logoGap + cardH;
   const availableH = H - bottomTagSpace;
-  const groupTopY = Math.max(40, Math.round((availableH - totalGroupH) / 2));
+  const groupTopY = Math.max(30, Math.round((availableH - totalGroupH) / 2));
+
+  console.log(`[draw] logoH=${logoH} logoGap=${logoGap} cardH=${cardH} totalGroupH=${totalGroupH} groupTopY=${groupTopY} cardBottom=${groupTopY + totalGroupH} bottomTag=${H - bottomTagSpace} H=${H}`);
 
   // ======== DRAW LOGO ========
   const logoY = groupTopY;
