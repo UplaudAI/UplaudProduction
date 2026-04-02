@@ -920,9 +920,7 @@ const handleDislike = (reviewIndex: number) => {
   const votes = reviewVotes[voteKey] || { likes: 0, dislikes: 0 };
 
   const reviewParams = {
-    reviewerName: user?.name || review.raw?.Name_Creator
-      ? (Array.isArray(review.raw?.Name_Creator) ? review.raw.Name_Creator[0] : (review.raw?.Name_Creator || "Uplaud User"))
-      : "Uplaud User",
+    reviewerName: user?.name || review.reviewerName || "Uplaud User",
     businessName: review.businessName,
     reviewText: review.uplaud,
     score: review.score || 5,
