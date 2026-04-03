@@ -1,62 +1,38 @@
 /**
  * generateStoryImage.ts
  *
- * Generates a 1080×1920 Instagram Story image on a <canvas>
- * from review data, matching the Uplaud story design.
- *
- * For long reviews, all dimensions scale down proportionally
- * so the entire review always fits on one story image.
- *
- * Returns a Blob (image/png) that can be shared via Web Share API
- * or downloaded.
+ * Generates a 1080×1920 Instagram Story image on a <canvas>.
+ * Auto-scales text size for long reviews to always fit.
  */
 
 export interface ReviewData {
   reviewerName: string;
   businessName: string;
   reviewText: string;
-  score: number; // 1-5 stars
-  handle?: string; // e.g. "@lakshsubodh"
-  profileImage?: string; // URL to profile photo
-  likes?: number; // number of likes/hearts
+  score: number;
+  handle?: string;
+  profileImage?: string;
+  likes?: number;
+  reviewCount?: number;
+  categories?: string[];
 }
 
-// Use Arial for all canvas text — it's always available and
-// gives consistent measureText results across all browsers.
-const FONT_FAMILY = "Arial, sans-serif";
+const FF = "Arial, sans-serif";
 
-/** Wrap text to fit a given maxWidth, returning an array of lines. */
-function wrapText(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  maxWidth: number
-): string[] {
+function wrapText(ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] {
   const words = text.split(" ");
   const lines: string[] = [];
-  let currentLine = "";
-
-  for (const word of words) {
-    const testLine = currentLine ? `${currentLine} ${word}` : word;
-    if (ctx.measureText(testLine).width > maxWidth && currentLine) {
-      lines.push(currentLine);
-      currentLine = word;
-    } else {
-      currentLine = testLine;
-    }
+  let cur = "";
+  for (const w of words) {
+    const test = cur ? `${cur} ${w}` : w;
+    if (ctx.measureText(test).width > maxW && cur) { lines.push(cur); cur = w; }
+    else cur = test;
   }
-  if (currentLine) lines.push(currentLine);
+  if (cur) lines.push(cur);
   return lines;
 }
 
-/** Draw a rounded rectangle path on context. */
-function roundedRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number
-) {
+function roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
   ctx.lineTo(x + w - r, y);
@@ -70,102 +46,71 @@ function roundedRect(
   ctx.closePath();
 }
 
-/** Load an image, returning null on failure. */
 function loadImage(src: string): Promise<HTMLImageElement | null> {
-  return new Promise((resolve) => {
+  return new Promise(res => {
     const img = new Image();
     img.crossOrigin = "anonymous";
-    img.onload = () => resolve(img);
-    img.onerror = () => resolve(null);
+    img.onload = () => res(img);
+    img.onerror = () => res(null);
     img.src = src;
   });
 }
 
-/**
- * Draw the logo as white on the canvas.
- */
-function drawLogoWhite(
-  ctx: CanvasRenderingContext2D,
-  logoImg: HTMLImageElement,
-  x: number,
-  y: number,
-  w: number,
-  h: number
-) {
+function drawLogoWhite(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, w: number, h: number) {
   const tmp = document.createElement("canvas");
-  tmp.width = w;
-  tmp.height = h;
-  const tctx = tmp.getContext("2d")!;
-  tctx.drawImage(logoImg, 0, 0, w, h);
-  tctx.globalCompositeOperation = "source-in";
-  tctx.fillStyle = "#FFFFFF";
-  tctx.fillRect(0, 0, w, h);
+  tmp.width = w; tmp.height = h;
+  const t = tmp.getContext("2d")!;
+  t.drawImage(img, 0, 0, w, h);
+  t.globalCompositeOperation = "source-in";
+  t.fillStyle = "#FFFFFF";
+  t.fillRect(0, 0, w, h);
   ctx.drawImage(tmp, x, y);
 }
 
-/**
- * Compute all layout dimensions at a given scale.
- * Returns whether it fits within the canvas height.
- */
+/** Compute layout at a given scale factor and return whether it fits. */
 function computeLayout(
   ctx: CanvasRenderingContext2D,
-  reviewText: string,
+  review: ReviewData,
   baseLogoH: number,
-  W: number,
-  H: number,
-  scale: number
+  W: number, H: number,
+  s: number
 ) {
-  const s = scale;
-
-  // Card margins get a floor so the card doesn't get too wide
-  const cardMarginX = Math.round(48 * Math.max(s, 0.7));
-  const cardW = W - cardMarginX * 2;
-  const cardPad = Math.round(60 * s);
+  const cardMX = Math.round(48 * Math.max(s, 0.65));
+  const cardW = W - cardMX * 2;
+  const cardPad = Math.round(52 * s);
   const contentW = cardW - cardPad * 2;
 
-  const bubblePadX = Math.round(36 * s);
-  const bubblePadY = Math.round(28 * s);
-  const reviewFontSize = Math.round(41 * s);
-  const lineHeight = Math.round(55 * s);
+  // Bubble sizing
+  const bubPadX = Math.round(32 * s);
+  const bubPadY = Math.round(24 * s);
+  const revFont = Math.round(38 * s);
+  const lineH = Math.round(52 * s);
+  ctx.font = `400 ${revFont}px ${FF}`;
+  const lines = wrapText(ctx, `\u201C${review.reviewText}\u201D`, contentW - bubPadX * 2);
 
-  // IMPORTANT: set font before measuring
-  ctx.font = `400 ${reviewFontSize}px ${FONT_FAMILY}`;
-  const reviewLines = wrapText(ctx, reviewText, contentW - bubblePadX * 2);
+  const avatarRowH = Math.round(82 * s);
+  const bizH = Math.round(48 * s);
+  const tagRowH = review.categories?.length ? Math.round(44 * s) : 0;
+  const starH = Math.round(52 * s);
+  const revTextH = lines.length * lineH + bubPadY * 2;
 
-  const avatarRowH = Math.round(86 * s);
-  const businessNameH = Math.round(52 * s);
-  const starsRowH = Math.round(68 * s);
-  const reviewTextH = reviewLines.length * lineHeight + bubblePadY * 2;
-
-  const gapAfterAvatar = Math.round(28 * s);
-  const gapAfterBusiness = Math.round(16 * s);
-  const gapAfterStars = Math.round(24 * s);
-
-  const totalContentH =
-    avatarRowH + gapAfterAvatar +
-    businessNameH + gapAfterBusiness +
-    starsRowH + gapAfterStars +
-    reviewTextH;
-
-  const cardH = totalContentH + cardPad * 2;
+  const gaps = Math.round(22 * s) + Math.round(10 * s) + (tagRowH ? Math.round(10 * s) : 0) + Math.round(14 * s) + Math.round(18 * s);
+  const cardH = avatarRowH + bizH + tagRowH + starH + revTextH + gaps + cardPad * 2;
 
   const logoH = Math.round(baseLogoH * s);
-  const logoGap = Math.round(60 * s);
-  const bottomTagSpace = Math.max(Math.round(100 * s), 80);
-  const topPad = 40; // minimum top padding
+  const logoGap = Math.round(50 * s);
+  const stickerH = Math.round(200 * s);
+  const followH = Math.round(60 * s);
+  const topPad = 30;
 
-  // Total height needed
-  const totalNeeded = topPad + logoH + logoGap + cardH + bottomTagSpace;
+  const total = topPad + logoH + logoGap + cardH + Math.round(30 * s) + stickerH + followH;
 
   return {
-    fits: totalNeeded <= H,
-    totalNeeded,
-    cardMarginX, cardW, cardPad, contentW,
-    bubblePadX, bubblePadY, reviewFontSize, lineHeight,
-    reviewLines,
-    avatarRowH, businessNameH, starsRowH, reviewTextH,
-    gapAfterAvatar, gapAfterBusiness, gapAfterStars,
-    cardH, logoH, logoGap, bottomTagSpace,
+    fits: total <= H, total,
+    cardMX, cardW, cardPad, contentW,
+    bubPadX, bubPadY, revFont, lineH, lines,
+    avatarRowH, bizH, tagRowH, starH, revTextH, gaps,
+    cardH, logoH, logoGap, stickerH, followH,
   };
 }
 
@@ -173,238 +118,251 @@ export async function generateStoryImage(
   review: ReviewData,
   logoUrl?: string
 ): Promise<Blob> {
-  const W = 1080;
-  const H = 1920;
-
+  const W = 1080, H = 1920;
   const canvas = document.createElement("canvas");
-  canvas.width = W;
-  canvas.height = H;
+  canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext("2d")!;
 
-  // ======== BACKGROUND ========
-  ctx.fillStyle = "#6214a8";
+  // ── Background: purple → lavender gradient ──
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, "#7B2FBE");
+  bg.addColorStop(0.55, "#9B4FD6");
+  bg.addColorStop(1, "#C8A8E8");
+  ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
 
-  // ======== LOGO ========
-  const actualLogoUrl = logoUrl || "/lovable-uploads/logo.png";
-  const logoImg = await loadImage(actualLogoUrl);
-
-  let baseLogoH = 180;
-  let baseLogoW = 380;
+  // ── Logo ──
+  const logoImg = await loadImage(logoUrl || "/lovable-uploads/logo.png");
+  let baseLH = 180, baseLW = 360;
   if (logoImg) {
-    const logoTargetW = 380;
-    const s = logoTargetW / logoImg.width;
-    baseLogoW = Math.round(logoImg.width * s);
-    baseLogoH = Math.round(logoImg.height * s);
+    const ls = 360 / logoImg.width;
+    baseLW = Math.round(logoImg.width * ls);
+    baseLH = Math.round(logoImg.height * ls);
   }
 
-  // ======== LOAD PROFILE IMAGE ========
   let profileImg: HTMLImageElement | null = null;
-  if (review.profileImage) {
-    profileImg = await loadImage(review.profileImage);
-  }
+  if (review.profileImage) profileImg = await loadImage(review.profileImage);
 
-  // ======== FIND THE RIGHT SCALE ========
-  let scale = 1.0;
-  let layout = computeLayout(ctx, review.reviewText, baseLogoH, W, H, scale);
-
-  while (!layout.fits && scale > 0.5) {
-    scale -= 0.05;
-    layout = computeLayout(ctx, review.reviewText, baseLogoH, W, H, scale);
-  }
-
-  // If still doesn't fit at 0.5, use 0.5 anyway (content will be small but complete)
-  if (!layout.fits) {
-    scale = 0.5;
-    layout = computeLayout(ctx, review.reviewText, baseLogoH, W, H, scale);
-  }
-
-  const s = scale;
+  // ── Scale to fit ──
+  let s = 1.0;
+  let L = computeLayout(ctx, review, baseLH, W, H, s);
+  while (!L.fits && s > 0.5) { s -= 0.05; L = computeLayout(ctx, review, baseLH, W, H, s); }
 
   const {
-    cardMarginX, cardW, cardPad, contentW,
-    bubblePadX, bubblePadY, reviewFontSize, lineHeight,
-    reviewLines, avatarRowH, businessNameH, starsRowH,
-    reviewTextH, gapAfterAvatar, gapAfterBusiness, gapAfterStars,
-    cardH, logoH, logoGap, bottomTagSpace,
-  } = layout;
+    cardMX, cardW, cardPad, contentW,
+    bubPadX, bubPadY, revFont, lineH, lines,
+    avatarRowH, bizH, tagRowH, starH, revTextH,
+    cardH, logoH, logoGap, stickerH, followH,
+  } = L;
 
-  const cardX = cardMarginX;
-  const logoW = Math.round(baseLogoW * s);
+  const logoW = Math.round(baseLW * s);
+  const lH = logoH;
 
-  // Center the logo+card group vertically in the available space
-  const totalGroupH = logoH + logoGap + cardH;
-  const availableH = H - bottomTagSpace;
-  const groupTopY = Math.max(30, Math.round((availableH - totalGroupH) / 2));
+  // Center group
+  const totalGroup = lH + logoGap + cardH + Math.round(30 * s) + stickerH + followH;
+  const groupY = Math.max(30, Math.round((H - totalGroup) / 2));
 
-  // ======== DRAW LOGO ========
-  const logoY = groupTopY;
+  // ── Draw logo ──
   if (logoImg) {
-    const logoX = Math.round((W - logoW) / 2);
-    drawLogoWhite(ctx, logoImg, logoX, logoY, logoW, logoH);
+    drawLogoWhite(ctx, logoImg, Math.round((W - logoW) / 2), groupY, logoW, lH);
   } else {
     ctx.save();
-    ctx.font = `300 ${Math.round(72 * s)}px ${FONT_FAMILY}`;
-    ctx.fillStyle = "#FFFFFF";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "top";
-    ctx.fillText("uplaud", W / 2, logoY);
+    ctx.font = `300 ${Math.round(72 * s)}px ${FF}`;
+    ctx.fillStyle = "#FFF";
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    ctx.fillText("uplaud", W / 2, groupY);
     ctx.restore();
   }
 
-  // ======== DRAW CARD ========
-  const cardY = groupTopY + logoH + logoGap;
+  // ── Card ──
+  const cardX = cardMX;
+  const cardY = groupY + lH + logoGap;
+  const cx = cardX + cardPad;
 
   ctx.save();
-  ctx.shadowColor = "rgba(0, 0, 0, 0.15)";
-  ctx.shadowBlur = 40;
-  ctx.shadowOffsetY = 6;
-  roundedRect(ctx, cardX, cardY, cardW, cardH, Math.round(20 * s));
+  ctx.shadowColor = "rgba(0,0,0,0.12)"; ctx.shadowBlur = 30; ctx.shadowOffsetY = 4;
+  roundedRect(ctx, cardX, cardY, cardW, cardH, Math.round(24 * s));
   ctx.fillStyle = "#FFF7E6";
   ctx.fill();
   ctx.restore();
 
-  // ======== CARD CONTENT ========
-  const cx = cardX + cardPad;
   let cy = cardY + cardPad;
 
-  // -- Avatar --
-  const avatarR = Math.round(38 * s);
-  const avatarCX = cx + avatarR;
-  const avatarCY = cy + avatarR;
+  // ── Avatar row ──
+  const aR = Math.round(36 * s);
+  const aCX = cx + aR, aCY = cy + aR;
 
   if (profileImg) {
     ctx.save();
-    ctx.beginPath();
-    ctx.arc(avatarCX, avatarCY, avatarR, 0, Math.PI * 2);
-    ctx.closePath();
-    ctx.clip();
-    ctx.drawImage(
-      profileImg,
-      avatarCX - avatarR,
-      avatarCY - avatarR,
-      avatarR * 2,
-      avatarR * 2
-    );
+    ctx.beginPath(); ctx.arc(aCX, aCY, aR, 0, Math.PI * 2); ctx.clip();
+    ctx.drawImage(profileImg, aCX - aR, aCY - aR, aR * 2, aR * 2);
     ctx.restore();
   } else {
-    const initials = review.reviewerName
-      .split(" ")
-      .map((w) => w[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-
+    const ini = review.reviewerName.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
     ctx.save();
-    ctx.beginPath();
-    ctx.arc(avatarCX, avatarCY, avatarR, 0, Math.PI * 2);
-    ctx.fillStyle = "#6214a8";
-    ctx.fill();
-    ctx.font = `700 ${Math.round(28 * s)}px ${FONT_FAMILY}`;
-    ctx.fillStyle = "#FFFFFF";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(initials, avatarCX, avatarCY + 1);
+    ctx.beginPath(); ctx.arc(aCX, aCY, aR, 0, Math.PI * 2);
+    ctx.fillStyle = "#6214a8"; ctx.fill();
+    ctx.font = `700 ${Math.round(26 * s)}px ${FF}`;
+    ctx.fillStyle = "#FFF"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(ini, aCX, aCY + 1);
     ctx.restore();
   }
 
-  // -- Name + handle --
-  const nameX = cx + avatarR * 2 + Math.round(16 * s);
-  const nameFontSize = Math.round(41 * s);
-
-  if (review.handle) {
-    // Name on top, handle below — position name near top of avatar
+  const nameX = cx + aR * 2 + Math.round(16 * s);
+  const nameSz = Math.round(38 * s);
+  if (review.reviewCount) {
+    // Name top, review count below
     ctx.save();
-    ctx.textAlign = "left";
-    ctx.textBaseline = "top";
-    ctx.font = `700 ${nameFontSize}px ${FONT_FAMILY}`;
-    ctx.fillStyle = "#111827";
-    ctx.fillText(review.reviewerName, nameX, avatarCY - avatarR + Math.round(4 * s));
-
-    ctx.font = `400 ${Math.round(31 * s)}px ${FONT_FAMILY}`;
-    ctx.fillStyle = "#9CA3AF";
-    ctx.fillText(review.handle, nameX, avatarCY + Math.round(4 * s));
+    ctx.textAlign = "left"; ctx.textBaseline = "top";
+    ctx.font = `700 ${nameSz}px ${FF}`; ctx.fillStyle = "#111";
+    ctx.fillText(review.reviewerName, nameX, aCY - Math.round(22 * s));
+    ctx.font = `600 ${Math.round(26 * s)}px ${FF}`; ctx.fillStyle = "#22c55e";
+    ctx.fillText(`${review.reviewCount} reviews`, nameX, aCY + Math.round(8 * s));
+    ctx.restore();
+  } else if (review.handle) {
+    ctx.save();
+    ctx.textAlign = "left"; ctx.textBaseline = "top";
+    ctx.font = `700 ${nameSz}px ${FF}`; ctx.fillStyle = "#111";
+    ctx.fillText(review.reviewerName, nameX, aCY - Math.round(22 * s));
+    ctx.font = `400 ${Math.round(28 * s)}px ${FF}`; ctx.fillStyle = "#9CA3AF";
+    ctx.fillText(review.handle, nameX, aCY + Math.round(8 * s));
     ctx.restore();
   } else {
-    // No handle — vertically center name with avatar
     ctx.save();
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.font = `700 ${nameFontSize}px ${FONT_FAMILY}`;
-    ctx.fillStyle = "#111827";
-    ctx.fillText(review.reviewerName, nameX, avatarCY);
+    ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    ctx.font = `700 ${nameSz}px ${FF}`; ctx.fillStyle = "#111";
+    ctx.fillText(review.reviewerName, nameX, aCY);
     ctx.restore();
   }
 
-  cy += avatarRowH + gapAfterAvatar;
+  cy += avatarRowH + Math.round(22 * s);
 
-  // -- Business name --
+  // ── Business name ──
+  const bizFont = Math.round(42 * s);
   ctx.save();
-  ctx.textAlign = "center";
-  ctx.textBaseline = "top";
-  ctx.font = `600 ${Math.round(43 * s)}px ${FONT_FAMILY}`;
-  ctx.fillStyle = "#6214a8";
-  ctx.fillText(review.businessName, cardX + cardW / 2, cy);
+  ctx.textAlign = "left"; ctx.textBaseline = "top";
+  ctx.font = `700 ${bizFont}px ${FF}`; ctx.fillStyle = "#111";
+  ctx.fillText(review.businessName, cx, cy);
   ctx.restore();
+  cy += bizH + Math.round(10 * s);
 
-  cy += businessNameH + gapAfterBusiness;
+  // ── Category tags ──
+  if (review.categories?.length) {
+    let tagX = cx;
+    const tagFont = Math.round(22 * s);
+    const tagH = Math.round(32 * s);
+    const tagPadX = Math.round(16 * s);
+    const tagR = Math.round(8 * s);
 
-  // -- Stars --
-  const starFontSize = Math.round(53 * s);
+    for (const cat of review.categories) {
+      ctx.font = `600 ${tagFont}px ${FF}`;
+      const tw = ctx.measureText(cat).width + tagPadX * 2;
+
+      ctx.save();
+      roundedRect(ctx, tagX, cy, tw, tagH, tagR);
+      ctx.fillStyle = "#FCE4E4";
+      ctx.fill();
+      ctx.restore();
+
+      ctx.save();
+      ctx.textAlign = "left"; ctx.textBaseline = "middle";
+      ctx.font = `600 ${tagFont}px ${FF}`; ctx.fillStyle = "#B45454";
+      ctx.fillText(cat, tagX + tagPadX, cy + tagH / 2);
+      ctx.restore();
+
+      tagX += tw + Math.round(10 * s);
+    }
+    cy += tagRowH + Math.round(10 * s);
+  }
+
+  // ── Stars + score ──
+  const starSz = Math.round(44 * s);
+  const fullStars = Math.floor(review.score);
   let starStr = "";
-  for (let i = 0; i < 5; i++) {
-    starStr += i < review.score ? "★" : "☆";
-  }
+  for (let i = 0; i < 5; i++) starStr += i < fullStars ? "★" : "☆";
+
   ctx.save();
-  ctx.textAlign = "center";
-  ctx.textBaseline = "top";
-  ctx.font = `400 ${starFontSize}px ${FONT_FAMILY}`;
-  ctx.fillStyle = "#F59E0B";
-  ctx.fillText(starStr, cardX + cardW / 2, cy);
+  ctx.textAlign = "left"; ctx.textBaseline = "top";
+  ctx.font = `400 ${starSz}px ${FF}`; ctx.fillStyle = "#F59E0B";
+  ctx.fillText(starStr, cx, cy);
+  const starTextW = ctx.measureText(starStr).width;
+
+  ctx.font = `700 ${Math.round(36 * s)}px ${FF}`; ctx.fillStyle = "#333";
+  ctx.fillText(review.score.toFixed(1), cx + starTextW + Math.round(12 * s), cy + Math.round(4 * s));
   ctx.restore();
+  cy += starH + Math.round(14 * s);
 
-  cy += starsRowH + gapAfterStars;
-
-  // -- Review text in WhatsApp-style green bubble --
-  const bubbleW = contentW;
-  const bubbleH = reviewLines.length * lineHeight + bubblePadY * 2;
-  const bubbleX = cx;
-  const bubbleY = cy;
+  // ── Review text in green bubble ──
+  const bubW = contentW;
+  const bubH = lines.length * lineH + bubPadY * 2;
 
   ctx.save();
-  roundedRect(ctx, bubbleX, bubbleY, bubbleW, bubbleH, Math.round(16 * s));
+  roundedRect(ctx, cx, cy, bubW, bubH, Math.round(14 * s));
   ctx.fillStyle = "#DCF8C6";
   ctx.fill();
   ctx.restore();
 
   ctx.save();
-  ctx.textAlign = "left";
-  ctx.textBaseline = "top";
-  ctx.font = `400 ${reviewFontSize}px ${FONT_FAMILY}`;
-  ctx.fillStyle = "#1A1A1A";
-  reviewLines.forEach((line, i) => {
-    ctx.fillText(line, bubbleX + bubblePadX, bubbleY + bubblePadY + i * lineHeight);
+  ctx.textAlign = "left"; ctx.textBaseline = "top";
+  ctx.font = `400 ${revFont}px ${FF}`; ctx.fillStyle = "#1A1A1A";
+  lines.forEach((line, i) => {
+    ctx.fillText(line, cx + bubPadX, cy + bubPadY + i * lineH);
   });
   ctx.restore();
 
-  // ======== BOTTOM: @uplaudofficial ========
-  const tagFontSize = Math.max(Math.round(52 * s), 32);
+  cy += bubH + Math.round(18 * s);
+
+  // ── Bottom sticker area ──
+  // "ask me before google" text badge + uplaud.ai
+  const stickerY = cardY + cardH + Math.round(30 * s);
+  const stickerCX = W / 2;
+
+  // Rounded sticker shape
+  const stW = Math.round(500 * s);
+  const stH = Math.round(160 * s);
+  const stX = stickerCX - stW / 2;
+  const stY = stickerY;
+
   ctx.save();
-  ctx.textAlign = "center";
-  ctx.textBaseline = "bottom";
-  ctx.font = `700 ${tagFontSize}px ${FONT_FAMILY}`;
-  ctx.fillStyle = "#FFFFFF";
-  ctx.fillText("@uplaudofficial", W / 2, H - Math.max(Math.round(40 * s), 30));
+  roundedRect(ctx, stX, stY, stW, stH, Math.round(30 * s));
+  ctx.fillStyle = "rgba(255,255,255,0.85)";
+  ctx.fill();
+  ctx.strokeStyle = "#7DD3C0";
+  ctx.lineWidth = Math.round(3 * s);
+  ctx.stroke();
   ctx.restore();
 
-  // ======== CONVERT TO BLOB ========
+  ctx.save();
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = `800 ${Math.round(30 * s)}px ${FF}`; ctx.fillStyle = "#6214a8";
+  ctx.fillText("ask me", stickerCX, stY + Math.round(35 * s));
+  ctx.font = `800 ${Math.round(30 * s)}px ${FF}`; ctx.fillStyle = "#6214a8";
+  ctx.fillText("before google", stickerCX, stY + Math.round(68 * s));
+  ctx.font = `600 ${Math.round(24 * s)}px ${FF}`; ctx.fillStyle = "#22c55e";
+  ctx.fillText("uplaud.ai", stickerCX, stY + Math.round(105 * s));
+  ctx.restore();
+
+  // ── Follow @uplaudofficial ──
+  const followY = stY + stH + Math.round(30 * s);
+  ctx.save();
+  ctx.textAlign = "center"; ctx.textBaseline = "top";
+  ctx.font = `500 ${Math.round(34 * s)}px ${FF}`; ctx.fillStyle = "rgba(255,255,255,0.85)";
+  ctx.fillText("Follow ", W / 2 - ctx.measureText("@uplaudofficial").width / 2, followY);
+  // Measure "Follow " width
+  const fW = ctx.measureText("Follow ").width;
+  ctx.font = `700 ${Math.round(34 * s)}px ${FF}`; ctx.fillStyle = "#FFF";
+  ctx.fillText("@uplaudofficial", W / 2 - ctx.measureText("@uplaudofficial").width / 2 + fW, followY);
+  ctx.restore();
+
+  // Simpler approach: draw as one line
+  ctx.save();
+  ctx.textAlign = "center"; ctx.textBaseline = "top";
+  // Clear previous attempt by overdrawing background
+  ctx.font = `600 ${Math.round(34 * s)}px ${FF}`; ctx.fillStyle = "rgba(255,255,255,0.9)";
+  ctx.fillText("Follow @uplaudofficial", W / 2, followY);
+  ctx.restore();
+
   return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => {
-        if (blob) resolve(blob);
-        else reject(new Error("Failed to generate image"));
-      },
-      "image/png"
-    );
+    canvas.toBlob(blob => { if (blob) resolve(blob); else reject(new Error("Failed")); }, "image/png");
   });
 }
