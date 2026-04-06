@@ -184,29 +184,29 @@ export async function generateStoryImage(review: ReviewData, logoUrl?: string): 
   const minCardH = H - cardY - BOTTOM_RESERVE;
   const cardH = Math.max(creamH + greenSectionH, minCardH);
 
-  // ── Draw card ──
-  // Full card in green first
+  // ── Three-zone card: [cream top] [green middle] [cream bottom] ──
+  const CREAM_BOTTOM_H = 130; // visible cream strip at bottom of card
+
+  // 1. Draw full card in cream
   ctx.save();
   ctx.shadowColor = "rgba(0,0,0,0.12)"; ctx.shadowBlur = 40; ctx.shadowOffsetY = 6;
   roundedRect(ctx, cardX, cardY, cardW, cardH, CARD_R);
-  ctx.fillStyle = COL.cardGreen;
-  ctx.fill();
-  ctx.restore();
-
-  // Cream top section (only avatar row)
-  ctx.save();
-  ctx.beginPath();
-  ctx.moveTo(cardX + CARD_R, cardY);
-  ctx.lineTo(cardX + cardW - CARD_R, cardY);
-  ctx.quadraticCurveTo(cardX + cardW, cardY, cardX + cardW, cardY + CARD_R);
-  ctx.lineTo(cardX + cardW, cardY + creamH);
-  ctx.lineTo(cardX, cardY + creamH);
-  ctx.lineTo(cardX, cardY + CARD_R);
-  ctx.quadraticCurveTo(cardX, cardY, cardX + CARD_R, cardY);
-  ctx.closePath();
   ctx.fillStyle = COL.cardCream;
   ctx.fill();
   ctx.restore();
+
+  // 2. Draw green section (middle — between cream top and cream bottom)
+  const greenStartY = cardY + creamH;
+  const greenEndY = cardY + cardH - CREAM_BOTTOM_H;
+  const greenMidH = greenEndY - greenStartY;
+  if (greenMidH > 0) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(cardX, greenStartY, cardW, greenMidH);
+    ctx.fillStyle = COL.cardGreen;
+    ctx.fill();
+    ctx.restore();
+  }
 
   // ── Avatar row (on cream) ──
   let cy = cardY + CARD_PAD;
@@ -298,12 +298,10 @@ export async function generateStoryImage(review: ReviewData, logoUrl?: string): 
   const totalBaseTextH = lines.length * LINE_H;
   let finalRevFont = REV_FONT;
   let finalLineH = LINE_H;
-  // The green section has two zones:
-  //   - Top zone: review text (uses ~60% of green height)
-  //   - Bottom zone: sticker overlap area (~40%)
-  const greenH = availableTextH;
-  const textZoneH = Math.round(greenH * 0.60);
-  const scale = Math.min(1.5, (textZoneH * 0.85) / Math.max(totalBaseTextH, 1));
+  // Green zone ends at cream bottom strip
+  const greenH = cardY + cardH - CREAM_BOTTOM_H - cy;
+  const textZoneH = greenH;
+  const scale = Math.min(1.3, (textZoneH * 0.75) / Math.max(totalBaseTextH, 1));
   if (scale > 1.05) {
     finalRevFont = Math.round(REV_FONT * scale);
     finalLineH = Math.round(LINE_H * scale);
