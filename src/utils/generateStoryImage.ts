@@ -322,30 +322,32 @@ export async function generateStoryImage(review: ReviewData, logoUrl?: string): 
   });
   ctx.restore();
 
-  // ── Bottom section: sticker centered, Follow text below ──
-  const bottomAreaY = cardY + cardH + Math.round(24 * s);
-  const bottomAreaH = H - bottomAreaY - Math.round(40 * s);
+  // ── Bottom section: sticker bottom-right (overlapping card corner), Follow text left ──
+  // Sticker: right-aligned, overlapping the bottom-right of the card
+  const stickerDrawW = Math.round(440 * s);
+  const stickerAspect = stickerImg ? stickerImg.width / stickerImg.height : 2;
+  const stickerDrawH = Math.round(stickerDrawW / stickerAspect);
 
-  // "Follow @uplaudofficial" text at very bottom
-  const followFontSz = Math.round(32 * s);
-  const followY = H - Math.round(60 * s);
-  ctx.save();
-  ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.font = `600 ${followFontSz}px ${FF}`; ctx.fillStyle = COL.followText;
-  ctx.fillText("Follow @uplaudofficial", W / 2, followY);
-  ctx.restore();
+  // Position: right edge flush with card right edge, vertically centered
+  // between card bottom and bottom of canvas
+  const bottomGap = H - (cardY + cardH);
+  const stickerY2 = Math.round(cardY + cardH - stickerDrawH * 0.35); // overlap card bottom by ~35%
+  const stickerX2 = cardX + cardW - stickerDrawW + Math.round(20 * s); // right-aligned, slight overhang
 
-  // Sticker centered in the remaining space above follow text
   if (stickerImg) {
-    const stickerAspect = stickerImg.width / stickerImg.height;
-    // Use available height to size sticker, but cap width
-    const availH = followY - Math.round(16 * s) - bottomAreaY;
-    const stickerH2 = Math.min(availH, Math.round(stickerH));
-    const stickerW2 = Math.round(stickerH2 * stickerAspect);
-    const stickerX2 = Math.round((W - stickerW2) / 2);
-    const stickerY2 = Math.round(bottomAreaY + (availH - stickerH2) / 2);
-    ctx.drawImage(stickerImg, stickerX2, stickerY2, stickerW2, stickerH2);
+    ctx.drawImage(stickerImg, stickerX2, stickerY2, stickerDrawW, stickerDrawH);
   }
+
+  // "Follow @uplaudofficial" text: left side, vertically centered with sticker
+  const followFontSz = Math.round(30 * s);
+  const followCY = Math.round(stickerY2 + stickerDrawH * 0.55); // center with sticker body
+  ctx.save();
+  ctx.textAlign = "left"; ctx.textBaseline = "middle";
+  ctx.font = `600 ${followFontSz}px ${FF}`; ctx.fillStyle = COL.followText;
+  ctx.fillText("Follow", cx, followCY - Math.round(18 * s));
+  ctx.font = `700 ${followFontSz}px ${FF}`;
+  ctx.fillText("@uplaudofficial", cx, followCY + Math.round(18 * s));
+  ctx.restore();
 
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(blob => { if (blob) resolve(blob); else reject(new Error("Failed")); }, "image/png");
