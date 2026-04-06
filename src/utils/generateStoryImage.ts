@@ -171,7 +171,10 @@ function computeLayout(
   const g4 = Math.round(14 * s); // after stars
   const g5 = Math.round(14 * s); // after bubble (before card bottom pad)
 
-  const cardH = cardPad + avatarRowH + g1 + bizH + g2 + tagRowH + g3 + starH + g4 + revTextH + g5 + cardPad;
+  // Ensure green section (review text area) is always generously sized
+  const creamContentH = avatarRowH + g1 + bizH + g2 + tagRowH + g3 + starH + g4;
+  const minGreenH = Math.max(revTextH + cardPad, Math.round(360 * s)); // at least 360px of green
+  const cardH = cardPad + creamContentH + Math.round(28 * s) + minGreenH;
 
   const logoH      = Math.round(baseLogoH * s);
   const logoGap    = Math.round(50 * s);
@@ -234,32 +237,42 @@ export async function generateStoryImage(review: ReviewData, logoUrl?: string): 
   } = L;
 
   const logoW = Math.round(baseLW * s);
-  const totalGroup = logoH + logoGap + cardH + Math.round(28 * s) + stickerH + followH;
-  const groupY = Math.max(40, Math.round((H - totalGroup) / 2));
+
+  // Fix the logo at the top, then let the card fill as much space as possible
+  const logoTopPad = Math.round(60 * s);
+  const logoY = logoTopPad;
+
+  // Card starts right after logo
+  const cardTopGap = Math.round(50 * s);
+  const cardX = cardMX;
+  const cardY = logoY + logoH + cardTopGap;
+
+  // Card bottom = leave space for sticker and follow text
+  const reservedBottom = stickerH * 0.65 + followH + Math.round(30 * s);
+  // Recalculate card height to fill available space
+  const availableCardH = H - cardY - reservedBottom;
+  // Use the larger of computed cardH or available space
+  const finalCardH = Math.max(cardH, availableCardH);
 
   // ── Logo ──
   if (logoImg) {
-    drawLogoWhite(ctx, logoImg, Math.round((W - logoW) / 2), groupY, logoW, logoH);
+    drawLogoWhite(ctx, logoImg, Math.round((W - logoW) / 2), logoY, logoW, logoH);
   }
-
-  // ── Card ──
-  const cardX = cardMX;
-  const cardY = groupY + logoH + logoGap;
 
   // Two-tone card: cream top + green bottom
   // First draw the full card in green (the bottom color)
   ctx.save();
   ctx.shadowColor = "rgba(0,0,0,0.12)"; ctx.shadowBlur = 30; ctx.shadowOffsetY = 4;
-  roundedRect(ctx, cardX, cardY, cardW, cardH, Math.round(24 * s));
+  roundedRect(ctx, cardX, cardY, cardW, finalCardH, Math.round(24 * s));
   ctx.fillStyle = COL.cardGreen;
   ctx.fill();
   ctx.restore();
 
-  // Then draw the cream top section (avatar + name + biz + tags + stars)
-  // Height = top padding + avatarRow + gap + bizH + gap + tagRowH + gap + starH + gap
-  const creamH = cardPad + avatarRowH + g1 + bizH + g2 + tagRowH + (tagRowH ? g3 : 0) + starH + Math.round(16 * s);
+  // Cream section: top padding + content rows + breathing room before green
+  const creamContentH = avatarRowH + g1 + bizH + g2 + tagRowH + (tagRowH ? g3 : 0) + starH + g4;
+  const creamH = cardPad + creamContentH + Math.round(28 * s);
+
   ctx.save();
-  // Clip to top-rounded rect for cream section
   const r24 = Math.round(24 * s);
   ctx.beginPath();
   ctx.moveTo(cardX + r24, cardY);
@@ -383,12 +396,20 @@ export async function generateStoryImage(review: ReviewData, logoUrl?: string): 
   ctx.restore();
   cy += starH + g4;
 
-  // ── Review text — sits on the green card bottom, no separate bubble ──
+  // ── Review text — vertically centered in the green section ──
+  // Green section starts at cy (after stars+gap), ends at cardY + finalCardH - cardPad
+  const greenSectionStart = cy;
+  const greenSectionEnd = cardY + finalCardH - Math.round(cardPad * 0.5);
+  const greenSectionH = greenSectionEnd - greenSectionStart;
+  const totalTextH = lines.length * lineH;
+  // Center text vertically in green area, biased slightly upward
+  const textStartY = greenSectionStart + Math.round((greenSectionH - totalTextH) * 0.4);
+
   ctx.save();
   ctx.textAlign = "left"; ctx.textBaseline = "top";
   ctx.font = `400 ${revFont}px ${FF}`; ctx.fillStyle = COL.black;
   lines.forEach((line, i) => {
-    ctx.fillText(line, cx, cy + i * lineH);
+    ctx.fillText(line, cx, textStartY + i * lineH);
   });
   ctx.restore();
 
@@ -399,7 +420,7 @@ export async function generateStoryImage(review: ReviewData, logoUrl?: string): 
 
   // Right-aligned with card, overlapping card bottom by ~35%
   const stickerX2 = cardX + cardW - stickerDrawW + Math.round(20 * s);
-  const stickerY2 = Math.round(cardY + cardH - stickerDrawH * 0.35);
+  const stickerY2 = Math.round(cardY + finalCardH - stickerDrawH * 0.35);
 
   if (stickerImg) {
     drawStickerNoWhite(ctx, stickerImg, stickerX2, stickerY2, stickerDrawW, stickerDrawH);
