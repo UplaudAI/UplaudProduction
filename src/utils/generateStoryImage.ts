@@ -175,13 +175,13 @@ export async function generateStoryImage(review: ReviewData, logoUrl?: string): 
   const greenContentH = 10 + BIZ_FONT + 14 + tagRowH + tagGap + STAR_SZ + 20 + revTextH;
   const greenSectionH = greenContentH + CARD_PAD;
 
-  // Force card to fill most of the canvas
-  // Reserve space at bottom for: sticker overhang below card + follow text
-  const STICKER_W    = 460;
+  // Card fills most of canvas, reserving 70% of sticker height + follow text at bottom
   const STICKER_ASPECT = stickerImg ? stickerImg.width / stickerImg.height : 2.1;
-  const STICKER_H    = Math.round(STICKER_W / STICKER_ASPECT);
-  const FOLLOW_RESERVE = STICKER_H * 0.60 + FOLLOW_FONT + 40; // below card
-  const minCardH = H - cardY - FOLLOW_RESERVE - 40;
+  const STICKER_W_FINAL = 600;
+  const STICKER_H_FINAL = Math.round(STICKER_W_FINAL / STICKER_ASPECT);
+  // Reserve space: sticker pokes 70% below card + follow text
+  const BOTTOM_RESERVE = Math.round(STICKER_H_FINAL * 0.70) + FOLLOW_FONT + 50;
+  const minCardH = H - cardY - BOTTOM_RESERVE;
   const cardH = Math.max(creamH + greenSectionH, minCardH);
 
   // ── Draw card ──
@@ -327,13 +327,12 @@ export async function generateStoryImage(review: ReviewData, logoUrl?: string): 
   ctx.fillText("Follow @uplaudofficial", W / 2, followY);
   ctx.restore();
 
-  // Sticker overlaps the card bottom-right corner
+  // Sticker overlaps bottom-right of card by ~30%, rest below
   if (stickerImg) {
     const stkAspect = stickerImg.width / stickerImg.height;
     const stkW = Math.round(600);
     const stkH = Math.round(stkW / stkAspect);
-    // Overlap card by ~60% — sticker sits mostly below card bottom
-    const stkY = cardY + cardH - stkH * 0.62;
+    const stkY = cardY + cardH - Math.round(stkH * 0.30);
     const stkX = cardX + cardW - stkW + 50;
     drawStickerNoWhite(ctx, stickerImg, stkX, stkY, stkW, stkH);
   }
