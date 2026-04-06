@@ -151,19 +151,19 @@ function computeLayout(
   const cardPad  = Math.round(52 * s);
   const contentW = cardW - cardPad * 2;
 
-  const bubPadX = Math.round(32 * s);
-  const bubPadY = Math.round(24 * s);
+  const bubPadX = 0; // no separate bubble, text sits directly on card
+  const bubPadY = 0;
   const revFont = Math.round(36 * s);
   const lineH   = Math.round(50 * s);
 
   ctx.font = `400 ${revFont}px ${FF}`;
-  const lines = wrapText(ctx, `\u201C${review.reviewText}\u201D`, contentW - bubPadX * 2);
+  const lines = wrapText(ctx, `\u201C${review.reviewText}\u201D`, contentW);
 
   const avatarRowH = Math.round(80 * s);
   const bizH      = Math.round(50 * s);
   const tagRowH   = review.categories?.length ? Math.round(42 * s) : 0;
   const starH     = Math.round(54 * s);
-  const revTextH  = lines.length * lineH + bubPadY * 2;
+  const revTextH  = lines.length * lineH;
 
   const g1 = Math.round(22 * s); // after avatar
   const g2 = Math.round(12 * s); // after biz
@@ -246,9 +246,30 @@ export async function generateStoryImage(review: ReviewData, logoUrl?: string): 
   const cardX = cardMX;
   const cardY = groupY + logoH + logoGap;
 
+  // Two-tone card: cream top + green bottom
+  // First draw the full card in green (the bottom color)
   ctx.save();
   ctx.shadowColor = "rgba(0,0,0,0.12)"; ctx.shadowBlur = 30; ctx.shadowOffsetY = 4;
   roundedRect(ctx, cardX, cardY, cardW, cardH, Math.round(24 * s));
+  ctx.fillStyle = COL.cardGreen;
+  ctx.fill();
+  ctx.restore();
+
+  // Then draw the cream top section (avatar + name + biz + tags + stars)
+  // Height = top padding + avatarRow + gap + bizH + gap + tagRowH + gap + starH + gap
+  const creamH = cardPad + avatarRowH + g1 + bizH + g2 + tagRowH + (tagRowH ? g3 : 0) + starH + Math.round(16 * s);
+  ctx.save();
+  // Clip to top-rounded rect for cream section
+  const r24 = Math.round(24 * s);
+  ctx.beginPath();
+  ctx.moveTo(cardX + r24, cardY);
+  ctx.lineTo(cardX + cardW - r24, cardY);
+  ctx.quadraticCurveTo(cardX + cardW, cardY, cardX + cardW, cardY + r24);
+  ctx.lineTo(cardX + cardW, cardY + creamH);
+  ctx.lineTo(cardX, cardY + creamH);
+  ctx.lineTo(cardX, cardY + r24);
+  ctx.quadraticCurveTo(cardX, cardY, cardX + r24, cardY);
+  ctx.closePath();
   ctx.fillStyle = COL.cardCream;
   ctx.fill();
   ctx.restore();
@@ -362,20 +383,12 @@ export async function generateStoryImage(review: ReviewData, logoUrl?: string): 
   ctx.restore();
   cy += starH + g4;
 
-  // ── Review text in green bubble ──
-  const bubW = contentW;
-  const bubH = lines.length * lineH + bubPadY * 2;
-
-  ctx.save();
-  roundedRect(ctx, cx, cy, bubW, bubH, Math.round(14 * s));
-  ctx.fillStyle = COL.cardGreen; ctx.fill();
-  ctx.restore();
-
+  // ── Review text — sits on the green card bottom, no separate bubble ──
   ctx.save();
   ctx.textAlign = "left"; ctx.textBaseline = "top";
   ctx.font = `400 ${revFont}px ${FF}`; ctx.fillStyle = COL.black;
   lines.forEach((line, i) => {
-    ctx.fillText(line, cx + bubPadX, cy + bubPadY + i * lineH);
+    ctx.fillText(line, cx, cy + i * lineH);
   });
   ctx.restore();
 
