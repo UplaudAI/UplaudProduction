@@ -139,8 +139,8 @@ export async function generateStoryImage(review: ReviewData, logoUrl?: string): 
   const BIZ_FONT   = 44;
   const TAG_FONT   = 23;
   const STAR_SZ    = 46;
-  const REV_FONT   = 36;       // smaller, lighter feel
-  const LINE_H     = 62;       // generous line height for airy feel
+  const REV_FONT   = 42;       // same size as before
+  const LINE_H     = 64;       // generous line height for airy feel (was 58)
   const FOLLOW_FONT= 36;
 
   // Logo
