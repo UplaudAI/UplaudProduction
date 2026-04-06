@@ -230,16 +230,24 @@ export async function generateStoryImage(review: ReviewData, logoUrl?: string): 
   }
 
   const nameX = cx + AVATAR_R * 2 + 18;
+  const NAME_FONT = 38;
+  const SUB_FONT = 26;
+  const NAME_SUB_GAP = 10; // gap between name and subtext
+  // Total text block height: name + gap + sub
+  const blockH = NAME_FONT + NAME_SUB_GAP + SUB_FONT;
+  // Center the entire name+sub block vertically with the avatar
+  const blockTopY = aCY - Math.round(blockH / 2);
+
   ctx.save();
   ctx.textAlign = "left"; ctx.textBaseline = "top";
-  ctx.font = `700 38px ${FF}`; ctx.fillStyle = COL.black;
-  ctx.fillText(review.reviewerName, nameX, aCY - 20);
+  ctx.font = `700 ${NAME_FONT}px ${FF}`; ctx.fillStyle = COL.black;
+  ctx.fillText(review.reviewerName, nameX, blockTopY);
   if (review.reviewCount) {
-    ctx.font = `600 26px ${FF}`; ctx.fillStyle = COL.purple;
-    ctx.fillText(`${review.reviewCount} reviews`, nameX, aCY + 10);
+    ctx.font = `600 ${SUB_FONT}px ${FF}`; ctx.fillStyle = COL.purple;
+    ctx.fillText(`${review.reviewCount} reviews`, nameX, blockTopY + NAME_FONT + NAME_SUB_GAP);
   } else if (review.handle) {
-    ctx.font = `400 26px ${FF}`; ctx.fillStyle = "#9CA3AF";
-    ctx.fillText(review.handle, nameX, aCY + 10);
+    ctx.font = `400 ${SUB_FONT}px ${FF}`; ctx.fillStyle = "#9CA3AF";
+    ctx.fillText(review.handle, nameX, blockTopY + NAME_FONT + NAME_SUB_GAP);
   }
   ctx.restore();
 
