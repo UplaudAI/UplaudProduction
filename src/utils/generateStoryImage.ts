@@ -298,51 +298,43 @@ export async function generateStoryImage(review: ReviewData, logoUrl?: string): 
   const totalBaseTextH = lines.length * LINE_H;
   let finalRevFont = REV_FONT;
   let finalLineH = LINE_H;
-  // Reserve lower portion of green for sticker overlap (so text doesn't go there)
-  const stickerReserveH = 180; // keep bottom ~180px of card clear for sticker
-  const textAreaH = availableTextH - stickerReserveH;
-  if (totalBaseTextH < textAreaH * 0.5 && lines.length > 0) {
-    // Scale up: fit text to fill ~80% of text area
-    const scale = Math.min(1.6, (textAreaH * 0.80) / totalBaseTextH);
+  // The green section has two zones:
+  //   - Top zone: review text (uses ~60% of green height)
+  //   - Bottom zone: sticker overlap area (~40%)
+  const greenH = availableTextH;
+  const textZoneH = Math.round(greenH * 0.60);
+  const scale = Math.min(1.5, (textZoneH * 0.85) / Math.max(totalBaseTextH, 1));
+  if (scale > 1.05) {
     finalRevFont = Math.round(REV_FONT * scale);
     finalLineH = Math.round(LINE_H * scale);
-    // Re-wrap at new font size
-    ctx.font = `400 ${finalRevFont}px ${FF}`;
-    const newLines = wrapText(ctx, `\u201C${review.reviewText}\u201D`, contentW);
-    const newTextH = newLines.length * finalLineH;
-    // Vertically center in available space
-    const textY = cy + Math.round((textAreaH - newTextH) * 0.35);
-    ctx.save();
-    ctx.textAlign = "left"; ctx.textBaseline = "top";
-    ctx.fillStyle = COL.black;
-    newLines.forEach((line, i) => { ctx.fillText(line, cx, textY + i * finalLineH); });
-    ctx.restore();
-  } else {
-    const textY = cy + Math.round((textAreaH - totalBaseTextH) * 0.35);
-    ctx.save();
-    ctx.textAlign = "left"; ctx.textBaseline = "top";
-    ctx.font = `400 ${finalRevFont}px ${FF}`; ctx.fillStyle = COL.black;
-    lines.forEach((line, i) => { ctx.fillText(line, cx, textY + i * finalLineH); });
-    ctx.restore();
   }
+  ctx.font = `400 ${finalRevFont}px ${FF}`;
+  const finalLines = wrapText(ctx, `\u201C${review.reviewText}\u201D`, contentW);
+  const finalTextH = finalLines.length * finalLineH;
+  const textY = cy + 28;
+  ctx.save();
+  ctx.textAlign = "left"; ctx.textBaseline = "top";
+  ctx.fillStyle = COL.black;
+  finalLines.forEach((line, i) => { ctx.fillText(line, cx, textY + i * finalLineH); });
+  ctx.restore();
 
   // ── Sticker + Follow text ──
   // "Follow @uplaudofficial" anchored to very bottom of canvas
   const followY = H - 70;
   ctx.save();
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.font = `600 ${FOLLOW_FONT}px ${FF}`; ctx.fillStyle = COL.white;
+  ctx.font = `700 ${FOLLOW_FONT}px ${FF}`; ctx.fillStyle = "rgba(255,255,255,0.92)";
   ctx.fillText("Follow @uplaudofficial", W / 2, followY);
   ctx.restore();
 
   // Sticker overlaps the card bottom-right corner
   if (stickerImg) {
     const stkAspect = stickerImg.width / stickerImg.height;
-    const stkW = Math.round(560);
+    const stkW = Math.round(600);
     const stkH = Math.round(stkW / stkAspect);
-    // Overlap card by ~45% from bottom
-    const stkY = cardY + cardH - stkH * 0.50;
-    const stkX = cardX + cardW - stkW + 40;
+    // Overlap card by ~60% — sticker sits mostly below card bottom
+    const stkY = cardY + cardH - stkH * 0.62;
+    const stkX = cardX + cardW - stkW + 50;
     drawStickerNoWhite(ctx, stickerImg, stkX, stkY, stkW, stkH);
   }
 
