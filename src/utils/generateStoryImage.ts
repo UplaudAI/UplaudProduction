@@ -97,20 +97,44 @@ function drawStickerNoWhite(
   const t = tmp.getContext("2d")!;
   t.drawImage(img, 0, 0, w, h);
 
-  // Get pixel data and knock out near-white pixels
+  // Flood-fill from the 4 corners to find and remove the background white.
+  // This avoids knocking out light-colored pixels inside the sticker itself.
   const imgData = t.getImageData(0, 0, w, h);
   const d = imgData.data;
-  for (let i = 0; i < d.length; i += 4) {
-    const r = d[i], g = d[i+1], b = d[i+2];
-    // If pixel is very light (near white), make it transparent
-    if (r > 230 && g > 230 && b > 230) {
-      d[i+3] = 0; // fully transparent
-    } else if (r > 210 && g > 210 && b > 210) {
-      // Semi-transparent for anti-aliasing edge pixels
-      const brightness = (r + g + b) / 3;
-      d[i+3] = Math.round(255 * (1 - (brightness - 210) / 45));
+
+  function isNearWhite(idx: number) {
+    return d[idx] > 240 && d[idx+1] > 240 && d[idx+2] > 240;
+  }
+
+  // BFS flood fill from all 4 corners
+  const visited = new Uint8Array(w * h);
+  const queue: number[] = [];
+  const corners = [0, w - 1, w * (h - 1), w * h - 1];
+  for (const c of corners) {
+    if (!visited[c] && isNearWhite(c * 4)) {
+      visited[c] = 1;
+      queue.push(c);
     }
   }
+
+  while (queue.length > 0) {
+    const idx = queue.pop()!;
+    d[idx * 4 + 3] = 0; // make transparent
+    const x2 = idx % w, y2 = Math.floor(idx / w);
+    const neighbors = [
+      x2 > 0 ? idx - 1 : -1,
+      x2 < w - 1 ? idx + 1 : -1,
+      y2 > 0 ? idx - w : -1,
+      y2 < h - 1 ? idx + w : -1,
+    ];
+    for (const n of neighbors) {
+      if (n >= 0 && !visited[n] && isNearWhite(n * 4)) {
+        visited[n] = 1;
+        queue.push(n);
+      }
+    }
+  }
+
   t.putImageData(imgData, 0, 0);
   ctx.drawImage(tmp, x, y);
 }
@@ -355,25 +379,20 @@ export async function generateStoryImage(review: ReviewData, logoUrl?: string): 
   });
   ctx.restore();
 
-  // ── Bottom section: sticker sits BELOW card, right-aligned, Follow text left ──
-  const belowCardY = cardY + cardH + Math.round(20 * s);
-  const availBelowH = H - belowCardY - Math.round(30 * s); // space between card bottom and canvas bottom
-
+  // ── Bottom section: sticker overlapping bottom-right of card, Follow text left ──
   const stickerAspect = stickerImg ? stickerImg.width / stickerImg.height : 2.0;
-  // Size sticker to fill ~80% of the available height below card
-  const stickerDrawH = Math.round(availBelowH * 0.82);
-  const stickerDrawW = Math.round(stickerDrawH * stickerAspect);
+  const stickerDrawW = Math.round(440 * s);
+  const stickerDrawH = Math.round(stickerDrawW / stickerAspect);
 
-  // Right-aligned flush with card right edge
-  const stickerX2 = cardX + cardW - stickerDrawW;
-  // Vertically centered in the available space below card
-  const stickerY2 = Math.round(belowCardY + (availBelowH - stickerDrawH) / 2);
+  // Right-aligned with card, overlapping card bottom by ~35%
+  const stickerX2 = cardX + cardW - stickerDrawW + Math.round(20 * s);
+  const stickerY2 = Math.round(cardY + cardH - stickerDrawH * 0.35);
 
   if (stickerImg) {
     drawStickerNoWhite(ctx, stickerImg, stickerX2, stickerY2, stickerDrawW, stickerDrawH);
   }
 
-  // "Follow @uplaudofficial" text — left side, vertically centered with sticker
+  // "Follow @uplaudofficial" — left side, vertically centered with sticker
   const followFontSz = Math.round(32 * s);
   const stickerCenterY = stickerY2 + Math.round(stickerDrawH * 0.5);
   ctx.save();
