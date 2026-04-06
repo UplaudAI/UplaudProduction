@@ -5,16 +5,7 @@
  * sharing options to Instagram Stories.
  *
  * URL format:
- *   /share?name=Laksh+Subodh&business=QI+Austin&text=Amazing+food...&score=5&handle=@laksh
- *
- * This URL is what gets sent via WhatsApp. When opened on mobile,
- * it shows the generated story image with a prominent
- * "Share Review" button.
- *
- * IMPORTANT: WhatsApp (and most apps) open links in an in-app browser
- * (WebView) which does NOT support navigator.share with files.
- * We detect this and prompt the user to open in Safari/Chrome where
- * the Web Share API works and can hand the image directly to Instagram.
+ *   /share?name=...&business=...&text=...&score=5&handle=@...&reviewCount=42&categories=Cafe,Vegetarian
  */
 import React, { useEffect, useState, useRef } from "react";
 import { useSearchParams, Link } from "react-router-dom";
@@ -28,7 +19,6 @@ function getDeviceInfo() {
   return { isIOS, isAndroid, isMobile: isIOS || isAndroid };
 }
 
-/** Detect if we're in an in-app browser (WhatsApp, Instagram, FB, etc.) */
 function isInAppBrowser(): boolean {
   const ua = navigator.userAgent || "";
   return /FBAN|FBAV|Instagram|WhatsApp|Line|Snapchat|Twitter|Weibo|MicroMessenger/i.test(ua);
@@ -44,33 +34,27 @@ const ShareReview: React.FC = () => {
   const [shareStatus, setShareStatus] = useState<string | null>(null);
   const canvasGenerated = useRef(false);
 
-  // Parse review data from URL params
   const review: ReviewData = {
     reviewerName: searchParams.get("name") || "Anonymous",
     businessName: searchParams.get("business") || "Unknown Business",
     reviewText: searchParams.get("text") || "",
-    score: Math.min(5, Math.max(1, parseInt(searchParams.get("score") || "5", 10))),
+    score: Math.min(5, Math.max(1, parseFloat(searchParams.get("score") || "5"))),
     handle: searchParams.get("handle") || undefined,
-    likes: searchParams.get("likes") ? parseInt(searchParams.get("likes")!, 10) : undefined,
+    reviewCount: searchParams.get("reviewCount") ? parseInt(searchParams.get("reviewCount")!, 10) : undefined,
+    categories: searchParams.get("categories") ? searchParams.get("categories")!.split(",").map(c => c.trim()).filter(Boolean) : undefined,
   };
 
   const device = getDeviceInfo();
   const inApp = isInAppBrowser();
 
-  // Check if Web Share API with files is available
   const [canWebShare, setCanWebShare] = useState(false);
   useEffect(() => {
     if (imageBlob && navigator.share && navigator.canShare) {
       const file = new File([imageBlob], "test.png", { type: "image/png" });
-      try {
-        setCanWebShare(navigator.canShare({ files: [file] }));
-      } catch {
-        setCanWebShare(false);
-      }
+      try { setCanWebShare(navigator.canShare({ files: [file] })); } catch { setCanWebShare(false); }
     }
   }, [imageBlob]);
 
-  // Generate the story image on mount
   useEffect(() => {
     if (canvasGenerated.current) return;
     canvasGenerated.current = true;
@@ -83,7 +67,6 @@ const ShareReview: React.FC = () => {
 
     (async () => {
       try {
-        // Use origin-relative path for the logo
         const logoUrl = `${window.location.origin}/lovable-uploads/logo.png`;
         const blob = await generateStoryImage(review, logoUrl);
         setImageBlob(blob);
@@ -96,73 +79,28 @@ const ShareReview: React.FC = () => {
       }
     })();
 
-    return () => {
-      // Cleanup object URL on unmount
-      if (imageUrl) URL.revokeObjectURL(imageUrl);
-    };
+    return () => { if (imageUrl) URL.revokeObjectURL(imageUrl); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* ---- Share handlers ---- */
-
-  /** Primary: Web Share API with file ONLY (no title/text).
-   *  Passing only the file ensures Instagram shows "Stories" as a
-   *  share target. When the user picks Stories, Instagram opens its
-   *  story editor with the image already loaded — zero extra taps.
-   *
-   *  NOTE: Web Share API requires HTTPS (secure context). On local
-   *  dev over plain HTTP, it will be unavailable — falls back to download. */
   const handleShareViaWebShare = async () => {
     if (!imageBlob) return;
     const file = new File([imageBlob], `uplaud-review.png`, { type: "image/png" });
-
-    // Debug: log what's available so we can diagnose issues
-    console.log("[ShareReview] navigator.share exists:", !!navigator.share);
-    console.log("[ShareReview] navigator.canShare exists:", !!navigator.canShare);
-    console.log("[ShareReview] isSecureContext:", window.isSecureContext);
-    console.log("[ShareReview] protocol:", window.location.protocol);
-    if (navigator.canShare) {
-      console.log("[ShareReview] canShare({files}):", navigator.canShare({ files: [file] }));
-    }
-
     try {
       if (navigator.share && navigator.canShare?.({ files: [file] })) {
         await navigator.share({ files: [file] });
         setShareStatus("Shared successfully!");
       } else if (!window.isSecureContext) {
-        // On HTTP (local dev), Web Share API is blocked
-        setShareStatus("Sharing requires HTTPS. On your deployed Vercel site this will open the share sheet. For now, use Download.");
+        setShareStatus("Sharing requires HTTPS. On your deployed site this will open the share sheet. For now, use Download.");
       } else {
         handleDownload();
       }
     } catch (err: any) {
-      if (err.name !== "AbortError") {
-        console.error("Share failed:", err);
-        handleDownload();
-      }
+      if (err.name !== "AbortError") { handleDownload(); }
     }
   };
 
-  /** Open this same page in Safari (iOS) or Chrome (Android) */
-  const handleOpenInBrowser = () => {
-    const currentUrl = window.location.href;
-    if (device.isIOS) {
-      // On iOS, x-safari-https:// opens Safari with the URL
-      // window.open also works in some WebViews
-      window.location.href = currentUrl;
-      // Also try opening via window.open as a fallback
-      setTimeout(() => {
-        window.open(currentUrl, "_blank");
-      }, 300);
-    } else {
-      // On Android, intent:// can open the default browser
-      const intentUrl =
-        `intent://${currentUrl.replace(/^https?:\/\//, "")}#Intent;scheme=https;action=android.intent.action.VIEW;end`;
-      window.location.href = intentUrl;
-    }
-  };
-
-  /** Fallback: download the image */
   const handleDownload = () => {
     if (!imageBlob) return;
     const url = URL.createObjectURL(imageBlob);
@@ -177,76 +115,66 @@ const ShareReview: React.FC = () => {
   };
 
   /* ---- Render ---- */
-
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center p-6">
+      <div className="min-h-screen flex items-center justify-center p-6" style={{ background: "#0E1828" }}>
         <div className="text-center">
           <p className="text-white text-lg mb-4">{error}</p>
-          <Link to="/" className="text-purple-400 hover:underline">
-            Go to Uplaud
-          </Link>
+          <Link to="/" className="text-purple-400 hover:underline">Go to Uplaud</Link>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 flex flex-col items-center pb-8">
-      {/* Header */}
-      <div className="w-full max-w-md px-4 pt-6 pb-2 text-center">
-        <img
-          src="/lovable-uploads/logo.png"
-          alt="Uplaud"
-          className="h-12 mx-auto mb-2"
-          style={{ filter: "brightness(0) invert(1)" }}
-        />
-        <p className="text-gray-400 text-sm">Share this review</p>
-      </div>
+    <div className="min-h-screen flex flex-col items-center pb-8" style={{ background: "#0E1828" }}>
 
-      {/* Share button — ABOVE the image, prominent green */}
+      {/* ── TAG + BUTTONS ── */}
       {!loading && imageBlob && (
-        <div className="w-full max-w-md px-4 mt-4 flex flex-col gap-2">
-          <button
-            onClick={handleShareViaWebShare}
-            className="w-full py-4 px-6 rounded-xl font-bold text-white text-lg flex items-center justify-center gap-3 shadow-lg active:scale-[0.98] transition-transform"
-            style={{
-              background: "linear-gradient(135deg, #22c55e, #16a34a)",
-            }}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
-              <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13" />
-            </svg>
-            Share Review
-          </button>
+        <div className="w-full max-w-md px-6 pt-10 pb-2">
+          {/* Large heading */}
+          <h1 className="text-3xl font-extrabold text-white leading-tight mb-6">
+            Tag{" "}
+            <span style={{ background: "linear-gradient(90deg, #AC4FDE, #0073FF)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>@uplaudofficial</span>
+            {" "}if you share to Instagram!
+          </h1>
 
-          <div className="flex items-center gap-2">
+          {/* Buttons row — side by side */}
+          <div className="flex gap-3 mb-6">
+            <button
+              onClick={handleShareViaWebShare}
+              className="flex-1 py-4 px-5 rounded-2xl font-bold text-white text-lg flex items-center justify-center gap-3 shadow-lg active:scale-[0.97] transition-transform"
+              style={{ background: "#00B846" }}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+                <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+              </svg>
+              Share review
+            </button>
+
             <button
               onClick={handleDownload}
-              className="flex-1 py-2.5 px-4 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 border"
+              className="py-4 px-6 rounded-2xl font-bold text-lg flex items-center justify-center gap-3 active:scale-[0.97] transition-transform border-2"
               style={{
-                color: "#a78bfa",
-                borderColor: "rgba(167, 139, 250, 0.3)",
-                background: "rgba(167, 139, 250, 0.08)",
+                color: "#9E80ED",
+                borderColor: "#474174",
+                background: "#1C213A",
               }}
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
                 <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
               </svg>
               Download
             </button>
           </div>
-
-          <p className="text-center text-gray-400 text-xs">
-            Tag <strong className="text-purple-400">@uplaudofficial</strong> if you share to Instagram!
-          </p>
         </div>
       )}
 
-      {/* Preview */}
-      <div className="w-full max-w-md px-4 mt-4">
+      {/* ── IMAGE PREVIEW ── */}
+      <div className="w-full max-w-md px-4">
         {loading ? (
-          <div className="aspect-[9/16] bg-gray-800 rounded-2xl flex items-center justify-center">
+          <div className="aspect-[9/16] rounded-2xl flex items-center justify-center" style={{ background: "#0E1828" }}>
             <div className="text-center">
               <div className="w-8 h-8 border-2 border-purple-400 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
               <p className="text-gray-400 text-sm">Generating story image...</p>
@@ -257,10 +185,17 @@ const ShareReview: React.FC = () => {
             src={imageUrl}
             alt="Instagram Story Preview"
             className="w-full rounded-2xl shadow-2xl"
-            style={{ aspectRatio: "9 / 16", objectFit: "contain", background: "#1f2937" }}
+            style={{ aspectRatio: "9 / 16", objectFit: "contain", background: "#0E1828" }}
           />
         ) : null}
       </div>
+
+      {/* ── FOLLOW TEXT ── */}
+      {!loading && imageBlob && (
+        <p className="mt-5 text-center text-gray-400 text-base">
+          Follow <strong style={{ background: "linear-gradient(90deg, #AC4FDE, #0073FF)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>@uplaudofficial</strong>
+        </p>
+      )}
 
       {/* Status toast */}
       {shareStatus && (
@@ -268,18 +203,6 @@ const ShareReview: React.FC = () => {
           {shareStatus}
         </div>
       )}
-
-      {/* Footer */}
-      <div className="mt-8 text-center">
-        <a
-          href="https://www.uplaud.ai"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-gray-500 text-xs hover:text-gray-400"
-        >
-          uplaud.ai — Real reviews from real people
-        </a>
-      </div>
     </div>
   );
 };

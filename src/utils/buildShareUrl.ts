@@ -13,6 +13,8 @@ export interface ShareReviewParams {
   score: number;
   handle?: string;
   likes?: number;
+  reviewCount?: number;
+  categories?: string[];
 }
 
 /**
@@ -34,6 +36,12 @@ export function buildSharePageUrl(
   }
   if (params.likes != null && params.likes > 0) {
     url.searchParams.set("likes", String(params.likes));
+  }
+  if (params.reviewCount != null && params.reviewCount > 0) {
+    url.searchParams.set("reviewCount", String(params.reviewCount));
+  }
+  if (params.categories?.length) {
+    url.searchParams.set("categories", params.categories.join(","));
   }
   return url.toString();
 }
