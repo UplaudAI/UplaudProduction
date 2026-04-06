@@ -117,7 +117,7 @@ const ShareReview: React.FC = () => {
   /* ---- Render ---- */
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6" style={{ background: "#0f1729" }}>
+      <div className="min-h-screen flex items-center justify-center p-6" style={{ background: "#0E1828" }}>
         <div className="text-center">
           <p className="text-white text-lg mb-4">{error}</p>
           <Link to="/" className="text-purple-400 hover:underline">Go to Uplaud</Link>
@@ -127,7 +127,7 @@ const ShareReview: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center pb-8" style={{ background: "#0f1729" }}>
+    <div className="min-h-screen flex flex-col items-center pb-8" style={{ background: "#0E1828" }}>
 
       {/* ── TAG + BUTTONS ── */}
       {!loading && imageBlob && (
@@ -135,7 +135,7 @@ const ShareReview: React.FC = () => {
           {/* Large heading */}
           <h1 className="text-3xl font-extrabold text-white leading-tight mb-6">
             Tag{" "}
-            <span style={{ color: "#7c6cf0" }}>@uplaudofficial</span>
+            <span style={{ background: "linear-gradient(90deg, #AC4FDE, #0073FF)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>@uplaudofficial</span>
             {" "}if you share to Instagram!
           </h1>
 
@@ -144,7 +144,7 @@ const ShareReview: React.FC = () => {
             <button
               onClick={handleShareViaWebShare}
               className="flex-1 py-4 px-5 rounded-2xl font-bold text-white text-lg flex items-center justify-center gap-3 shadow-lg active:scale-[0.97] transition-transform"
-              style={{ background: "#22c55e" }}
+              style={{ background: "#00B846" }}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
                 <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
@@ -157,9 +157,9 @@ const ShareReview: React.FC = () => {
               onClick={handleDownload}
               className="py-4 px-6 rounded-2xl font-bold text-lg flex items-center justify-center gap-3 active:scale-[0.97] transition-transform border-2"
               style={{
-                color: "#94a3b8",
-                borderColor: "#334155",
-                background: "transparent",
+                color: "#9E80ED",
+                borderColor: "#474174",
+                background: "#1C213A",
               }}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
@@ -174,7 +174,7 @@ const ShareReview: React.FC = () => {
       {/* ── IMAGE PREVIEW ── */}
       <div className="w-full max-w-md px-4">
         {loading ? (
-          <div className="aspect-[9/16] rounded-2xl flex items-center justify-center" style={{ background: "#1a2236" }}>
+          <div className="aspect-[9/16] rounded-2xl flex items-center justify-center" style={{ background: "#0E1828" }}>
             <div className="text-center">
               <div className="w-8 h-8 border-2 border-purple-400 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
               <p className="text-gray-400 text-sm">Generating story image...</p>
@@ -185,7 +185,7 @@ const ShareReview: React.FC = () => {
             src={imageUrl}
             alt="Instagram Story Preview"
             className="w-full rounded-2xl shadow-2xl"
-            style={{ aspectRatio: "9 / 16", objectFit: "contain", background: "#1a2236" }}
+            style={{ aspectRatio: "9 / 16", objectFit: "contain", background: "#0E1828" }}
           />
         ) : null}
       </div>
@@ -193,7 +193,7 @@ const ShareReview: React.FC = () => {
       {/* ── FOLLOW TEXT ── */}
       {!loading && imageBlob && (
         <p className="mt-5 text-center text-gray-400 text-base">
-          Follow <strong style={{ color: "#7c6cf0" }}>@uplaudofficial</strong>
+          Follow <strong style={{ background: "linear-gradient(90deg, #AC4FDE, #0073FF)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>@uplaudofficial</strong>
         </p>
       )}
 
