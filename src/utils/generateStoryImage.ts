@@ -82,6 +82,39 @@ function drawLogoWhite(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: 
   ctx.drawImage(tmp, x, y);
 }
 
+/**
+ * Draw a JPEG sticker image with white background removed.
+ * Works by drawing to a temp canvas, then using 'destination-out'
+ * to knock out near-white pixels via a threshold approach.
+ */
+function drawStickerNoWhite(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  x: number, y: number, w: number, h: number
+) {
+  const tmp = document.createElement("canvas");
+  tmp.width = w; tmp.height = h;
+  const t = tmp.getContext("2d")!;
+  t.drawImage(img, 0, 0, w, h);
+
+  // Get pixel data and knock out near-white pixels
+  const imgData = t.getImageData(0, 0, w, h);
+  const d = imgData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i], g = d[i+1], b = d[i+2];
+    // If pixel is very light (near white), make it transparent
+    if (r > 230 && g > 230 && b > 230) {
+      d[i+3] = 0; // fully transparent
+    } else if (r > 210 && g > 210 && b > 210) {
+      // Semi-transparent for anti-aliasing edge pixels
+      const brightness = (r + g + b) / 3;
+      d[i+3] = Math.round(255 * (1 - (brightness - 210) / 45));
+    }
+  }
+  t.putImageData(imgData, 0, 0);
+  ctx.drawImage(tmp, x, y);
+}
+
 function computeLayout(
   ctx: CanvasRenderingContext2D,
   review: ReviewData,
@@ -322,31 +355,33 @@ export async function generateStoryImage(review: ReviewData, logoUrl?: string): 
   });
   ctx.restore();
 
-  // ── Bottom section: sticker bottom-right (overlapping card corner), Follow text left ──
-  // Sticker: right-aligned, overlapping the bottom-right of the card
-  const stickerDrawW = Math.round(440 * s);
-  const stickerAspect = stickerImg ? stickerImg.width / stickerImg.height : 2;
-  const stickerDrawH = Math.round(stickerDrawW / stickerAspect);
+  // ── Bottom section: sticker sits BELOW card, right-aligned, Follow text left ──
+  const belowCardY = cardY + cardH + Math.round(20 * s);
+  const availBelowH = H - belowCardY - Math.round(30 * s); // space between card bottom and canvas bottom
 
-  // Position: right edge flush with card right edge, vertically centered
-  // between card bottom and bottom of canvas
-  const bottomGap = H - (cardY + cardH);
-  const stickerY2 = Math.round(cardY + cardH - stickerDrawH * 0.35); // overlap card bottom by ~35%
-  const stickerX2 = cardX + cardW - stickerDrawW + Math.round(20 * s); // right-aligned, slight overhang
+  const stickerAspect = stickerImg ? stickerImg.width / stickerImg.height : 2.0;
+  // Size sticker to fill ~80% of the available height below card
+  const stickerDrawH = Math.round(availBelowH * 0.82);
+  const stickerDrawW = Math.round(stickerDrawH * stickerAspect);
+
+  // Right-aligned flush with card right edge
+  const stickerX2 = cardX + cardW - stickerDrawW;
+  // Vertically centered in the available space below card
+  const stickerY2 = Math.round(belowCardY + (availBelowH - stickerDrawH) / 2);
 
   if (stickerImg) {
-    ctx.drawImage(stickerImg, stickerX2, stickerY2, stickerDrawW, stickerDrawH);
+    drawStickerNoWhite(ctx, stickerImg, stickerX2, stickerY2, stickerDrawW, stickerDrawH);
   }
 
-  // "Follow @uplaudofficial" text: left side, vertically centered with sticker
-  const followFontSz = Math.round(30 * s);
-  const followCY = Math.round(stickerY2 + stickerDrawH * 0.55); // center with sticker body
+  // "Follow @uplaudofficial" text — left side, vertically centered with sticker
+  const followFontSz = Math.round(32 * s);
+  const stickerCenterY = stickerY2 + Math.round(stickerDrawH * 0.5);
   ctx.save();
   ctx.textAlign = "left"; ctx.textBaseline = "middle";
-  ctx.font = `600 ${followFontSz}px ${FF}`; ctx.fillStyle = COL.followText;
-  ctx.fillText("Follow", cx, followCY - Math.round(18 * s));
-  ctx.font = `700 ${followFontSz}px ${FF}`;
-  ctx.fillText("@uplaudofficial", cx, followCY + Math.round(18 * s));
+  ctx.font = `500 ${followFontSz}px ${FF}`; ctx.fillStyle = COL.followText;
+  ctx.fillText("Follow", cx, stickerCenterY - Math.round(22 * s));
+  ctx.font = `700 ${Math.round(34 * s)}px ${FF}`;
+  ctx.fillText("@uplaudofficial", cx, stickerCenterY + Math.round(22 * s));
   ctx.restore();
 
   return new Promise<Blob>((resolve, reject) => {
