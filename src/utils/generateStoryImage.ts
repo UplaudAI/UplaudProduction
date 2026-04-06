@@ -136,11 +136,11 @@ export async function generateStoryImage(review: ReviewData, logoUrl?: string): 
   const CARD_PAD   = 52;
   const CARD_R     = 24;
   const AVATAR_R   = 40;
-  const BIZ_FONT   = 46;
-  const TAG_FONT   = 24;
-  const STAR_SZ    = 48;
-  const REV_FONT   = 42;
-  const LINE_H     = 58;
+  const BIZ_FONT   = 44;
+  const TAG_FONT   = 23;
+  const STAR_SZ    = 46;
+  const REV_FONT   = 36;       // smaller, lighter feel
+  const LINE_H     = 62;       // generous line height for airy feel
   const FOLLOW_FONT= 36;
 
   // Logo
@@ -306,22 +306,14 @@ export async function generateStoryImage(review: ReviewData, logoUrl?: string): 
   const totalBaseTextH = lines.length * LINE_H;
   let finalRevFont = REV_FONT;
   let finalLineH = LINE_H;
-  // Green zone ends at cream bottom strip
-  const greenH = cardY + cardH - CREAM_BOTTOM_H - cy;
-  const textZoneH = greenH;
-  const scale = Math.min(1.3, (textZoneH * 0.75) / Math.max(totalBaseTextH, 1));
-  if (scale > 1.05) {
-    finalRevFont = Math.round(REV_FONT * scale);
-    finalLineH = Math.round(LINE_H * scale);
-  }
-  ctx.font = `400 ${finalRevFont}px ${FF}`;
-  const finalLines = wrapText(ctx, `\u201C${review.reviewText}\u201D`, contentW);
-  const finalTextH = finalLines.length * finalLineH;
-  const textY = cy + 28;
+  // No scaling — use fixed font size for light, airy feel
+  // Text sits at the top of the green section with room to breathe below
+  const textY = cy + 32;
   ctx.save();
   ctx.textAlign = "left"; ctx.textBaseline = "top";
-  ctx.fillStyle = COL.black;
-  finalLines.forEach((line, i) => { ctx.fillText(line, cx, textY + i * finalLineH); });
+  ctx.font = `400 ${REV_FONT}px ${FF}`; ctx.fillStyle = COL.black;
+  const finalLines = wrapText(ctx, `\u201C${review.reviewText}\u201D`, contentW);
+  finalLines.forEach((line, i) => { ctx.fillText(line, cx, textY + i * LINE_H); });
   ctx.restore();
 
   // ── Sticker + Follow text ──
