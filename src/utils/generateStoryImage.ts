@@ -175,17 +175,11 @@ export async function generateStoryImage(review: ReviewData, logoUrl?: string): 
   const greenContentH = 10 + BIZ_FONT + 14 + tagRowH + tagGap + STAR_SZ + 20 + revTextH;
   const greenSectionH = greenContentH + CARD_PAD;
 
-  // Card fills most of canvas, reserving 70% of sticker height + follow text at bottom
-  const STICKER_ASPECT = stickerImg ? stickerImg.width / stickerImg.height : 2.1;
-  const STICKER_W_FINAL = 600;
-  const STICKER_H_FINAL = Math.round(STICKER_W_FINAL / STICKER_ASPECT);
-  // Reserve space: sticker pokes 70% below card + follow text
-  const BOTTOM_RESERVE = Math.round(STICKER_H_FINAL * 0.70) + FOLLOW_FONT + 50;
-  const minCardH = H - cardY - BOTTOM_RESERVE;
-  const cardH = Math.max(creamH + greenSectionH, minCardH);
-
-  // ── Three-zone card: [cream top] [green middle] [cream bottom] ──
-  const CREAM_BOTTOM_H = 130; // visible cream strip at bottom of card
+  // Three-zone heights
+  const CREAM_BOTTOM_H = 110; // cream strip at bottom of card
+  const GREEN_BOTTOM_PAD = 60; // breathing room at bottom of green section
+  // Card sized to content only — no forced canvas-filling
+  const cardH = creamH + greenSectionH + GREEN_BOTTOM_PAD + CREAM_BOTTOM_H;
 
   // 1. Draw full card in cream
   ctx.save();
@@ -301,13 +295,7 @@ export async function generateStoryImage(review: ReviewData, logoUrl?: string): 
   ctx.restore();
   cy += STAR_SZ + 20;
 
-  // Review text — scale font up to fill available green space
-  const availableTextH = cardY + cardH - cy - CARD_PAD;
-  const totalBaseTextH = lines.length * LINE_H;
-  let finalRevFont = REV_FONT;
-  let finalLineH = LINE_H;
-  // No scaling — use fixed font size for light, airy feel
-  // Text sits at the top of the green section with room to breathe below
+  // Fixed font, no scaling — text sits at top of green section with breathing room below
   const textY = cy + 32;
   ctx.save();
   ctx.textAlign = "left"; ctx.textBaseline = "top";
