@@ -150,7 +150,8 @@ export async function generateStoryImage(review: ReviewData, logoUrl?: string): 
 
   // ── Load assets ──
   const logoImg    = await loadImage(logoUrl || "/lovable-uploads/logo.png");
-  const stickerImg = await loadImage("/lovable-uploads/sticker-ask-me.jpg");
+  // Use transparent PNG version of the sticker
+  const stickerImg = await loadImage("/lovable-uploads/sticker-ask-me.png");
   let profileImg: HTMLImageElement | null = null;
   if (review.profileImage) profileImg = await loadImage(review.profileImage);
 
@@ -321,24 +322,30 @@ export async function generateStoryImage(review: ReviewData, logoUrl?: string): 
   });
   ctx.restore();
 
-  // ── Sticker image ──
-  const stickerY = cardY + cardH + Math.round(28 * s);
-  const stickerW = Math.round(520 * s);
-  const stickerX = W - cardMX - stickerW; // right-aligned like mockup
+  // ── Bottom section: sticker centered, Follow text below ──
+  const bottomAreaY = cardY + cardH + Math.round(24 * s);
+  const bottomAreaH = H - bottomAreaY - Math.round(40 * s);
 
-  if (stickerImg) {
-    const stickerAspect = stickerImg.width / stickerImg.height;
-    const sH = Math.round(stickerW / stickerAspect);
-    ctx.drawImage(stickerImg, stickerX, stickerY, stickerW, sH);
-  }
-
-  // ── Follow @uplaudofficial ──
-  const followY = stickerY + stickerH;
+  // "Follow @uplaudofficial" text at very bottom
+  const followFontSz = Math.round(32 * s);
+  const followY = H - Math.round(60 * s);
   ctx.save();
-  ctx.textAlign = "center"; ctx.textBaseline = "top";
-  ctx.font = `600 ${Math.round(32 * s)}px ${FF}`; ctx.fillStyle = COL.followText;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = `600 ${followFontSz}px ${FF}`; ctx.fillStyle = COL.followText;
   ctx.fillText("Follow @uplaudofficial", W / 2, followY);
   ctx.restore();
+
+  // Sticker centered in the remaining space above follow text
+  if (stickerImg) {
+    const stickerAspect = stickerImg.width / stickerImg.height;
+    // Use available height to size sticker, but cap width
+    const availH = followY - Math.round(16 * s) - bottomAreaY;
+    const stickerH2 = Math.min(availH, Math.round(stickerH));
+    const stickerW2 = Math.round(stickerH2 * stickerAspect);
+    const stickerX2 = Math.round((W - stickerW2) / 2);
+    const stickerY2 = Math.round(bottomAreaY + (availH - stickerH2) / 2);
+    ctx.drawImage(stickerImg, stickerX2, stickerY2, stickerW2, stickerH2);
+  }
 
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(blob => { if (blob) resolve(blob); else reject(new Error("Failed")); }, "image/png");
