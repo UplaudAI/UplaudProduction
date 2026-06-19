@@ -27,16 +27,13 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 /* ===================== Airtable Config ===================== */
-const API_KEY = import.meta.env.VITE_AIRTABLE_API_KEY || "";
-const BASE_ID = import.meta.env.VITE_AIRTABLE_BASE_ID || "";
 const USERS_TABLE = import.meta.env.VITE_AIRTABLE_USERS_TABLE || "";
 const REVIEWS_TABLE = import.meta.env.VITE_AIRTABLE_REVIEWS_TABLE || "";
 const CIRCLES_TABLE = import.meta.env.VITE_AIRTABLE_CIRCLES_TABLE || "";
 
 /* ===================== HTTP helpers ===================== */
 const AIRTABLE = axios.create({
-  baseURL: `https://api.airtable.com/v0/${BASE_ID}/`,
-  headers: { Authorization: `Bearer ${API_KEY}` },
+  baseURL: "/api/airtable/",
 });
 
 function escapeAirtableString(v: string) {

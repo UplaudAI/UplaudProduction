@@ -1,6 +1,5 @@
 import { Suspense, lazy } from "react";
 import { Routes, Route } from "react-router-dom";
-import Loader from "@/components/Loader"; // need loader? check if exists. if not fallback simple.
 
 const Index = lazy(() => import("./pages/Index"));
 const NotFound = lazy(() => import("./pages/NotFound"));

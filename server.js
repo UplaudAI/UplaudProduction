@@ -163,7 +163,7 @@ app.post("/api/verify-otp", (req, res) => {
 /* ===================== API: Reviews ===================== */
 /**
  * GET /api/reviews?businessSlug=:slug[&debug=1]
- * Returns: { reviews: [{ user,uplaud,date,score,location,category,businessName }] }
+ * Returns review content plus optional NBA decision fields.
  */
 app.get("/api/reviews", async (req, res) => {
   try {
@@ -181,6 +181,13 @@ app.get("/api/reviews", async (req, res) => {
       "Name_Creator",
       "City",
       "Category",
+      "NBA_Sentiment",
+      "NBA_Category",
+      "NBA_Action",
+      "NBA_Message",
+      "NBA_Rationale",
+      "NBA_Status",
+      "NBA_Human_Review",
     ];
     const filterByFormula = slugMatchFormula("business_name", slug);
 
@@ -190,20 +197,50 @@ app.get("/api/reviews", async (req, res) => {
     });
 
     const reviews = records
-      .map((r) => r.fields || {})
-      .filter((f) => f.business_name && f.Uplaud)
-      .filter((f) => slugify(f.business_name) === slug)
-      .map((f) => ({
+      .map((record) => {
+        const fields = record.fields || {};
+        const rawSentiment = String(fields["NBA_Sentiment"] || "")
+          .toLowerCase()
+          .trim();
+        const sentiment = ["high", "medium", "low"].includes(rawSentiment)
+          ? rawSentiment
+          : null;
+        const rawStatus = String(fields["NBA_Status"] || "")
+          .toLowerCase()
+          .trim()
+          .replace(/\s+/g, "_");
+        const nbaStatus = ["pending_approval", "approved", "sent", "ignored"].includes(
+          rawStatus
+        )
+          ? rawStatus
+          : null;
+
+        return { recordId: record.id, fields, sentiment, nbaStatus };
+      })
+      .filter(({ fields }) => fields.business_name && fields.Uplaud)
+      .filter(({ fields }) => slugify(fields.business_name) === slug)
+      .map(({ recordId, fields, sentiment, nbaStatus }) => ({
+        record_id: recordId || null,
         user:
-          (Array.isArray(f["Name_Creator"])
-            ? f["Name_Creator"][0]
-            : f["Name_Creator"]) || "Anonymous",
-        uplaud: f["Uplaud"] || "",
-        date: f["Date_Added"] || null,
-        score: typeof f["Uplaud Score"] === "number" ? f["Uplaud Score"] : null,
-        location: f["City"] || "",
-        category: f["Category"] || "",
-        businessName: f["business_name"] || "",
+          (Array.isArray(fields["Name_Creator"])
+            ? fields["Name_Creator"][0]
+            : fields["Name_Creator"]) || "Anonymous",
+        uplaud: fields.Uplaud || "",
+        date: fields["Date_Added"] || null,
+        score:
+          typeof fields["Uplaud Score"] === "number"
+            ? fields["Uplaud Score"]
+            : null,
+        location: fields.City || "",
+        category: fields.Category || "",
+        businessName: fields.business_name || "",
+        sentiment,
+        category_nba: fields["NBA_Category"] || null,
+        next_best_action: fields["NBA_Action"] || null,
+        suggested_message: fields["NBA_Message"] || null,
+        human_rationale: fields["NBA_Rationale"] || null,
+        nba_status: nbaStatus,
+        needs_human_review: Boolean(fields["NBA_Human_Review"]),
       }));
 
     return res.json(debug ? { reviews, _debug: { filterByFormula } } : { reviews });
@@ -261,6 +298,38 @@ app.get("/api/circles", async (req, res) => {
       hint:
         "We removed optional fields from the query. If errors persist, confirm 'Business_Name' exists in the Circles table.",
     });
+  }
+});
+
+/* ===================== API: Read-only Airtable proxy ===================== */
+const READABLE_AIRTABLE_TABLES = new Set(
+  [USERS_TABLE, REVIEWS_TABLE, CIRCLES_TABLE].filter(Boolean)
+);
+
+app.get("/api/airtable/:tableId", async (req, res) => {
+  const { tableId } = req.params;
+  if (!READABLE_AIRTABLE_TABLES.has(tableId)) {
+    return res.status(404).json({ error: "Table not found" });
+  }
+
+  try {
+    const queryIndex = req.originalUrl.indexOf("?");
+    const queryString = queryIndex >= 0 ? req.originalUrl.slice(queryIndex + 1) : "";
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${tableId}${
+      queryString ? `?${queryString}` : ""
+    }`;
+    const response = await axios.get(url, {
+      headers: AT_HEADERS,
+      timeout: 20000,
+    });
+
+    res.set("Cache-Control", "private, no-store");
+    return res.status(response.status).json(response.data);
+  } catch (err) {
+    const status = err?.response?.status || 500;
+    const message = err?.response?.data?.error?.message || "Failed to fetch Airtable data";
+    console.error("GET /api/airtable/:tableId error:", message);
+    return res.status(status).json({ error: message });
   }
 });
 

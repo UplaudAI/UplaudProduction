@@ -3,8 +3,6 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
 const MINT = "#5EEAD4";
-const API_KEY = import.meta.env.VITE_AIRTABLE_API_KEY || '';
-const BASE_ID = import.meta.env.VITE_AIRTABLE_BASE_ID || '';
 const REVIEWS_TABLE = import.meta.env.VITE_AIRTABLE_REVIEWS_TABLE || '';
 
 const COMPANY_USERS = [
@@ -177,10 +175,7 @@ const UpcomingFeatures = () => {
         do {
           const params: any = { pageSize: 100 };
           if (offset) params.offset = offset;
-          const resp = await axios.get(
-            `https://api.airtable.com/v0/${BASE_ID}/${REVIEWS_TABLE}`,
-            { headers: { Authorization: `Bearer ${API_KEY}` }, params }
-          );
+          const resp = await axios.get(`/api/airtable/${REVIEWS_TABLE}`, { params });
           allRecords = allRecords.concat(resp.data.records);
           offset = resp.data.offset;
         } while (offset);
