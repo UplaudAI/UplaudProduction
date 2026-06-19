@@ -13,6 +13,7 @@ import axios from "axios";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { motion, AnimatePresence } from "framer-motion";
+import { DecisionTimeline } from "@/components/DecisionTimeline";
 
 /* ===================== Utils ===================== */
 function slugify(name = "") {
@@ -453,6 +454,7 @@ const BusinessPage = () => {
   });
 
   const [showAllReviews, setShowAllReviews] = useState(false);
+  const [activeTab, setActiveTab] = useState<"reviews" | "timeline">("reviews");
 
   useEffect(() => {
     if (!slug) return;
@@ -470,6 +472,7 @@ const BusinessPage = () => {
 
         const filtered = rawReviews
           .map((r: any) => ({
+            record_id: r.record_id || null,
             user: r.user || "Anonymous",
             uplaud: r.uplaud || "",
             date: r.date ? new Date(r.date) : null,
@@ -477,6 +480,14 @@ const BusinessPage = () => {
             location: r.location || "",
             category: r.category || "",
             business_name: r.businessName || "",
+            sentiment: r.sentiment || null,
+            category_nba: r.category_nba || null,
+            next_best_action: r.next_best_action || null,
+            suggested_message: r.suggested_message || null,
+            human_rationale: r.human_rationale || null,
+            nba_status: r.nba_status || null,
+            needs_human_review: Boolean(r.needs_human_review),
+            uplaud_score: typeof r.score === "number" ? r.score : null,
           }))
           .filter((r: any) => r.business_name && r.uplaud);
 
@@ -689,43 +700,68 @@ const BusinessPage = () => {
           />
         </div>
 
-        {/* Reviews */}
+        {/* Reviews and decision timeline */}
         <div
           className="rounded-2xl p-4"
           style={{ background: "transparent", borderColor: "transparent" }}
         >
           <div className="flex gap-6 mb-6 text-base font-semibold border-b border-white/30">
-            <span className="pb-2 -mb-[2px] px-1 text-white border-b-2 border-white">
+            <button
+              type="button"
+              className={`pb-2 -mb-[2px] px-1 transition-colors ${
+                activeTab === "reviews"
+                  ? "text-white border-b-2 border-white"
+                  : "text-white/60 hover:text-white"
+              }`}
+              onClick={() => setActiveTab("reviews")}
+            >
               Reviews
-            </span>
+            </button>
+            <button
+              type="button"
+              className={`pb-2 -mb-[2px] px-1 transition-colors ${
+                activeTab === "timeline"
+                  ? "text-white border-b-2 border-white"
+                  : "text-white/60 hover:text-white"
+              }`}
+              onClick={() => setActiveTab("timeline")}
+            >
+              Decision Timeline
+            </button>
           </div>
 
-          {loading ? (
-            <div className="text-center text-white/80 py-8">Loading reviews…</div>
-          ) : business.reviews.length === 0 ? (
-            <div className="text-center text-white/90 py-8">
-              No reviews found for this business.
-            </div>
-          ) : (
-            <>
-              <div className="space-y-7">
-                {(showAllReviews ? business.reviews : business.reviews.slice(0, 5)).map(
-                  (review, idx) => (
-                    <ReviewCard key={idx} review={review} />
-                  )
-                )}
+          {activeTab === "reviews" ? (
+            loading ? (
+              <div className="text-center text-white/80 py-8">Loading reviews...</div>
+            ) : business.reviews.length === 0 ? (
+              <div className="text-center text-white/90 py-8">
+                No reviews found for this business.
               </div>
-              {business.reviews.length > 5 && (
-                <div className="flex justify-center mt-6">
-                  <button
-                    className="px-5 py-2 rounded-lg bg-white/15 text-white font-bold hover:bg-white/25 shadow transition"
-                    onClick={() => setShowAllReviews((prev) => !prev)}
-                  >
-                    {showAllReviews ? "Show Less" : "Load More Reviews"}
-                  </button>
+            ) : (
+              <>
+                <div className="space-y-7">
+                  {(showAllReviews ? business.reviews : business.reviews.slice(0, 5)).map(
+                    (review, idx) => (
+                      <ReviewCard key={review.record_id || idx} review={review} />
+                    )
+                  )}
                 </div>
-              )}
-            </>
+                {business.reviews.length > 5 && (
+                  <div className="flex justify-center mt-6">
+                    <button
+                      className="px-5 py-2 rounded-lg bg-white/15 text-white font-bold hover:bg-white/25 shadow transition"
+                      onClick={() => setShowAllReviews((prev) => !prev)}
+                    >
+                      {showAllReviews ? "Show Less" : "Load More Reviews"}
+                    </button>
+                  </div>
+                )}
+              </>
+            )
+          ) : (
+            <div className="rounded-2xl bg-gray-50 p-4 sm:p-6">
+              <DecisionTimeline reviews={business.reviews} loading={loading} />
+            </div>
           )}
         </div>
       </div>

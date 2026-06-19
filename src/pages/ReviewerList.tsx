@@ -7,14 +7,11 @@ import { Crown, Medal, Award, MessageCircle, ArrowLeft } from "lucide-react";
 const PRIMARY = "#6214a8";
 const MINT = "#5EEAD4";
 
-const API_KEY = import.meta.env.VITE_AIRTABLE_API_KEY || "";
-const BASE_ID = import.meta.env.VITE_AIRTABLE_BASE_ID || "";
 const REVIEWS_TABLE = import.meta.env.VITE_AIRTABLE_REVIEWS_TABLE || "";
 const CIRCLES_TABLE = import.meta.env.VITE_AIRTABLE_CIRCLES_TABLE || "";
 
 const AIRTABLE = axios.create({
-  baseURL: `https://api.airtable.com/v0/${BASE_ID}/`,
-  headers: { Authorization: `Bearer ${API_KEY}` },
+  baseURL: "/api/airtable/",
 });
 
 /** Generic, safe Airtable paginator */

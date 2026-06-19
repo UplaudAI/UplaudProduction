@@ -16,6 +16,9 @@ export default async function handler(req, res) {
         if (filterByFormula) url.searchParams.set("filterByFormula", filterByFormula);
         const r = await fetch(url, { headers });
         const j = await r.json();
+        if (!r.ok) {
+          throw new Error(`Airtable request failed (${r.status}): ${j.error?.message || "unknown error"}`);
+        }
         out = out.concat(j.records || []);
         offset = j.offset;
       } while (offset);
@@ -39,6 +42,7 @@ export default async function handler(req, res) {
         (typeof f["Reviewer"]==="string" && f["Reviewer"].trim()) ? f["Reviewer"] :
         (Array.isArray(f["Reviewer"]) && f["Reviewer"][0]) ? f["Reviewer"][0] : "Anonymous";
       return {
+        record_id: r.id,
         businessName: f.business_name || "",
         uplaud: f.Uplaud || "",
         date: f.Date_Added || null,
@@ -47,11 +51,25 @@ export default async function handler(req, res) {
         referralLink: f["ReferralLink"] || f["Referral Link"] || "",
         location: city,
         category: f.Category || "Other",
-        user
+        user,
+        sentiment: ["high", "medium", "low"].includes(String(f.NBA_Sentiment || "").toLowerCase())
+          ? String(f.NBA_Sentiment).toLowerCase()
+          : null,
+        category_nba: f.NBA_Category || null,
+        next_best_action: f.NBA_Action || null,
+        suggested_message: f.NBA_Message || null,
+        human_rationale: f.NBA_Rationale || null,
+        nba_status: ["pending_approval", "approved", "sent", "ignored"].includes(String(f.NBA_Status || "").toLowerCase())
+          ? String(f.NBA_Status).toLowerCase()
+          : null,
+        needs_human_review: Boolean(f.NBA_Human_Review)
       };
     }).filter(x => x.businessName && x.uplaud)
       .sort((a,b)=> new Date(b.date||0) - new Date(a.date||0));
 
     res.status(200).json({ reviews });
-  } catch (e) { res.status(500).json({ error: "server error" }); }
+  } catch (e) {
+    console.error("GET /api/reviews error:", e instanceof Error ? e.message : e);
+    res.status(500).json({ error: "server error" });
+  }
 }

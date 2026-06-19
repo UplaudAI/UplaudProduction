@@ -1,15 +1,7 @@
 export async function fetchAirtableUsers() {
-  const apiKey = import.meta.env.VITE_AIRTABLE_API_KEY;
-  const baseId = import.meta.env.VITE_AIRTABLE_BASE_ID;
   const tableName = import.meta.env.VITE_AIRTABLE_TABLE_NAME;
 
-  const url = `https://api.airtable.com/v0/${baseId}/${tableName}`;
-
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${apiKey}`
-    }
-  });
+  const response = await fetch(`/api/airtable/${tableName}`);
 
   if (!response.ok) {
     throw new Error("Failed to fetch Airtable data");
