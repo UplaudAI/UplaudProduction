@@ -1,0 +1,178 @@
+{
+  "project_name": "Uplaud AI",
+  "theme_direction": "Hybrid (Light Editorial Hero + Dark Tech Showcase)",
+  "typography": {
+    "headings": {
+      "font_family": "Clash Display",
+      "weights": ["400", "500", "600"],
+      "usage_rules": "Do NOT use Inter for headings. Headings must have tight letter spacing (`tracking-tight` or `tracking-tighter`). Never center-align by default; prefer strong left-alignment to create an editorial, authoritative feel.",
+      "google_font_url": "https://api.fontshare.com/v2/css?f[]=clash-display@400,500,600&display=swap"
+    },
+    "body": {
+      "font_family": "Manrope",
+      "weights": ["400", "500"],
+      "usage_rules": "Clean, geometric but humanist sans for high legibility. Use relaxed line-height (`leading-relaxed`) for body paragraphs.",
+      "google_font_url": "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500&display=swap"
+    }
+  },
+  "colors": {
+    "light_mode_sections": {
+      "background": "#FDFDFB",
+      "surface": "#F4F4F0",
+      "text_primary": "#0A0A0A",
+      "text_secondary": "#525252",
+      "border": "#E5E5E5",
+      "accent": "#047857"
+    },
+    "dark_mode_sections": {
+      "background": "#050505",
+      "surface": "#121212",
+      "text_primary": "#FDFDFB",
+      "text_secondary": "#A3A3A3",
+      "border": "#262626",
+      "accent": "#10B981"
+    },
+    "brand_accent": {
+      "primary": "#10B981",
+      "glow": "rgba(16, 185, 129, 0.4)",
+      "description": "Electric Emerald. Used sparingly as a signal color for CTAs, nodes in the AI graph, and hover states. No purple/violet gradients allowed."
+    }
+  },
+  "visual_enhancers": {
+    "textures": "Subtle noise overlay on the dark sections to prevent digital flatness and give it a premium 'Vercel' feel.",
+    "borders": "1px crisp borders (`border-black/5` in light, `border-white/10` in dark) to ground elements. 'Tracing beam' glow effect on the AI Ad Intelligence Engine cards.",
+    "shadows": "Minimalist. Avoid soft, muddy shadows. Use sharp, diffuse ambient shadows or stark 1px structural borders."
+  },
+  "sections_and_layouts": [
+    {
+      "name": "Navigation Bar",
+      "theme": "Light",
+      "layout": "Fixed top, glassmorphism (`backdrop-blur-xl bg-[#FDFDFB]/80`), clean left-aligned logo, right-aligned nav links + Primary CTA.",
+      "components": ["Logo", "Nav Links", "Pill-shaped CTA"]
+    },
+    {
+      "name": "Hero Section",
+      "theme": "Light",
+      "layout": "Editorial, aggressive asymmetry. Massive left-aligned H1 (`text-6xl md:text-8xl`), generous white space (`py-32`). A conceptual architectural image on the right offset to break the grid.",
+      "components": ["H1", "Subhead", "Primary CTA", "Secondary CTA"]
+    },
+    {
+      "name": "Trust Bar (Social Proof)",
+      "theme": "Light",
+      "layout": "Subtle horizontal marquee (`react-fast-marquee`) with logos of Trustpilot, G2, Reddit, WeChat. Styled monochromatic/grayscale.",
+      "components": ["Marquee", "Grayscale Logos"]
+    },
+    {
+      "name": "Pain Point (The $2 for $1 Problem)",
+      "theme": "Light transitioning to Dark",
+      "layout": "Massive typography, data-driven. Big statistic: '+60% CAC in 5 years'. Simple layout, huge impact.",
+      "components": ["Data Callout", "Narrative Text"]
+    },
+    {
+      "name": "AI Ad Intelligence / Trust Graph",
+      "theme": "Dark",
+      "layout": "Full width, immersive. This is the 'Tech Competence' moment. Use `react-tsparticles` for a striking animated node network connecting user avatars/data points in the background.",
+      "components": ["TSParticles Canvas", "Graph Overlay Cards", "Glowing Accent Borders"]
+    },
+    {
+      "name": "How It Works (5-Step Flow)",
+      "theme": "Dark",
+      "layout": "Bento Grid (Mode A: Tetris Grid). 5 asymmetrical cards: Capture -> Personalize -> Amplify -> Enrich -> Convert. High density, 1px white/10 borders.",
+      "components": ["Bento Grid", "Feature Cards", "Lucide Icons (Electric Emerald)"]
+    },
+    {
+      "name": "Acquisition Loops Diagram",
+      "theme": "Dark",
+      "layout": "Visual section showing 'Organic Referrals' vs 'Smarter Paid Growth'. Use raw HTML/Tailwind for an overlapping, layered layout.",
+      "components": ["Loop Diagram", "Stat Callouts"]
+    },
+    {
+      "name": "Product Feature Grid",
+      "theme": "Light",
+      "layout": "Return to light mode. 3-column grid (`md:grid-cols-3`). Generous padding (`gap-8`, `p-8` per card). Focus on readability.",
+      "components": ["Shadcn Cards", "Feature descriptions"]
+    },
+    {
+      "name": "Outcomes & Metrics",
+      "theme": "Light",
+      "layout": "Big numbers, minimal text. 3 massive metrics (e.g., '3x ROAS', '-40% CAC').",
+      "components": ["Metric Blocks"]
+    },
+    {
+      "name": "FAQ",
+      "theme": "Light",
+      "layout": "Standard accordion layout (`Shadcn Accordion`), but left-aligned within a max-w-3xl container.",
+      "components": ["Shadcn Accordion"]
+    },
+    {
+      "name": "Final CTA & Lead Form",
+      "theme": "Dark",
+      "layout": "High-contrast form. Sends to deepthi@uplaud.ai. Crisp inputs, no generic rounded corners (use `rounded-none` or `rounded-sm`).",
+      "components": ["Shadcn Form", "Input", "Button"]
+    },
+    {
+      "name": "Footer",
+      "theme": "Dark",
+      "layout": "Massive bottom space (`py-24`). Huge 'Uplaud AI' text mark. Clean columns for links.",
+      "components": ["Footer Links", "Brand Mark"]
+    }
+  ],
+  "copywriting_examples": {
+    "hero_h1": "Turn Customer Trust into a Compounding Acquisition Engine.",
+    "hero_subhead": "Stop paying the $2 for $1 tax on cold ads. Uplaud AI builds an intelligent Trust Graph from your reviews and referrals to lower CAC and multiply ROAS.",
+    "pain_point": "Customer acquisition costs have risen 60% in 5 years. Cold traffic is dead. You're wasting spend on an algorithm that doesn't care about your brand.",
+    "solution_headline": "The New Layer of Growth: Trust-Powered Acquisition.",
+    "ai_graph_headline": "The AI Trust Graph Engine",
+    "ai_graph_subhead": "We ingest reviews, social proof, and referrals to map high-intent lookalike clusters, feeding smarter data back into your ad loops.",
+    "cta_button": "Book a Demo",
+    "secondary_cta": "See how it works"
+  },
+  "media_and_3d": {
+    "libraries": ["react-tsparticles", "framer-motion", "react-fast-marquee", "lucide-react"],
+    "3d_instructions": "Install `react-tsparticles` and `tsparticles` to create a 'network node' effect in the AI Trust Graph section. It should look like connecting dots/lines, colored in `#10B981` (Electric Emerald) with low opacity on a `#050505` background."
+  },
+  "images": [
+    {
+      "url": "https://images.unsplash.com/photo-1483366774565-c783b9f70e2c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDV8MHwxfHNlYXJjaHwxfHxtaW5pbWFsaXN0JTIwZ2VvbWV0cmljJTIwYXJjaGl0ZWN0dXJlfGVufDB8fHx8MTc4MzU0NDA0NXww&ixlib=rb-4.1.0&q=85",
+      "description": "Minimalist geometric architecture. Use as an offset conceptual image in the light Hero section to convey structure, foundation, and editorial elegance.",
+      "category": "Hero Section Conceptual Asset"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1655993810480-c15dccf9b3a0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjh8MHwxfHNlYXJjaHwzfHxhYnN0cmFjdCUyMG5ldHdvcmslMjBub2Rlc3xlbnwwfHx8fDE3ODM1NDQwNDV8MA&ixlib=rb-4.1.0&q=85",
+      "description": "3D wireframe polyhedron. Use as a background accent or card visual in the 'How It Works' bento grid.",
+      "category": "Abstract Tech Asset"
+    }
+  ],
+  "accessibility": {
+    "contrast": "Ensure pure black text on the #FDFDFB light theme and pure white text on the #050505 dark theme. The #10B981 accent must be tested against dark backgrounds for 4.5:1 ratio.",
+    "focus_states": "All form inputs and buttons must have a `focus:ring-2 focus:ring-[#10B981] focus:ring-offset-2` outline.",
+    "testing": "All interactive elements MUST include a `data-testid` attribute (e.g., `data-testid=\"hero-book-demo-btn\"`, `data-testid=\"lead-form-submit\"`)."
+  },
+  "instructions_to_main_agent": [
+    "Install `lucide-react` for iconography.",
+    "Install `react-fast-marquee` for the Trust Bar.",
+    "Install `react-tsparticles` and `tsparticles` for the AI Trust Graph node background.",
+    "Do NOT use `Inter` for headings. Embed `Clash Display` via Fontshare API and `Manrope` via Google Fonts in the index.html or main CSS.",
+    "Construct the page with a clear Light -> Dark -> Light -> Dark thematic transition as defined in sections_and_layouts.",
+    "The Hero section must NOT be center-aligned. Make it wildly asymmetrical. Huge left-aligned text, abstract architectural image bleeding off the right edge.",
+    "The AI Trust Graph section must feel like a completely different environment (dark mode, glowing green nodes via tsparticles, stark borders).",
+    "Forms must use Shadcn UI components but heavily customized to be sharp-edged (`rounded-none` or `rounded-sm`) to fit the brutalist tech vibe. Form action should direct submissions to deepthi@uplaud.ai (use a standard mailto or form handler block).",
+    "Never use generic placeholder images. Use the provided abstract images and Lucide icons.",
+    "Ensure `data-testid` is added to every single link, button, accordion trigger, and form input."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "Do not converge toward generic, 'on distribution' outputs. Avoid the 'AI slop' aesthetic.",
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur) where appropriate (e.g., sticky header).",
+    "You MUST NOT apply universal transition (e.g., `transition: all`). Always add transitions for specific properties.",
+    "You MUST NOT center align the app container. Do not add `.App { text-align: center; }`.",
+    "Always use modern button styles. For this project, use sharp or slightly rounded crisp buttons, avoiding muddy soft shadows.",
+    "NEVER use AI assistant Emoji characters (🤖🧠💭💡🔮🎯) for icons.",
+    "Every interaction needs micro-animations - hover states, transitions.",
+    "Use 2-3x more spacing than feels comfortable (`py-24` or `py-32`).",
+    "Prioritize using pre-existing components from src/components/ui when applicable.",
+    "Use `sonner` for toasts located in `/app/src/components/ui/sonner.tsx`."
+  ]
+}
