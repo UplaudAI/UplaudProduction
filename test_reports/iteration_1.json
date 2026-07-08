@@ -1,0 +1,33 @@
+{
+  "summary": "First-finish smoke test of Uplaud AI landing page. Backend + frontend + integration end-to-end verified. Lead capture flow (UI form -> POST /api/leads -> Mongo persist -> Resend email) works with status=sent, email_sent=true. All 13 major landing sections render with expected data-testid attributes. Navigation, hero CTAs, FAQ accordion, mobile menu, and empty-form validation all behave correctly.",
+  "tested_scope": ["backend", "frontend", "integration"],
+  "passed": [
+    "GET /api/ -> 200, {message: 'Uplaud AI API'}",
+    "POST /api/leads full payload -> 201, id + status='sent' + email_sent=true",
+    "POST /api/leads invalid email -> 422 validation error",
+    "POST /api/leads minimal (name+email only) -> 201, sent",
+    "MongoDB db.leads collection persisted 3 test leads (verified via motor query)",
+    "Landing page renders all 13 major sections (site-navbar, hero-section, trust-bar, pain-point-section, ai-engine-section, trust-graph-canvas, how-it-works-section, loops-section, feature-grid-section, outcomes-section, faq-section, lead-form-section, site-footer)",
+    "Nav 'Book a demo' anchors to /#demo",
+    "Hero 'Book a demo' -> /#demo, Hero 'See how it works' -> /#how",
+    "FAQ accordion trigger-0 opens and content-0 becomes visible",
+    "Lead form UI submit -> axios POST to REACT_APP_BACKEND_URL/api/leads (external URL) returning 201, success block (data-testid='lead-form-success') replaces the form",
+    "Empty form submit does NOT trigger API call (blocked by browser required-field validation before axios call)",
+    "Mobile viewport (390x844): mobile-menu-toggle opens and closes menu, mobile CTA visible",
+    "Animated Trust Graph canvas renders with zero console errors"
+  ],
+  "failed": [
+    {
+      "area": "lead-form empty validation UX",
+      "issue": "Empty form submit triggers native HTML5 'Please fill out this field' tooltip (from required attributes) rather than the sonner error toast defined in code. The sonner toast.error('Name and work email are required.') branch is unreachable because browser blocks submit first. API is correctly NOT called, so functional requirement met; only the UX flavor differs from the spec.",
+      "evidence": "Screenshot shows native browser tooltip; api_calls=[] and no [data-sonner-toast] element after empty submit click.",
+      "priority": "LOW"
+    }
+  ],
+  "action_items": [
+    "Optional: remove `required` from inputs (or use noValidate on <form>) if you want the custom sonner error toast to show on empty submit instead of the native browser tooltip. Not blocking first finish."
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "retest_needed": false,
+  "full_testing_deferred": true
+}
