@@ -66,13 +66,13 @@ export default function LeadForm() {
               data-testid="demo-headline"
               className="mt-6 font-display text-[40px] sm:text-[52px] lg:text-[60px] leading-[1.02] font-semibold tracking-tight text-[#111827]"
             >
-              See it in
+              Turn your trust
               <br />
-              <span className="mint-underline">your business.</span>
+              <span className="mint-underline">into growth.</span>
             </h2>
             <p className="mt-6 text-[15.5px] leading-relaxed text-[#4b5563] max-w-md">
-              Tell us a little about what you do. We come back with a 20-min
-              walkthrough tailored to your business.
+              Tell us where your trust lives today. We come back with a 20-min
+              walkthrough of the flywheel we would build for your business.
             </p>
 
             <div className="mt-10 space-y-3 text-[13px] text-[#4b5563]">

@@ -6,8 +6,8 @@ const LOGO_URL =
 
 const NAV_LINKS = [
   { href: "#how", label: "How it works", testId: "nav-link-how" },
-  { href: "#product", label: "Product", testId: "nav-link-product" },
-  { href: "#results", label: "Results", testId: "nav-link-results" },
+  { href: "#agents", label: "AI Agents", testId: "nav-link-agents" },
+  { href: "#surfaces", label: "Activation", testId: "nav-link-surfaces" },
   { href: "#faq", label: "FAQ", testId: "nav-link-faq" },
 ];
 

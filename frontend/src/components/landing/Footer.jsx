@@ -8,8 +8,9 @@ const NAV = [
     heading: "Product",
     links: [
       { label: "How it works", href: "#how" },
-      { label: "Product", href: "#product" },
-      { label: "Results", href: "#results" },
+      { label: "AI Agents", href: "#agents" },
+      { label: "Activation", href: "#surfaces" },
+      { label: "Flywheel", href: "#results" },
       { label: "FAQ", href: "#faq" },
     ],
   },
@@ -48,8 +49,9 @@ export default function Footer() {
               </span>
             </a>
             <p className="mt-6 max-w-md text-[14px] leading-relaxed text-white/65">
-              Turn happy customers into new ones. Reviews on WhatsApp, one-tap
-              referrals, and growth that gets cheaper as it scales.
+              The trust engine for modern acquisition. Ingest customer trust
+              from anywhere. Activate it across every channel. Growth on
+              autopilot.
             </p>
             <a
               href="#demo"
@@ -100,7 +102,7 @@ export default function Footer() {
           <span>
             © {new Date().getFullYear()} Uplaud AI. All rights reserved.
           </span>
-          <span className="font-mono">Real reviews. Real people. Real growth.</span>
+          <span className="font-mono">Trust-powered growth · v1</span>
         </div>
       </div>
     </footer>

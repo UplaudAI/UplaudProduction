@@ -7,28 +7,28 @@ import {
 
 const FAQS = [
   {
-    q: "Who is Uplaud for?",
-    a: "Any business where trust matters and one new customer is worth a lot. Tutoring centers, clinics, law firms, vets, groomers, dermatologists, immigration lawyers, preschools &mdash; if your customers already talk about you, Uplaud will make it count.",
+    q: "Is Uplaud a reviews and referrals tool?",
+    a: "Reviews and referrals are part of it, but the real value is broader. Uplaud is a trust-powered growth platform that turns your customer trust &mdash; from every source &mdash; into acquisition, ads, content, referrals and audience insight.",
   },
   {
-    q: "Do my customers need an app?",
-    a: "No. Everything happens on WhatsApp, which they already have. No downloads, no logins, no friction.",
+    q: "What kinds of trust signals do you ingest?",
+    a: "Reviews (Trustpilot, G2, Google, Yelp, Shopify), social (Reddit, X, Instagram, TikTok, LinkedIn), CRM notes and email testimonials, support tickets, sales-call transcripts, referrals and native captures on WhatsApp, SMS or your site.",
   },
   {
-    q: "How long to see results?",
-    a: "Most customers see their first spike in reviews within the first week and their first referred bookings inside 30 days.",
+    q: "What do the AI Agents actually do?",
+    a: "They analyze trust data, spot warm leads, recommend campaigns, generate ad creative, draft follow-ups, surface the right testimonial for the right query on social, and hand you a one-click approve workflow. You stay in command.",
   },
   {
-    q: "What about my existing reviews?",
-    a: "We import them. Google, Yelp, Trustpilot, or wherever they live. Nothing goes to waste.",
+    q: "Does Uplaud replace my ad platforms or CRM?",
+    a: "No. Uplaud plugs into what you already use &mdash; Meta, Google, TikTok, HubSpot, Salesforce, Shopify and more &mdash; and makes them smarter with trust-native audiences, creative and attribution.",
   },
   {
-    q: "How much time will I spend on this?",
-    a: "About 20 minutes to set up. Then roughly zero. Uplaud runs quietly in the background.",
+    q: "How does making trust AI-visible work?",
+    a: "As buyers start using ChatGPT, Perplexity and Gemini to research, the brands whose customer trust is structured and citable will win the answer. Uplaud publishes your trust in AI-friendly formats so you show up where the query is asked.",
   },
   {
-    q: "Is my customer data safe?",
-    a: "Yes. We are GDPR-friendly, never share your list, and you can export or delete any time.",
+    q: "Who is Uplaud built for?",
+    a: "High-consideration businesses where a single new customer is valuable and trust is expensive to earn &mdash; ecommerce, education, healthcare, legal, professional services and B2B SaaS.",
   },
 ];
 
@@ -37,7 +37,7 @@ export default function FAQ() {
     <section
       id="faq"
       data-testid="faq-section"
-      className="relative py-24 md:py-32 bg-white"
+      className="relative py-24 md:py-32 bg-[#faf9ff] border-y border-[#eeeaf6]"
     >
       <div className="max-w-[1240px] mx-auto px-6 md:px-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
@@ -47,10 +47,10 @@ export default function FAQ() {
               data-testid="faq-headline"
               className="mt-4 font-display text-[36px] sm:text-[44px] leading-[1.05] font-semibold tracking-tight text-[#111827]"
             >
-              Quick answers.
+              Straight answers.
             </h2>
             <p className="mt-5 text-[14px] leading-relaxed text-[#4b5563] max-w-sm">
-              Something more specific? Book a demo below and ask us live.
+              Something more specific? Book a demo below and ask us directly.
             </p>
           </div>
 

@@ -4,7 +4,7 @@ import TrustBar from "@/components/landing/TrustBar";
 import PainPoint from "@/components/landing/PainPoint";
 import HowItWorks from "@/components/landing/HowItWorks";
 import TrustGraph from "@/components/landing/TrustGraph";
-import FeatureGrid from "@/components/landing/FeatureGrid";
+import Surfaces from "@/components/landing/Surfaces";
 import Outcomes from "@/components/landing/Outcomes";
 import FAQ from "@/components/landing/FAQ";
 import LeadForm from "@/components/landing/LeadForm";
@@ -20,7 +20,7 @@ export default function LandingPage() {
         <PainPoint />
         <HowItWorks />
         <TrustGraph />
-        <FeatureGrid />
+        <Surfaces />
         <Outcomes />
         <FAQ />
         <LeadForm />
