@@ -40,15 +40,15 @@ const VERTICALS = [
         "My daughter went from 1290 to 1520 in 6 weeks. Personalised practice was the difference.",
     },
     referral: {
-      customerName: "Priya",
-      friendName: "Kavya",
+      customerName: "Jessica",
+      friendName: "Rachel",
       customerRole: "verified parent",
       review:
         "testprep.pro’s tutor spotted my daughter’s weak areas in week one. Life saver.",
       brand: "testprep.pro",
       message:
-        "Kavya! You asked about SAT tutoring &mdash; I just reviewed testprep.pro. My daughter jumped 230 points. Free diagnostic here:",
-      link: "uplaud.co/tpp-priya",
+        "Rachel! You asked about SAT tutoring &mdash; I just reviewed testprep.pro. My daughter jumped 230 points. Free diagnostic here:",
+      link: "uplaud.co/tpp-jessica",
       offer: "Free diagnostic",
     },
     ai: {
