@@ -186,14 +186,14 @@ async def create_lead(payload: LeadCreate):
             "id": lead.id,
             "status": "saved",
             "email_sent": False,
-            "message": "Your request was received. We'll be in touch shortly.",
+            "message": "Your request was received. We will be in touch shortly.",
         }
 
     return {
         "id": lead.id,
         "status": "sent",
         "email_sent": True,
-        "message": "Thanks — we'll be in touch shortly.",
+        "message": "Thanks, we will be in touch shortly.",
     }
 
 

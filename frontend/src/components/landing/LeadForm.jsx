@@ -28,7 +28,7 @@ export default function LeadForm() {
     try {
       const res = await axios.post(`${API}/leads`, form);
       setSubmitted(true);
-      toast.success(res.data?.message || "Thanks — we'll be in touch.");
+      toast.success(res.data?.message || "Thanks, we will be in touch.");
     } catch (err) {
       const msg =
         err?.response?.data?.detail?.[0]?.msg ||
@@ -44,10 +44,11 @@ export default function LeadForm() {
     <section
       id="demo"
       data-testid="lead-form-section"
-      className="relative py-24 md:py-32 bg-[#050505] text-[#fdfdfb] noise overflow-hidden"
+      className="relative py-24 md:py-32 bg-[#0b0616] text-[#fdfbff] noise overflow-hidden"
     >
-      <div className="absolute inset-0 grid-bg opacity-30 pointer-events-none" />
-      <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[640px] h-[640px] rounded-full bg-[#10b981]/10 blur-3xl pointer-events-none" />
+      <div className="absolute inset-0 grid-bg opacity-25 pointer-events-none" />
+      <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[720px] h-[720px] rounded-full bg-[#7c3aed]/25 blur-3xl pointer-events-none" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom,rgba(167,139,250,0.15),transparent_60%)] pointer-events-none" />
 
       <div className="relative max-w-[1240px] mx-auto px-6 md:px-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
@@ -58,21 +59,21 @@ export default function LeadForm() {
             </span>
             <h2
               data-testid="demo-headline"
-              className="mt-6 font-display text-[40px] sm:text-[56px] lg:text-[64px] leading-[1.02] font-medium tracking-tight"
+              className="mt-6 font-display text-[40px] sm:text-[56px] lg:text-[64px] leading-[1.02] font-semibold tracking-tight"
             >
               Build your Trust Graph.
               <br />
-              <span className="text-[#10b981]">Lower your CAC.</span>
+              <span className="text-violet-shine">Lower your CAC.</span>
             </h2>
-            <p className="mt-6 text-[15px] leading-relaxed text-white/65 max-w-md">
-              Tell us a little about your business. We&apos;ll come back with a
-              tailored walkthrough — including where the biggest CAC wins are
+            <p className="mt-6 text-[15px] leading-relaxed text-white/70 max-w-md">
+              Tell us a little about your business. We will come back with a
+              tailored walkthrough, including where the biggest CAC wins are
               hiding for you.
             </p>
 
             <div className="mt-10 space-y-4 text-[13px] text-white/60">
               <Row label="Reply time">Under 24 hours, from the founder.</Row>
-              <Row label="Pilot length">4 – 6 weeks, one core loop live.</Row>
+              <Row label="Pilot length">4 to 6 weeks, one core loop live.</Row>
               <Row label="Data required">Read-only reviews + ad accounts.</Row>
             </div>
           </div>
@@ -81,25 +82,26 @@ export default function LeadForm() {
             {submitted ? (
               <div
                 data-testid="lead-form-success"
-                className="border border-[#10b981]/40 bg-[#10b981]/[0.06] rounded-sm p-10 flex flex-col items-start gap-4"
+                className="border border-[#7c3aed]/50 bg-[#7c3aed]/[0.08] rounded-2xl p-10 flex flex-col items-start gap-4"
               >
                 <CheckCircle2
-                  className="w-8 h-8 text-[#10b981]"
+                  className="w-8 h-8 text-[#a78bfa]"
                   strokeWidth={1.5}
                 />
-                <h3 className="font-display text-[28px] tracking-tight">
-                  Thanks — we&apos;re on it.
+                <h3 className="font-display text-[28px] tracking-tight font-semibold">
+                  Thanks, we are on it.
                 </h3>
                 <p className="text-[14px] text-white/70 max-w-md">
                   Your request landed with Deepthi and the team. Expect a note
-                  from us within a day, from a real inbox — not a sequence.
+                  from us within a day, from a real inbox, not a sequence.
                 </p>
               </div>
             ) : (
               <form
                 data-testid="lead-form"
                 onSubmit={onSubmit}
-                className="border border-white/10 rounded-sm p-6 md:p-8 bg-white/[0.03] backdrop-blur-md"
+                noValidate
+                className="border border-white/10 rounded-2xl p-6 md:p-8 bg-white/[0.03] backdrop-blur-md"
               >
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Field
@@ -107,7 +109,6 @@ export default function LeadForm() {
                     testId="lead-name-input"
                     value={form.name}
                     onChange={update("name")}
-                    required
                   />
                   <Field
                     label="Work email"
@@ -115,7 +116,6 @@ export default function LeadForm() {
                     testId="lead-email-input"
                     value={form.email}
                     onChange={update("email")}
-                    required
                   />
                   <Field
                     label="Company"
@@ -141,15 +141,15 @@ export default function LeadForm() {
                     value={form.message}
                     onChange={update("message")}
                     rows={4}
-                    placeholder="What you sell, current CAC pain, biggest growth question…"
-                    className="mt-2 w-full bg-transparent border border-white/15 rounded-sm px-3 py-3 text-[14px] text-white placeholder:text-white/30 focus:border-[#10b981] focus:outline-none transition-colors"
+                    placeholder="What you sell, current CAC pain, biggest growth question..."
+                    className="mt-2 w-full bg-transparent border border-white/15 rounded-xl px-3 py-3 text-[14px] text-white placeholder:text-white/30 focus:border-[#a78bfa] focus:outline-none transition-colors"
                   />
                 </div>
 
                 <div className="mt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <p className="text-[11px] text-white/40 max-w-xs">
                     By submitting, you agree to be contacted about Uplaud. We
-                    don&apos;t share your data.
+                    do not share your data.
                   </p>
                   <button
                     type="submit"
@@ -189,7 +189,7 @@ function Field({ label, testId, type = "text", ...rest }) {
         type={type}
         data-testid={testId}
         {...rest}
-        className="mt-2 w-full bg-transparent border border-white/15 rounded-sm px-3 py-3 text-[14px] text-white placeholder:text-white/30 focus:border-[#10b981] focus:outline-none transition-colors"
+        className="mt-2 w-full bg-transparent border border-white/15 rounded-xl px-3 py-3 text-[14px] text-white placeholder:text-white/30 focus:border-[#a78bfa] focus:outline-none transition-colors"
       />
     </label>
   );

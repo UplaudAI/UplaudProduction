@@ -16,24 +16,22 @@ Build a high-converting, AI/tech-forward landing page for Uplaud AI. It must com
 - Fonts: Clash Display (headings, Fontshare) + Manrope (body, Google) + JetBrains Mono (accents).
 - Signature color: Electric Emerald `#10b981` on Structural Black `#0a0a0a` / Ivory `#fdfdfb`.
 
-## What's Implemented (2026-12-08)
-- Fully composed marketing page:
-  Navbar (sticky, glass on scroll, mobile menu) → Hero (asymmetric, animated card stack) → TrustBar (Marquee of review sources) → PainPoint (data-driven stats) → **TrustGraph (dark AI section with custom Canvas node network)** → HowItWorks (bento 5-step) → Loops (2 acquisition loops) → FeatureGrid (6 product capabilities) → Outcomes (big-number metrics) → FAQ (Shadcn accordion) → LeadForm (dark, Resend-backed) → Footer (giant brand mark)
-- Backend endpoints:
-  - `GET /api/` health
-  - `POST /api/leads` — validates payload, sends transactional HTML email to `deepthi@uplaud.ai` via Resend, persists to `db.leads` in MongoDB as backup, returns status `sent` or `saved`.
-- Resend integration wired with user's API key; sender is `onboarding@resend.dev` until `uplaud.ai` domain is verified in Resend.
-- Sonner toasts for success/error, native HTML5 validation on required fields.
-- data-testid on every interactive element.
+## What's Implemented (updated 2026-12-09)
+- **Full brand refresh v2**: swapped from emerald/black to Uplaud violet palette (`#6d28d9`, `#7c3aed`, `#a78bfa`), added tasteful gradient shine on headings & CTAs, pill-shaped buttons.
+- **Real logo** now used in navbar and footer (purple circle mark).
+- **Fonts**: Bricolage Grotesque (headings, rounded/contemporary, matches logo) + Inter (body) + JetBrains Mono (accents).
+- **Hero rewritten with PAS framework**: opens with "Dear growth-obsessed founder", pain hook "You're spending $2 to earn $1 on cold ads", then pivots to the solution + mechanism (WhatsApp + Trust Graph) + 30-day timeframe.
+- **WhatsApp** integrated as the core capture mechanism throughout (matches live uplaud.ai positioning).
+- **Pain section rebuilt**: "Dear founder," + 3 pain questions + old-way vs Uplaud-way side-by-side + stat row.
+- Stripped em dashes across the copy per landing-page copywriting guidance.
+- All 13 sections retained: Navbar → Hero → TrustBar → PainPoint (v2) → TrustGraph (violet nodes) → HowItWorks (WhatsApp-first) → Loops → FeatureGrid → Outcomes → FAQ (+ new WhatsApp Q) → LeadForm → Footer.
 
 ## Backlog / Next
-- P1: Verify `uplaud.ai` domain in Resend and switch `SENDER_EMAIL` to `noreply@uplaud.ai`.
-- P1: Replace native required-field tooltip with sonner error toast (add `noValidate` to form) — LOW priority UX polish flagged by testing agent.
-- P2: Add a `/thanks` route or inline calendar embed (Cal.com / Calendly) after a lead is captured.
-- P2: Add SEO metadata (OG image, sitemap.xml, robots.txt) and canonical tags.
-- P2: Add per-vertical variants (e.g. `/for/sat-prep`) once user picks a beachhead vertical.
-- P3: Add lightweight admin view at `/leads` (protected) to browse persisted leads.
-- P3: Instrument PostHog events on CTA clicks and form submits.
+- P1: Verify `uplaud.ai` in Resend and switch `SENDER_EMAIL` to `noreply@uplaud.ai`.
+- P2: Add a `/thanks` route or embed Cal.com after form submit.
+- P2: SEO metadata (OG image, sitemap, robots.txt).
+- P3: Add PostHog event tracking on CTA clicks & form submits.
+- P3: Consider a vertical picker chip in the hero so visitors can self-select (SAT prep / law firm / dentist / ecommerce) and see 1-2 tailored copy swaps.
 
 ## Test Credentials
 None required. Landing page has no auth.
