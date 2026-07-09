@@ -1,72 +1,63 @@
 import {
-  MessagesSquare,
+  MessageCircle,
   Share2,
-  Sparkles,
-  BarChart3,
-  Layers,
+  Star,
   ShieldCheck,
+  Sparkles,
+  Wallet,
 } from "lucide-react";
 
 const FEATURES = [
   {
-    icon: MessagesSquare,
-    title: "WhatsApp-first capture",
-    body: "Collect authentic reviews via voice or text, in 50+ languages, at the moment your customers are happiest.",
+    icon: MessageCircle,
+    title: "WhatsApp reviews",
+    body: "Where your customers already are. 60% higher reply rates than email.",
   },
   {
     icon: Share2,
-    title: "One-click referrals",
-    body: "Every advocate becomes a one-click, AI-personalized referrer. No coupon codes, no awkward asks, no friction.",
+    title: "1-tap referrals",
+    body: "Every happy customer turns into a warm intro. No coupon codes, no awkward asks.",
   },
   {
     icon: Sparkles,
-    title: "Story-driven ads",
-    body: "Real customer language, clustered by theme and buyer intent, becomes ad copy and creative that outperforms.",
+    title: "AI-personalised",
+    body: "Every referral message is written in your customer&apos;s voice, to the right friend.",
   },
   {
-    icon: Layers,
-    title: "Buyer intent clusters",
-    body: "The Trust Graph maps clusters of high-intent lookalikes for your Meta, Google and TikTok ad accounts.",
+    icon: Star,
+    title: "Voice or text, 50+ languages",
+    body: "Your customers speak the way they want. You get every review, in any language.",
   },
   {
-    icon: BarChart3,
-    title: "Signal-level attribution",
-    body: "See which review, story or referrer drove which conversion, and double down with confidence.",
+    icon: Wallet,
+    title: "Rewards that fit",
+    body: "Points, credits or perks your customers actually want. Design it once, run it forever.",
   },
   {
     icon: ShieldCheck,
-    title: "Authentic by default",
-    body: "No paid influencers. No synthetic reviews. Every signal is a real customer, verified end-to-end.",
+    title: "Real, verified & authentic",
+    body: "Every review is a real customer. No bots. No fakes. No shortcuts.",
   },
 ];
 
 export default function FeatureGrid() {
   return (
     <section
-      id="features"
+      id="product"
       data-testid="feature-grid-section"
-      className="relative py-24 md:py-32 bg-white border-b border-violet-100"
+      className="relative py-24 md:py-32 bg-white"
     >
       <div className="max-w-[1240px] mx-auto px-6 md:px-10">
-        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-14">
-          <div className="max-w-2xl">
-            <span className="section-label">
-              05 &nbsp;/&nbsp; the product
-            </span>
-            <h2
-              data-testid="features-headline"
-              className="mt-4 font-display text-[36px] sm:text-[48px] lg:text-[60px] leading-[1.05] font-semibold tracking-tight text-[#0f0a1e]"
-            >
-              Everything you need
-              <br />
-              to run growth on trust.
-            </h2>
-          </div>
-          <p className="max-w-md text-[14px] leading-relaxed text-[#4a3d63]">
-            A single platform for capturing trust signals over WhatsApp,
-            activating them across channels, and attributing the revenue they
-            drive.
-          </p>
+        <div className="max-w-3xl mb-14">
+          <span className="section-label">03 / the product</span>
+          <h2
+            data-testid="features-headline"
+            className="mt-4 font-display text-[36px] sm:text-[48px] lg:text-[60px] leading-[1.02] font-semibold tracking-tight text-[#111827]"
+          >
+            Simple to set up.
+            <br />
+            <span className="mint-underline">Impossible to outgrow.</span>
+          </h2>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -74,17 +65,18 @@ export default function FeatureGrid() {
             <div
               key={i}
               data-testid={`feature-${i}`}
-              className="group border border-violet-100 rounded-2xl p-8 bg-white hover:border-violet-300 hover:shadow-[0_20px_50px_-25px_rgba(109,40,217,0.35)] transition-all duration-200"
+              className="group border border-[#eeeaf6] rounded-2xl p-8 bg-white hover:border-[#6d46c6] transition-colors"
             >
-              <div className="w-10 h-10 border border-violet-100 rounded-full flex items-center justify-center bg-violet-50 text-[#6d28d9] group-hover:bg-gradient-to-br group-hover:from-[#a78bfa] group-hover:to-[#7c3aed] group-hover:text-white transition-all">
-                <f.icon className="w-4 h-4" strokeWidth={1.5} />
+              <div className="w-10 h-10 rounded-full bg-[#f5f3ff] flex items-center justify-center text-[#6d46c6] group-hover:bg-[#5eead4] group-hover:text-[#261c4d] transition-colors">
+                <f.icon className="w-4 h-4" strokeWidth={1.75} />
               </div>
-              <h3 className="mt-8 font-display text-[22px] tracking-tight text-[#0f0a1e] font-semibold">
+              <h3 className="mt-6 font-display text-[19px] font-semibold tracking-tight text-[#111827]">
                 {f.title}
               </h3>
-              <p className="mt-3 text-[13px] leading-relaxed text-[#4a3d63]">
-                {f.body}
-              </p>
+              <p
+                className="mt-2 text-[13.5px] leading-relaxed text-[#4b5563]"
+                dangerouslySetInnerHTML={{ __html: f.body }}
+              />
             </div>
           ))}
         </div>

@@ -5,9 +5,9 @@ const LOGO_URL =
   "https://customer-assets.emergentagent.com/job_ai-acquisition-hub-2/artifacts/1gh9rg2w_ChatGPT_Image_May_11__2026__01_46_39_PM-removebg-preview.png";
 
 const NAV_LINKS = [
-  { href: "#pain", label: "The problem", testId: "nav-link-pain" },
   { href: "#how", label: "How it works", testId: "nav-link-how" },
-  { href: "#engine", label: "AI engine", testId: "nav-link-engine" },
+  { href: "#product", label: "Product", testId: "nav-link-product" },
+  { href: "#results", label: "Results", testId: "nav-link-results" },
   { href: "#faq", label: "FAQ", testId: "nav-link-faq" },
 ];
 
@@ -25,9 +25,9 @@ export default function Navbar() {
   return (
     <header
       data-testid="site-navbar"
-      className={`fixed inset-x-0 top-0 z-50 transition-[background-color,border-color,backdrop-filter] duration-300 ${
+      className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
         scrolled
-          ? "backdrop-blur-xl bg-white/70 border-b border-violet-100"
+          ? "backdrop-blur-xl bg-white/85 border-b border-[#eeeaf6]"
           : "bg-transparent border-b border-transparent"
       }`}
     >
@@ -35,7 +35,7 @@ export default function Navbar() {
         <a
           href="#top"
           data-testid="brand-logo"
-          className="flex items-center gap-2.5 group"
+          className="flex items-center gap-2.5"
         >
           <img
             src={LOGO_URL}
@@ -44,9 +44,8 @@ export default function Navbar() {
             width={32}
             height={32}
           />
-          <span className="font-display text-[19px] font-semibold tracking-tight text-[#0f0a1e]">
+          <span className="font-display text-[19px] font-semibold tracking-tight text-[#111827]">
             uplaud
-            <span className="text-[#7c3aed]">.ai</span>
           </span>
         </a>
 
@@ -56,7 +55,7 @@ export default function Navbar() {
               key={l.href}
               href={l.href}
               data-testid={l.testId}
-              className="text-[13px] text-[#4a3d63] hover:text-[#6d28d9] transition-colors duration-200"
+              className="text-[13px] text-[#4b5563] hover:text-[#6d46c6] transition-colors"
             >
               {l.label}
             </a>
@@ -76,7 +75,7 @@ export default function Navbar() {
 
         <button
           data-testid="mobile-menu-toggle"
-          className="md:hidden inline-flex items-center justify-center w-10 h-10 border border-violet-200 rounded-full text-[#0f0a1e]"
+          className="md:hidden inline-flex items-center justify-center w-10 h-10 border border-[#d9d1ee] rounded-full text-[#111827]"
           onClick={() => setOpen((v) => !v)}
           aria-label="Toggle menu"
         >
@@ -87,7 +86,7 @@ export default function Navbar() {
       {open && (
         <div
           data-testid="mobile-menu"
-          className="md:hidden border-t border-violet-100 bg-white/95 backdrop-blur-xl"
+          className="md:hidden border-t border-[#eeeaf6] bg-white/95 backdrop-blur-xl"
         >
           <div className="px-6 py-4 flex flex-col gap-3">
             {NAV_LINKS.map((l) => (
@@ -96,7 +95,7 @@ export default function Navbar() {
                 href={l.href}
                 data-testid={`${l.testId}-mobile`}
                 onClick={() => setOpen(false)}
-                className="text-[14px] text-[#0f0a1e] py-2"
+                className="text-[14px] text-[#111827] py-2"
               >
                 {l.label}
               </a>

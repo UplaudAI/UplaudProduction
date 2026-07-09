@@ -16,22 +16,20 @@ Build a high-converting, AI/tech-forward landing page for Uplaud AI. It must com
 - Fonts: Clash Display (headings, Fontshare) + Manrope (body, Google) + JetBrains Mono (accents).
 - Signature color: Electric Emerald `#10b981` on Structural Black `#0a0a0a` / Ivory `#fdfdfb`.
 
-## What's Implemented (updated 2026-12-09)
-- **Full brand refresh v2**: swapped from emerald/black to Uplaud violet palette (`#6d28d9`, `#7c3aed`, `#a78bfa`), added tasteful gradient shine on headings & CTAs, pill-shaped buttons.
-- **Real logo** now used in navbar and footer (purple circle mark).
-- **Fonts**: Bricolage Grotesque (headings, rounded/contemporary, matches logo) + Inter (body) + JetBrains Mono (accents).
-- **Hero rewritten with PAS framework**: opens with "Dear growth-obsessed founder", pain hook "You're spending $2 to earn $1 on cold ads", then pivots to the solution + mechanism (WhatsApp + Trust Graph) + 30-day timeframe.
-- **WhatsApp** integrated as the core capture mechanism throughout (matches live uplaud.ai positioning).
-- **Pain section rebuilt**: "Dear founder," + 3 pain questions + old-way vs Uplaud-way side-by-side + stat row.
-- Stripped em dashes across the copy per landing-page copywriting guidance.
-- All 13 sections retained: Navbar → Hero → TrustBar → PainPoint (v2) → TrustGraph (violet nodes) → HowItWorks (WhatsApp-first) → Loops → FeatureGrid → Outcomes → FAQ (+ new WhatsApp Q) → LeadForm → Footer.
+## What's Implemented (updated 2026-12-09 v3)
+- **Rebuilt for the right audience & the right brand.** Copy simplified for education, healthcare, legal and pet care operators (no jargon, no "Trust Graph" language, no MarTech-speak).
+- **Exact Uplaud brand palette** pulled from live uplaud.ai CSS: purple `#6D46C6`, deep purple `#261c4d`, mint `#5EEAD4`, black `#111827`, white. Buttons are clean solid purple with mint hover accents; no more emerald or violet-shine gradients.
+- **Hero rewritten to be punchy & benefit-first**: "More reviews. More referrals. More customers." + a 2-line subhead naming patients / parents / clients / pet parents. Four vertical chips visible directly under the CTAs.
+- **Page structure simplified** to 9 sections: Nav → Hero → Trust bar (industry categories, not review platforms) → Ads-vs-Uplaud pain comparison → 3-step How it works (was 5) → Powered-by-AI dark section (single headline, no stat cluster) → 6-card product grid → 3 big-number results on deep purple → FAQ (6 short Qs) → Book-a-demo (light bg, mint+lavender halo) → Footer.
+- **Loops section removed** (too abstract for this audience). "AI Engine" simplified to a single dark statement.
+- Backend unchanged. Resend + Mongo flow still verified.
 
 ## Backlog / Next
 - P1: Verify `uplaud.ai` in Resend and switch `SENDER_EMAIL` to `noreply@uplaud.ai`.
-- P2: Add a `/thanks` route or embed Cal.com after form submit.
-- P2: SEO metadata (OG image, sitemap, robots.txt).
-- P3: Add PostHog event tracking on CTA clicks & form submits.
-- P3: Consider a vertical picker chip in the hero so visitors can self-select (SAT prep / law firm / dentist / ecommerce) and see 1-2 tailored copy swaps.
+- P2: Embed Cal.com after success state so form → booked call in one step.
+- P2: SEO/OG image, sitemap.xml, robots.txt.
+- P2: Add a per-vertical hero variant swap (Education / Healthcare / Legal / Pet care) with tailored review examples in the hero visual.
+- P3: PostHog event tracking on CTAs & FAQ opens.
 
 ## Test Credentials
 None required. Landing page has no auth.
