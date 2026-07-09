@@ -30,7 +30,7 @@ export default function TrustBar() {
     >
       <div className="max-w-[1240px] mx-auto px-6 md:px-10 mb-5 flex items-baseline justify-between gap-4">
         <span className="section-label">
-          Works with every place your customers already talk about you
+          Easily bring in customer trust signals from anywhere
         </span>
         <span className="hidden md:inline text-[12px] text-[#4b5563]">
           Reviews · Social · CRM · Support · Referrals

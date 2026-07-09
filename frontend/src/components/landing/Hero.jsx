@@ -1,6 +1,37 @@
+import { useState } from "react";
 import { ArrowUpRight, Star, Sparkles, MessageCircle } from "lucide-react";
 
+const VERTICALS = [
+  {
+    id: "education",
+    label: "Education",
+    copy: "Turn parent and student reviews into more enrollments &mdash; for tutoring centers, SAT prep and preschools.",
+  },
+  {
+    id: "healthcare",
+    label: "Healthcare",
+    copy: "Turn patient stories into more booked appointments &mdash; for clinics, dentists and dermatologists.",
+  },
+  {
+    id: "legal",
+    label: "Legal",
+    copy: "Turn client testimonials into more qualified leads &mdash; for immigration, family and injury attorneys.",
+  },
+  {
+    id: "petcare",
+    label: "Pet care",
+    copy: "Turn happy pet parents into new bookings &mdash; for groomers, vets and boarding.",
+  },
+  {
+    id: "ecommerce",
+    label: "Ecommerce",
+    copy: "Turn 5-star reviews into more repeat buyers &mdash; for high-consideration Shopify brands.",
+  },
+];
+
 export default function Hero() {
+  const [activeVertical, setActiveVertical] = useState("education");
+  const active = VERTICALS.find((v) => v.id === activeVertical) || VERTICALS[0];
   return (
     <section
       id="top"
@@ -71,7 +102,41 @@ export default function Hero() {
               </a>
             </div>
 
-            <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-3 text-[13px] text-[#4b5563]">
+            {/* Vertical selector */}
+            <div
+              data-testid="hero-vertical-selector"
+              className="mt-10 pt-8 border-t border-[#eeeaf6] max-w-xl"
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <span className="section-label">Built for</span>
+                <span className="h-px flex-1 bg-[#eeeaf6]" />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {VERTICALS.map((v) => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    data-testid={`hero-vertical-${v.id}`}
+                    onClick={() => setActiveVertical(v.id)}
+                    className={`px-3.5 py-1.5 rounded-full text-[12.5px] font-medium border transition-all ${
+                      activeVertical === v.id
+                        ? "bg-[#111827] text-white border-[#111827]"
+                        : "bg-white text-[#4b5563] border-[#eeeaf6] hover:border-[#d9d1ee] hover:text-[#111827]"
+                    }`}
+                  >
+                    {v.label}
+                  </button>
+                ))}
+              </div>
+              <p
+                key={active.id}
+                data-testid="hero-vertical-copy"
+                className="mt-4 text-[14px] leading-relaxed text-[#4b5563]"
+                dangerouslySetInnerHTML={{ __html: active.copy }}
+              />
+            </div>
+
+            <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 text-[13px] text-[#4b5563]">
               <div className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#6d46c6]" />
                 Works inside Meta, Google, TikTok

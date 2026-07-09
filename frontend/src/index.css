@@ -317,3 +317,18 @@ textarea:focus-visible {
 .node-pulse {
     animation: nodePulse 2.8s ease-in-out infinite;
 }
+
+/* Fade-in for reactive text */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+[data-testid="hero-vertical-copy"] {
+    animation: fadeInUp 300ms ease-out both;
+}
