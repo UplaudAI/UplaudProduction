@@ -1,14 +1,4 @@
-import { ArrowUpRight, Sparkles } from "lucide-react";
-
-const SOURCES = [
-  "Trustpilot",
-  "G2",
-  "Shopify",
-  "Reddit",
-  "Instagram",
-  "CRM",
-  "WhatsApp",
-];
+import { ArrowUpRight, Star, Sparkles } from "lucide-react";
 
 export default function Hero() {
   return (
@@ -30,31 +20,31 @@ export default function Hero() {
         <div className="flex flex-wrap items-center gap-3 mb-8">
           <span className="chip" data-testid="hero-eyebrow">
             <span className="dot" />
-            The trust engine for modern acquisition
+            You pay for the click. Your customer pays attention to the review.
           </span>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
           <div className="lg:col-span-7">
             <h1
               data-testid="hero-headline"
-              className="font-display text-[46px] leading-[0.98] sm:text-[64px] lg:text-[82px] font-semibold tracking-tight text-[#111827]"
+              className="font-display text-[46px] leading-[0.98] sm:text-[62px] lg:text-[78px] font-semibold tracking-tight text-[#111827]"
             >
-              Turn customer trust
+              You spend on ads.
               <br />
-              into your{" "}
-              <span className="mint-underline">#1 acquisition channel</span>.
+              They decide on{" "}
+              <span className="mint-underline">reviews.</span>
             </h1>
 
             <p
               data-testid="hero-subhead"
               className="mt-8 max-w-xl text-[17px] md:text-[18px] leading-[1.55] text-[#4b5563]"
             >
-              Uplaud pulls trust signals from every corner of your business
-              &mdash; reviews, referrals, testimonials, social, CRM &mdash;
-              structures them with AI, and activates them across ads,
-              referrals, sales and social. Growth that compounds every quarter,
-              not fades.
+              Every buyer today checks Reddit, reads reviews, and asks ChatGPT
+              before they check out. Uplaud plugs the trust they find there
+              directly into the ads, referrals, sales follow-ups and AI-search
+              results you already spend on &mdash; so the whole funnel finally
+              works together.
             </p>
 
             <div className="mt-9 flex flex-wrap items-center gap-3">
@@ -75,23 +65,14 @@ export default function Hero() {
               </a>
             </div>
 
-            <div className="mt-10">
-              <div className="section-label mb-3">
-                Pulls trust from
+            <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-3 text-[13px] text-[#4b5563]">
+              <div className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#6d46c6]" />
+                Works inside Meta, Google, TikTok
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {SOURCES.map((v, i) => (
-                  <span
-                    key={v}
-                    data-testid={`hero-source-${i}`}
-                    className="px-3 py-1.5 rounded-full text-[12px] font-medium border border-[#eeeaf6] bg-[#faf9ff] text-[#4b5563]"
-                  >
-                    {v}
-                  </span>
-                ))}
-                <span className="px-3 py-1.5 rounded-full text-[12px] font-medium border border-[#eeeaf6] bg-white text-[#9ca3af]">
-                  + 20 more
-                </span>
+              <div className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#5eead4]" />
+                Feeds Reddit, X, ChatGPT & Perplexity
               </div>
             </div>
           </div>
@@ -105,81 +86,104 @@ export default function Hero() {
   );
 }
 
+/**
+ * Product-clarity visual: three stacked mockups showing Uplaud in action.
+ *  1. A Reddit answer surfacing a real customer testimonial
+ *  2. A Meta ad using a 5-star customer story as creative
+ *  3. A ChatGPT / AI-search answer citing the brand
+ */
 function HeroVisual() {
   return (
     <div
       data-testid="hero-visual"
-      className="relative w-full aspect-[4/5] lg:aspect-[3/3.4]"
+      className="relative w-full aspect-[4/5] lg:aspect-[3/3.5]"
     >
-      <div className="absolute inset-6 rounded-[28px] bg-gradient-to-br from-[#ecfdf7] via-white to-[#f5f3ff] border border-[#eeeaf6]" />
+      <div className="absolute inset-4 rounded-[28px] bg-gradient-to-br from-[#ecfdf7] via-white to-[#f5f3ff] border border-[#eeeaf6]" />
 
-      {/* Card 1 – multi-source ingest */}
+      {/* Reddit answer card */}
       <div className="absolute top-2 left-1 w-[80%] bg-white border border-[#eeeaf6] rounded-2xl p-4 shadow-[0_25px_60px_-30px_rgba(38,28,77,0.35)]">
-        <div className="flex items-center justify-between">
-          <span className="section-label">trust in · today</span>
-          <span className="text-[10px] font-mono text-[#6d46c6]">+312</span>
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-          {[
-            ["Trustpilot", "84"],
-            ["Shopify", "67"],
-            ["Reddit", "44"],
-            ["Instagram", "58"],
-            ["CRM emails", "39"],
-            ["WhatsApp", "20"],
-          ].map(([s, n]) => (
-            <div
-              key={s}
-              className="flex items-center justify-between border border-[#eeeaf6] rounded-lg px-2.5 py-1.5 bg-[#faf9ff]"
-            >
-              <span className="text-[#4b5563]">{s}</span>
-              <span className="font-mono font-semibold text-[#111827]">
-                {n}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Card 2 – AI agent action */}
-      <div className="absolute top-[46%] right-1 w-[76%] bg-[#261c4d] text-white rounded-2xl p-4 shadow-[0_25px_60px_-30px_rgba(38,28,77,0.7)]">
-        <div className="flex items-center gap-2 pb-2 border-b border-white/10">
-          <div className="w-7 h-7 rounded-full bg-[#5eead4]/15 flex items-center justify-center">
-            <Sparkles className="w-3.5 h-3.5 text-[#5eead4]" strokeWidth={2} />
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded-full bg-[#ff4500] text-white text-[10px] font-bold flex items-center justify-center">
+            r/
           </div>
-          <div className="flex-1">
-            <div className="text-[11px] font-semibold">Uplaud Agent</div>
-            <div className="text-[9.5px] text-white/50 font-mono">
-              acquisition · autopilot
-            </div>
+          <div className="text-[11px] font-mono text-[#4b5563]">
+            r/skincareaddiction
           </div>
+          <span className="ml-auto text-[10px] font-mono text-[#6d46c6]">
+            surfaced by uplaud
+          </span>
         </div>
-        <p className="mt-3 text-[12px] leading-relaxed text-white/85">
-          Spotted <span className="text-[#5eead4]">7 story-driven ads</span>{" "}
-          outperforming benchmark. Ready to launch a lookalike campaign to
-          2.1K high-intent buyers?
+        <p className="mt-2 text-[12px] text-[#111827] leading-relaxed">
+          &ldquo;Anyone tried the vitamin C serum? Worth it?&rdquo;
         </p>
-        <div className="mt-3 flex items-center gap-2">
-          <span className="px-2.5 py-1 rounded-full bg-[#5eead4] text-[#261c4d] text-[10px] font-semibold">
-            Approve
+        <div className="mt-3 rounded-lg bg-[#faf9ff] border border-[#eeeaf6] p-3">
+          <div className="flex items-center gap-1">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Star
+                key={i}
+                className="w-2.5 h-2.5 fill-[#5eead4] text-[#5eead4]"
+                strokeWidth={0}
+              />
+            ))}
+            <span className="text-[10px] text-[#9ca3af] ml-1">
+              verified customer
+            </span>
+          </div>
+          <p className="mt-1.5 text-[11.5px] text-[#111827] leading-snug">
+            &ldquo;Cleared my hyperpigmentation in 3 weeks. Only thing that
+            worked after 5 products.&rdquo;
+          </p>
+        </div>
+      </div>
+
+      {/* Meta ad card */}
+      <div className="absolute top-[38%] right-1 w-[74%] bg-white border border-[#eeeaf6] rounded-2xl p-4 shadow-[0_25px_60px_-30px_rgba(38,28,77,0.35)]">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded-md bg-[#1877f2] text-white text-[10px] font-bold flex items-center justify-center">
+            f
+          </div>
+          <div className="text-[11px] font-mono text-[#4b5563]">Sponsored</div>
+          <span className="ml-auto text-[10px] font-mono text-[#6d46c6]">
+            written by uplaud
           </span>
-          <span className="px-2.5 py-1 rounded-full border border-white/20 text-white/70 text-[10px]">
-            Tweak
+        </div>
+        <p className="mt-3 text-[13px] leading-snug font-semibold text-[#111827]">
+          &ldquo;Cleared my hyperpigmentation in 3 weeks.&rdquo;
+        </p>
+        <p className="mt-1 text-[11.5px] text-[#4b5563]">
+          Real 5-star review, now your best-performing ad.
+        </p>
+        <div className="mt-3 flex items-center justify-between">
+          <span className="px-2.5 py-1 rounded-full bg-[#111827] text-white text-[10px] font-semibold">
+            Shop now
+          </span>
+          <span className="font-mono text-[10px] text-[#6d46c6]">
+            +2.6x CTR
           </span>
         </div>
       </div>
 
-      {/* Card 3 – flywheel counter */}
-      <div className="absolute bottom-4 left-6 bg-white border border-[#eeeaf6] rounded-2xl px-4 py-3 shadow-[0_15px_40px_-20px_rgba(38,28,77,0.35)]">
-        <div className="text-[10px] font-mono uppercase tracking-widest text-[#4b5563]">
-          flywheel · Q3
-        </div>
-        <div className="flex items-baseline gap-2 mt-1">
-          <span className="font-display text-[22px] font-semibold text-[#111827]">
-            2.6x
+      {/* ChatGPT answer card */}
+      <div className="absolute bottom-1 left-4 w-[78%] bg-[#261c4d] text-white rounded-2xl p-4 shadow-[0_25px_60px_-30px_rgba(38,28,77,0.7)]">
+        <div className="flex items-center gap-2 pb-2 border-b border-white/10">
+          <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center">
+            <Sparkles
+              className="w-3.5 h-3.5 text-[#5eead4]"
+              strokeWidth={2}
+            />
+          </div>
+          <div className="text-[11px] font-mono text-white/60">
+            AI search answer
+          </div>
+          <span className="ml-auto text-[10px] font-mono text-[#5eead4]">
+            cited via uplaud
           </span>
-          <span className="text-[11px] text-[#4b5563]">CAC efficiency</span>
         </div>
+        <p className="mt-2 text-[11.5px] leading-relaxed text-white/85">
+          &ldquo;Users consistently rate this brand 4.8/5, citing fast results
+          on hyperpigmentation and dryness &mdash; per 3,200+ verified
+          reviews.&rdquo;
+        </p>
       </div>
     </div>
   );
