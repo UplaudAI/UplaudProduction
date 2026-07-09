@@ -17,15 +17,13 @@ export default function PainPoint() {
             >
               Ads are getting
               <br />
-              <span className="text-[#6d46c6]">more expensive</span> every
-              quarter.
+              <span className="text-[#6d46c6]">more expensive</span>.
             </h2>
             <p className="mt-6 max-w-lg text-[16px] leading-relaxed text-[#4b5563]">
-              CAC is up 40% year on year. Cold acquisition now costs roughly
-              $2 in ad spend for every $1 of revenue. Meanwhile, real buying
-              decisions are made elsewhere &mdash; on Reddit, in reviews, in
-              WhatsApp DMs, in ChatGPT answers. That is the disconnect Uplaud
-              closes.
+              The click keeps costing more, and the trust behind the click
+              keeps costing you nothing &mdash; because it&apos;s already
+              sitting in your reviews, DMs and Reddit threads, doing zero work
+              for you. Uplaud closes that gap.
             </p>
             <div className="mt-8 rounded-2xl border border-[#eeeaf6] bg-[#faf9ff] p-6">
               <p className="font-display text-[19px] leading-snug italic text-[#111827]">
