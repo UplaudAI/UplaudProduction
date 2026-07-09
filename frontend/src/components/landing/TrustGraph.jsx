@@ -106,16 +106,16 @@ function NodeNetwork() {
 
 const AGENTS = [
   {
+    name: "Referral Agent",
+    body: "Reads the sentiment of each testimonial and creates a personalized referral campaign with a loyalty offer &mdash; queued up for your customer to share with the friends of their choice.",
+  },
+  {
     name: "Insights Agent",
     body: "Reads every review and comment. Tells you which stories, features and pain points actually convert &mdash; by segment.",
   },
   {
     name: "Acquisition Agent",
     body: "Turns high-signal customer stories into lookalike audiences, ad creative and landing pages &mdash; then ships to Meta, Google or TikTok.",
-  },
-  {
-    name: "Referral Agent",
-    body: "Spots the customers most likely to advocate, drafts a personal message in their voice, and sends the referral to the right friend.",
   },
   {
     name: "Social Agent",

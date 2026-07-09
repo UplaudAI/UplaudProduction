@@ -53,6 +53,12 @@ body {
     font-variation-settings: "opsz" 60;
 }
 
+.font-brand {
+    font-family: "Nunito", "Inter", ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.03em;
+    font-weight: 800;
+}
+
 .font-mono {
     font-family:
         "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;

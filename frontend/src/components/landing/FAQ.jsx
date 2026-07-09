@@ -12,7 +12,7 @@ const FAQS = [
   },
   {
     q: "What kinds of trust signals do you ingest?",
-    a: "Reviews (Trustpilot, G2, Google, Yelp, Shopify), social (Reddit, X, Instagram, TikTok, LinkedIn), CRM notes and email testimonials, support tickets, sales-call transcripts, referrals and native captures on WhatsApp, SMS or your site.",
+    a: "Reviews (Trustpilot, G2, Google, Yelp, Shopify), social (Reddit, X, Instagram, TikTok, LinkedIn), CRM notes and email testimonials, support tickets, sales-call transcripts, referrals and native captures on WhatsApp, Telegram, SMS or your site.",
   },
   {
     q: "What do the AI Agents actually do?",

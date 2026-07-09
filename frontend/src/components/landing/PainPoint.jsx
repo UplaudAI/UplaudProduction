@@ -15,16 +15,17 @@ export default function PainPoint() {
               data-testid="pain-headline"
               className="mt-4 font-display text-[36px] sm:text-[48px] lg:text-[58px] leading-[1.02] font-semibold tracking-tight text-[#111827]"
             >
-              You keep paying for
+              Ads are getting
               <br />
-              <span className="text-[#6d46c6]">the wrong half</span> of the
-              funnel.
+              <span className="text-[#6d46c6]">more expensive</span> every
+              quarter.
             </h2>
             <p className="mt-6 max-w-lg text-[16px] leading-relaxed text-[#4b5563]">
-              You spend on ads, SEO and campaigns to get the click. But the
-              actual buying decision happens somewhere you don&apos;t spend at
-              all &mdash; on a Reddit thread, in a WhatsApp DM, in a review,
-              in a ChatGPT answer. That is the disconnect.
+              CAC is up 40% year on year. Cold acquisition now costs roughly
+              $2 in ad spend for every $1 of revenue. Meanwhile, real buying
+              decisions are made elsewhere &mdash; on Reddit, in reviews, in
+              WhatsApp DMs, in ChatGPT answers. That is the disconnect Uplaud
+              closes.
             </p>
             <div className="mt-8 rounded-2xl border border-[#eeeaf6] bg-[#faf9ff] p-6">
               <p className="font-display text-[19px] leading-snug italic text-[#111827]">
@@ -44,6 +45,7 @@ export default function PainPoint() {
               statLabel="YoY"
               title="Customer acquisition costs keep climbing."
               body="Every quarter, the ad auction gets more expensive. And the click you buy doesn&apos;t come with trust attached."
+              highlight
             />
             <PainCard
               testId="pain-stat-roas"
@@ -52,7 +54,6 @@ export default function PainPoint() {
               statLabel="to earn $1"
               title="You&apos;re spending more to make less."
               body="Cold acquisition now costs roughly $2 in ad spend for every $1 of revenue. The math stopped working, everyone noticed."
-              highlight
             />
             <PainCard
               testId="pain-stat-disconnect"

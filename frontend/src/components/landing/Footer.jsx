@@ -40,11 +40,11 @@ export default function Footer() {
               <img
                 src={LOGO_URL}
                 alt="Uplaud"
-                className="w-9 h-9 rounded-full"
-                width={36}
-                height={36}
+                className="w-10 h-10 rounded-full"
+                width={40}
+                height={40}
               />
-              <span className="font-display text-[19px] font-semibold tracking-tight">
+              <span className="font-brand text-[24px] text-white leading-none">
                 uplaud
               </span>
             </a>
