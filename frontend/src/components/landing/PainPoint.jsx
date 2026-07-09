@@ -56,10 +56,10 @@ export default function PainPoint() {
             <PainCard
               testId="pain-stat-disconnect"
               icon={ArrowRight}
-              stat="0%"
-              statLabel="of trust used"
-              title="Meanwhile, your best sales rep is on Reddit."
-              body="Real customer stories, DMs, comments and reviews are already convincing your next buyer &mdash; without a single dollar from you."
+              stat="5×"
+              statLabel="vs paid ads"
+              title="Word-of-mouth converts 5× better than ads."
+              body="Recommendations and reviews are the highest-converting channel your business has &mdash; and it&apos;s already running for free in your customers&apos; DMs, threads and group chats. Uplaud puts it to work."
             />
           </div>
         </div>

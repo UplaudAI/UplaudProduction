@@ -1,0 +1,59 @@
+{
+  "summary": "Verified copy/content changes for Uplaud AI hero verticals and pain-stat-disconnect card. 4 of 5 verticals updated correctly to US names. Education vertical still contains Indian names (Priya/Kavya) — main agent missed this one. Pain card copy fully updated. Backend /api/leads regression: PASS.",
+  "tested_scope": ["frontend content verification", "backend regression"],
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Hero.jsx VERTICALS[0] (Education) — referral block",
+        "issue": "Education vertical still uses Indian names 'Priya' (customerName) and 'Kavya' (friendName). Referral message body begins with 'Kavya! You asked about SAT tutoring' and link is 'uplaud.co/tpp-priya'. Per review spec, Education should use Jessica/Rachel. Old Indian names must not appear anywhere on the page — this rule is currently violated on the default (Education) vertical view.",
+        "selector": "[data-testid='hero-card-referral'] under [data-testid='hero-vertical-education']",
+        "priority": "HIGH",
+        "evidence_locations": [
+          "/app/frontend/src/components/landing/Hero.jsx line 43 customerName: 'Priya'",
+          "/app/frontend/src/components/landing/Hero.jsx line 44 friendName: 'Kavya'",
+          "/app/frontend/src/components/landing/Hero.jsx line 50 message string starts with 'Kavya!'",
+          "/app/frontend/src/components/landing/Hero.jsx line 51 link 'uplaud.co/tpp-priya'"
+        ]
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed": [
+    "pain-stat-disconnect: stat '5×', label 'vs paid ads', title 'Word-of-mouth converts 5× better than ads.', body starts 'Recommendations and reviews are the highest-converting channel'.",
+    "Old pain copy removed globally: '0% of trust used', 'Meanwhile, your best sales rep is on Reddit', 'without a single dollar from you' — none found on page.",
+    "Healthcare vertical → Emma/Kayla present in referral card.",
+    "Legal vertical → Michael/David present; ad brand and AI answer both cite 'millerkatzlaw.com'; 'sethiroy.law' not present.",
+    "Pet care vertical → Ashley/Megan present; Reddit question and AI query both mention 'Brooklyn'; 'Bandra' and 'Mumbai' not present.",
+    "Ecommerce vertical → Madison/Chloe present.",
+    "Hero CTAs — 'Learn how' href='#demo' scrolls to lead-form-section (visible); 'See how it works' href='#how' scrolls to how-it-works-section (visible).",
+    "Backend regression — POST https://ai-acquisition-hub-2.preview.emergentagent.com/api/leads with valid payload returned 201 with {status:'sent', email_sent:true}."
+  ],
+  "failed": [
+    "Education vertical referral card still shows Indian names (Priya/Kavya) — see ui_bugs[0]."
+  ],
+  "test_report_links": [
+    "/app/test_reports/iteration_2.json"
+  ],
+  "action_items": [
+    "In /app/frontend/src/components/landing/Hero.jsx, update the Education vertical (VERTICALS[0].referral):",
+    "  - customerName: 'Priya' → 'Jessica'",
+    "  - friendName: 'Kavya' → 'Rachel'",
+    "  - message: 'Kavya! You asked about SAT tutoring...' → 'Rachel! You asked about SAT tutoring...'",
+    "  - link: 'uplaud.co/tpp-priya' → 'uplaud.co/tpp-jessica' (or similar US-appropriate slug)",
+    "After the fix, no further main-agent-visible bugs remain per this review scope."
+  ],
+  "critical_code_review_comments": [
+    "Copy/content data lives inline inside Hero.jsx (VERTICALS array ~215 lines). Consider extracting to /content/hero-verticals.js for easier future copy edits and to avoid partial-update regressions like this one."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "83% (5/6 review items pass)"},
+  "seed_data_creation": "None (only ephemeral POST /api/leads with TEST_ prefix during backend regression curl).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Only remaining issue is Education vertical names in Hero.jsx VERTICALS[0].referral. Once main agent updates customerName, friendName, message opener, and link, re-run the same Playwright pass (click each hero-vertical-* chip, inner_text of hero-card-referral + hero-card-ai + hero-card-reddit, and scan for forbidden strings: Priya, Kavya, Rahul, Vikram, Aisha, Maya, Anaya, Nina, Simi, sethiroy, Bandra, Mumbai, '0% of trust used', 'best sales rep is on Reddit', 'without a single dollar'). Backend /api/leads is stable — no need to retest unless server.py changes."
+}

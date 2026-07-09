@@ -82,15 +82,15 @@ const VERTICALS = [
         "Zero anxiety appointment. Fair pricing, upfront plan, no upsell.",
     },
     referral: {
-      customerName: "Aisha",
-      friendName: "Maya",
+      customerName: "Emma",
+      friendName: "Kayla",
       customerRole: "verified patient",
       review:
         "brightsmiles.co explained everything before touching a thing. Painless cleaning too.",
       brand: "brightsmiles.co",
       message:
-        "Maya! You mentioned finding a dentist &mdash; I just reviewed brightsmiles.co. Gentle team, no upsell. First cleaning free:",
-      link: "uplaud.co/bs-aisha",
+        "Kayla! You mentioned finding a dentist &mdash; I just reviewed brightsmiles.co. Gentle team, no upsell. First cleaning free:",
+      link: "uplaud.co/bs-emma",
       offer: "Free cleaning",
     },
     ai: {
@@ -106,10 +106,10 @@ const VERTICALS = [
     copy: "Turn client testimonials into more qualified leads &mdash; for immigration, family and injury attorneys.",
     icon: Scale,
     ad: {
-      brand: "sethiroy.law",
+      brand: "millerkatzlaw.com",
       gradient: "from-[#e6e6f7] via-[#c7c7ed] to-[#7f7fb8]",
-      title: "SETHI",
-      subtitle: "& ROY LAW",
+      title: "MILLER",
+      subtitle: "& KATZ LAW",
       quote: "EB-5 approved. Painless from day one.",
       quoteBy: "real 5-star client",
       reviews: "512",
@@ -124,22 +124,22 @@ const VERTICALS = [
         "400+ approved petitions. Fees were clear upfront. My case cleared in 11 months.",
     },
     referral: {
-      customerName: "Rahul",
-      friendName: "Vikram",
+      customerName: "Michael",
+      friendName: "David",
       customerRole: "verified client",
       review:
-        "sethiroy.law walked us through EB-5 like it was a checklist. Zero surprises.",
-      brand: "sethiroy.law",
+        "millerkatzlaw.com walked us through EB-5 like it was a checklist. Zero surprises.",
+      brand: "millerkatzlaw.com",
       message:
-        "Vikram! You asked about EB-5 lawyers &mdash; I just reviewed sethiroy.law. 400+ approved petitions. Free 30-min consult here:",
-      link: "uplaud.co/sr-rahul",
+        "David! You asked about EB-5 lawyers &mdash; I just reviewed millerkatzlaw.com. 400+ approved petitions. Free 30-min consult here:",
+      link: "uplaud.co/mkl-michael",
       offer: "Free consult",
     },
     ai: {
       query: "Best immigration lawyer for EB-5?",
-      brand: "sethiroy.law",
+      brand: "millerkatzlaw.com",
       answer:
-        "For EB-5 investor visas, users consistently name sethiroy.law as top choice, citing 400+ approved petitions and clear fee structure.",
+        "For EB-5 investor visas, users consistently name millerkatzlaw.com as top choice, citing 400+ approved petitions and clear fee structure.",
     },
   },
   {
@@ -160,25 +160,25 @@ const VERTICALS = [
     reddit: {
       sub: "r/dogs",
       handle: "surfaced by uplaud",
-      question: "Where do I get my poodle groomed in Bandra?",
+      question: "Where do I get my poodle groomed in Brooklyn?",
       reviewerRole: "verified pet parent",
       review:
         "Gentle team, no anxious pup, and Milo actually looked happy walking out.",
     },
     referral: {
-      customerName: "Priya",
-      friendName: "Anaya",
+      customerName: "Ashley",
+      friendName: "Megan",
       customerRole: "verified pet parent",
       review:
         "Poodles & Pals gave Milo the softest cut. Gentle, patient staff, no anxious pup!",
       brand: "Poodles & Pals",
       message:
-        "Anaya! You asked about groomers &mdash; I just reviewed Poodles &amp; Pals. Milo loved them. $20 off your first cut:",
-      link: "uplaud.co/pnp-priya",
+        "Megan! You asked about groomers &mdash; I just reviewed Poodles &amp; Pals. Milo loved them. $20 off your first cut:",
+      link: "uplaud.co/pnp-ashley",
       offer: "$20 off",
     },
     ai: {
-      query: "Best pet grooming for anxious dogs in Mumbai?",
+      query: "Best pet grooming for anxious dogs in Brooklyn?",
       brand: "Poodles & Pals",
       answer:
         "Poodles & Pals is consistently recommended for anxious dogs, citing calm handling and small-batch sessions across 1,200+ verified reviews.",
@@ -208,15 +208,15 @@ const VERTICALS = [
         "Cleared my hyperpigmentation in 3 weeks. Only thing that worked after 5 products.",
     },
     referral: {
-      customerName: "Nina",
-      friendName: "Simi",
+      customerName: "Madison",
+      friendName: "Chloe",
       customerRole: "verified customer",
       review:
         "glowskin.co’s serum evened my skin in weeks. Zero irritation, glow for days.",
       brand: "glowskin.co",
       message:
-        "Simi! You asked about vitamin C &mdash; I just reviewed glowskin.co. Even skin in 3 weeks. 20% off your first bottle:",
-      link: "uplaud.co/glow-nina",
+        "Chloe! You asked about vitamin C &mdash; I just reviewed glowskin.co. Even skin in 3 weeks. 20% off your first bottle:",
+      link: "uplaud.co/glow-madison",
       offer: "20% off",
     },
     ai: {
