@@ -1,8 +1,9 @@
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, Header, Depends
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import re
 import asyncio
 import logging
 import resend
@@ -31,6 +32,7 @@ db = client[os.environ['DB_NAME']]
 resend.api_key = os.environ.get('RESEND_API_KEY', '')
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
 LEAD_RECIPIENT_EMAIL = os.environ.get('LEAD_RECIPIENT_EMAIL', 'deepthi@uplaud.ai')
+ADMIN_TOKEN = os.environ.get('ADMIN_TOKEN', '')
 
 # Create the main app without a prefix
 app = FastAPI(title="Uplaud AI API")
@@ -195,6 +197,166 @@ async def create_lead(payload: LeadCreate):
         "email_sent": True,
         "message": "Thanks, we will be in touch shortly.",
     }
+
+
+# ---------- Blog ----------
+def _slugify(text: str) -> str:
+    text = text.lower().strip()
+    text = re.sub(r"[^a-z0-9\s-]", "", text)
+    text = re.sub(r"[\s_-]+", "-", text)
+    return text.strip("-")[:80] or uuid.uuid4().hex[:8]
+
+
+class BlogPostIn(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    slug: Optional[str] = Field(default=None, max_length=120)
+    excerpt: str = Field(min_length=1, max_length=500)
+    content: str = Field(min_length=1)
+    cover_image: Optional[str] = Field(default=None, max_length=500)
+    tag: Optional[str] = Field(default=None, max_length=60)
+    author: Optional[str] = Field(default="Uplaud Team", max_length=100)
+    published: bool = True
+
+
+class BlogPost(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    slug: str
+    title: str
+    excerpt: str
+    content: str
+    cover_image: Optional[str] = None
+    tag: Optional[str] = None
+    author: str = "Uplaud Team"
+    published: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+def require_admin(x_admin_token: Optional[str] = Header(default=None)):
+    if not ADMIN_TOKEN:
+        raise HTTPException(status_code=503, detail="Admin not configured")
+    if not x_admin_token or x_admin_token != ADMIN_TOKEN:
+        raise HTTPException(status_code=401, detail="Invalid admin token")
+    return True
+
+
+def _serialize_post(doc: dict) -> dict:
+    doc.pop("_id", None)
+    for k in ("created_at", "updated_at"):
+        v = doc.get(k)
+        if isinstance(v, datetime):
+            doc[k] = v.isoformat()
+    return doc
+
+
+@api_router.get("/blog")
+async def list_blog(limit: int = 20, offset: int = 0, include_unpublished: bool = False):
+    limit = max(1, min(limit, 50))
+    offset = max(0, offset)
+    query = {} if include_unpublished else {"published": True}
+    cursor = (
+        db.blog_posts.find(query, {"_id": 0})
+        .sort("created_at", -1)
+        .skip(offset)
+        .limit(limit)
+    )
+    posts = await cursor.to_list(limit)
+    return {"posts": [_serialize_post(p) for p in posts]}
+
+
+@api_router.get("/blog/latest")
+async def latest_blog(limit: int = 3):
+    limit = max(1, min(limit, 10))
+    cursor = (
+        db.blog_posts.find({"published": True}, {"_id": 0})
+        .sort("created_at", -1)
+        .limit(limit)
+    )
+    posts = await cursor.to_list(limit)
+    return {"posts": [_serialize_post(p) for p in posts]}
+
+
+@api_router.get("/blog/{slug}")
+async def get_blog(slug: str):
+    doc = await db.blog_posts.find_one({"slug": slug}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Post not found")
+    return _serialize_post(doc)
+
+
+@api_router.post("/blog", status_code=201)
+async def create_blog(payload: BlogPostIn, _: bool = Depends(require_admin)):
+    slug = _slugify(payload.slug or payload.title)
+    # ensure unique slug
+    if await db.blog_posts.find_one({"slug": slug}):
+        slug = f"{slug}-{uuid.uuid4().hex[:6]}"
+
+    post = BlogPost(
+        slug=slug,
+        title=payload.title.strip(),
+        excerpt=payload.excerpt.strip(),
+        content=payload.content,
+        cover_image=payload.cover_image,
+        tag=payload.tag,
+        author=payload.author or "Uplaud Team",
+        published=payload.published,
+    )
+    doc = post.model_dump()
+    doc["created_at"] = doc["created_at"].isoformat()
+    doc["updated_at"] = doc["updated_at"].isoformat()
+    await db.blog_posts.insert_one(doc)
+    return _serialize_post(doc)
+
+
+@api_router.put("/blog/{slug}")
+async def update_blog(slug: str, payload: BlogPostIn, _: bool = Depends(require_admin)):
+    existing = await db.blog_posts.find_one({"slug": slug}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    update = {
+        "title": payload.title.strip(),
+        "excerpt": payload.excerpt.strip(),
+        "content": payload.content,
+        "cover_image": payload.cover_image,
+        "tag": payload.tag,
+        "author": payload.author or existing.get("author", "Uplaud Team"),
+        "published": payload.published,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    # allow slug change
+    new_slug = _slugify(payload.slug) if payload.slug else slug
+    if new_slug != slug:
+        if await db.blog_posts.find_one({"slug": new_slug}):
+            new_slug = f"{new_slug}-{uuid.uuid4().hex[:6]}"
+        update["slug"] = new_slug
+
+    await db.blog_posts.update_one({"slug": slug}, {"$set": update})
+    doc = await db.blog_posts.find_one({"slug": update.get("slug", slug)}, {"_id": 0})
+    return _serialize_post(doc)
+
+
+@api_router.delete("/blog/{slug}", status_code=204)
+async def delete_blog(slug: str, _: bool = Depends(require_admin)):
+    res = await db.blog_posts.delete_one({"slug": slug})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Post not found")
+    return None
+
+
+@api_router.get("/admin/blog")
+async def admin_list_blog(_: bool = Depends(require_admin), limit: int = 100, offset: int = 0):
+    limit = max(1, min(limit, 200))
+    cursor = (
+        db.blog_posts.find({}, {"_id": 0})
+        .sort("created_at", -1)
+        .skip(max(0, offset))
+        .limit(limit)
+    )
+    posts = await cursor.to_list(limit)
+    return {"posts": [_serialize_post(p) for p in posts]}
 
 
 # Include the router in the main app

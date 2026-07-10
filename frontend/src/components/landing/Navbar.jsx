@@ -5,10 +5,11 @@ const LOGO_URL =
   "https://customer-assets.emergentagent.com/job_ai-acquisition-hub-2/artifacts/1gh9rg2w_ChatGPT_Image_May_11__2026__01_46_39_PM-removebg-preview.png";
 
 const NAV_LINKS = [
-  { href: "#how", label: "How it works", testId: "nav-link-how" },
-  { href: "#agents", label: "AI Agents", testId: "nav-link-agents" },
-  { href: "#surfaces", label: "Activation", testId: "nav-link-surfaces" },
-  { href: "#faq", label: "FAQ", testId: "nav-link-faq" },
+  { href: "/#how", label: "How it works", testId: "nav-link-how" },
+  { href: "/#agents", label: "AI Agents", testId: "nav-link-agents" },
+  { href: "/#surfaces", label: "Activation", testId: "nav-link-surfaces" },
+  { href: "/blog", label: "Blog", testId: "nav-link-blog" },
+  { href: "/#faq", label: "FAQ", testId: "nav-link-faq" },
 ];
 
 export default function Navbar() {
@@ -33,7 +34,7 @@ export default function Navbar() {
     >
       <div className="max-w-[1240px] mx-auto px-6 md:px-10 h-16 flex items-center justify-between">
         <a
-          href="#top"
+          href="/#top"
           data-testid="brand-logo"
           className="flex items-center gap-2.5"
         >
@@ -64,7 +65,7 @@ export default function Navbar() {
 
         <div className="hidden md:flex items-center gap-3">
           <a
-            href="#demo"
+            href="/#demo"
             data-testid="nav-book-demo-btn"
             className="btn-primary"
           >
@@ -101,7 +102,7 @@ export default function Navbar() {
               </a>
             ))}
             <a
-              href="#demo"
+              href="/#demo"
               data-testid="nav-book-demo-btn-mobile"
               onClick={() => setOpen(false)}
               className="btn-primary mt-2 justify-center"

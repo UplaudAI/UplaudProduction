@@ -6,6 +6,7 @@ import HowItWorks from "@/components/landing/HowItWorks";
 import TrustGraph from "@/components/landing/TrustGraph";
 import Surfaces from "@/components/landing/Surfaces";
 import Outcomes from "@/components/landing/Outcomes";
+import BlogPreview from "@/components/landing/BlogPreview";
 import FAQ from "@/components/landing/FAQ";
 import LeadForm from "@/components/landing/LeadForm";
 import Footer from "@/components/landing/Footer";
@@ -22,6 +23,7 @@ export default function LandingPage() {
         <TrustGraph />
         <Surfaces />
         <Outcomes />
+        <BlogPreview />
         <FAQ />
         <LeadForm />
       </main>
