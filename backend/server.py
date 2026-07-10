@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Header, Depends
+from fastapi import FastAPI, APIRouter, HTTPException, Header, Depends, File, UploadFile
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -7,6 +7,7 @@ import re
 import asyncio
 import logging
 import resend
+import fal_client
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import List, Optional
@@ -33,6 +34,8 @@ resend.api_key = os.environ.get('RESEND_API_KEY', '')
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
 LEAD_RECIPIENT_EMAIL = os.environ.get('LEAD_RECIPIENT_EMAIL', 'deepthi@uplaud.ai')
 ADMIN_TOKEN = os.environ.get('ADMIN_TOKEN', '')
+if os.environ.get('FAL_KEY'):
+    os.environ['FAL_KEY'] = os.environ['FAL_KEY']  # ensure it's exported for fal_client
 
 # Create the main app without a prefix
 app = FastAPI(title="Uplaud AI API")
@@ -357,6 +360,40 @@ async def admin_list_blog(_: bool = Depends(require_admin), limit: int = 100, of
     )
     posts = await cursor.to_list(limit)
     return {"posts": [_serialize_post(p) for p in posts]}
+
+
+ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif"}
+MAX_IMAGE_BYTES = 8 * 1024 * 1024  # 8 MB
+
+
+@api_router.post("/admin/upload", status_code=201)
+async def upload_image(
+    file: UploadFile = File(...),
+    _: bool = Depends(require_admin),
+):
+    if not os.environ.get('FAL_KEY'):
+        raise HTTPException(status_code=503, detail="Image upload not configured (FAL_KEY missing)")
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status_code=400, detail=f"Unsupported image type: {file.content_type}")
+
+    contents = await file.read()
+    if not contents:
+        raise HTTPException(status_code=400, detail="Empty file")
+    if len(contents) > MAX_IMAGE_BYTES:
+        raise HTTPException(status_code=413, detail="File too large (max 8MB)")
+
+    try:
+        url = await fal_client.upload_async(contents, file.content_type)
+    except Exception as e:
+        logger.error(f"fal.ai upload failed: {e}")
+        raise HTTPException(status_code=502, detail=f"CDN upload failed: {e}")
+
+    return {
+        "url": url,
+        "filename": file.filename,
+        "content_type": file.content_type,
+        "size": len(contents),
+    }
 
 
 # Include the router in the main app

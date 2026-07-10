@@ -1,8 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowUpRight, Loader2, Pencil, Trash2, Plus, LogOut } from "lucide-react";
+import {
+  ArrowUpRight,
+  Loader2,
+  Pencil,
+  Trash2,
+  Plus,
+  LogOut,
+  Upload,
+  ImageIcon,
+} from "lucide-react";
 import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
 
@@ -263,13 +272,12 @@ function AdminBlogDashboard({ onSignOut }) {
                   />
                 </F>
               </div>
-              <F label="Cover image URL" className="mt-4">
-                <input
-                  data-testid="admin-cover"
+              <F label="Cover image" className="mt-4">
+                <CoverUploader
                   value={form.cover_image}
-                  onChange={update("cover_image")}
-                  placeholder="https://..."
-                  className="admin-input"
+                  onChange={(url) =>
+                    setForm((f) => ({ ...f, cover_image: url }))
+                  }
                 />
               </F>
               <F label="Excerpt" required className="mt-4">

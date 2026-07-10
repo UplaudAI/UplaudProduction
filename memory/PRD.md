@@ -24,6 +24,8 @@ Build a high-converting, AI/tech-forward landing page for Uplaud AI. It must com
   - Landing page adds a **"What we're thinking about"** section (auto-hides when no posts).
   - Navbar has a new **Blog** link; nav anchors updated to `/#how`, `/#agents`, etc. so they work from any route.
 - Uses `react-markdown` + `remark-gfm` for content rendering and `@tailwindcss/typography` for reading typography.
+- **Image upload for blog covers** wired via **fal.ai storage** (`POST /api/admin/upload`, X-Admin-Token protected, 8 MB limit, image/* only). Admin form now has a drag-and-drop cover uploader that hits fal.ai and stores the returned CDN URL. `FAL_KEY` lives in `/app/backend/.env`.
+  - **⚠ Note**: fal.ai account is currently at *zero balance* — top up at https://fal.ai/dashboard/billing to enable uploads. Auth, validation and dropzone are all working; only the outbound fal.ai call is blocked by balance.
 - Admin token stored in `/app/backend/.env` as `ADMIN_TOKEN=uplaud-admin-c9f7e2a1` — user should rotate this in production.
 
 ## Backlog / Next
