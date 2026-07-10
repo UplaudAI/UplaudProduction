@@ -16,7 +16,20 @@ Build a high-converting, AI/tech-forward landing page for Uplaud AI. It must com
 - Fonts: Clash Display (headings, Fontshare) + Manrope (body, Google) + JetBrains Mono (accents).
 - Signature color: Electric Emerald `#10b981` on Structural Black `#0a0a0a` / Ivory `#fdfdfb`.
 
-## What's Implemented (updated 2026-12-09 v3)
+## What's Implemented (updated 2026-12-10 v12 — blog module)
+- **Full blog module** added:
+  - Backend: `GET /api/blog`, `GET /api/blog/latest`, `GET /api/blog/{slug}`, and admin `POST /api/blog`, `PUT /api/blog/{slug}`, `DELETE /api/blog/{slug}`, `GET /api/admin/blog` (all protected by `X-Admin-Token` header). Model stored in `db.blog_posts` with slug auto-generation.
+  - Public pages: `/blog` (featured post + card grid), `/blog/:slug` (markdown-rendered post with prose typography, cover image, tag/date/author, CTA to demo).
+  - Admin page: `/admin/blog` — token-gated (stored in `localStorage`), lists all posts including drafts, in-place create/edit/delete form with fields: title, slug (auto), tag, author, cover image URL, excerpt, markdown content, published toggle.
+  - Landing page adds a **"What we're thinking about"** section (auto-hides when no posts).
+  - Navbar has a new **Blog** link; nav anchors updated to `/#how`, `/#agents`, etc. so they work from any route.
+- Uses `react-markdown` + `remark-gfm` for content rendering and `@tailwindcss/typography` for reading typography.
+- Admin token stored in `/app/backend/.env` as `ADMIN_TOKEN=uplaud-admin-c9f7e2a1` — user should rotate this in production.
+
+## Backlog / Next
+- Rotate the admin token.
+- Optional: add image upload (currently cover_image is a URL you paste).
+- Optional: SEO metadata per post (og:image, description).
 - **Rebuilt for the right audience & the right brand.** Copy simplified for education, healthcare, legal and pet care operators (no jargon, no "Trust Graph" language, no MarTech-speak).
 - **Exact Uplaud brand palette** pulled from live uplaud.ai CSS: purple `#6D46C6`, deep purple `#261c4d`, mint `#5EEAD4`, black `#111827`, white. Buttons are clean solid purple with mint hover accents; no more emerald or violet-shine gradients.
 - **Hero rewritten to be punchy & benefit-first**: "More reviews. More referrals. More customers." + a 2-line subhead naming patients / parents / clients / pet parents. Four vertical chips visible directly under the CTAs.
