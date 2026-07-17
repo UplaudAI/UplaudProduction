@@ -28,6 +28,25 @@ Build a high-converting, AI/tech-forward landing page for Uplaud AI. It must com
   - **⚠ Note**: fal.ai account is currently at *zero balance* — top up at https://fal.ai/dashboard/billing to enable uploads. Auth, validation and dropzone are all working; only the outbound fal.ai call is blocked by balance.
 - Admin token stored in `/app/backend/.env` as `ADMIN_TOKEN=uplaud-admin-c9f7e2a1` — user should rotate this in production.
 
+
+## What's Implemented (updated 2026-02-13 v13 — Product MVP Dashboard UI)
+- **Business Dashboard MVP** — frontend-only, mocked (no backend calls added). Vertical showcased: **Fintech / Wealth Management** (Westgate Wealth).
+- Route entry `/business` → **Login page** (mocked auth via localStorage `uplaud_business_auth_v1`). Any email/password accepted. Pre-filled: `hello@westgate.finance` / `demo1234`.
+- After login → zero-state redirect to `/business/import` (first time), or `/business/insights` if `uplaud_business_imported_v1` is true.
+- **DashboardLayout** — 248px sidebar with sections (Overview / Ingest / Agents) + workspace switcher, topbar with search, "New campaign", notifications, user avatar, logout.
+- **6 modules**:
+  1. **Import Reviews** (`/business/import`) — dropzone with animated progressive import, 5 review sources (Google, Trustpilot, Yelp, App Store, CSV), success state + navigation to Insights/Reviews.
+  2. **Reviews** (`/business/reviews`) — filterable table of 12 mocked reviews + Review Drawer with agentic recommendations (Social/Referral/Reddit/Attribution agents) with confidence bars.
+  3. **Social Post Agent** (`/business/social`) — composer with source-review picker, platform (LinkedIn/X/Instagram), tone chips, live preview card, post queue with status pills, generate/schedule/publish actions.
+  4. **Referral Agent** (`/business/referrals`) — 3 campaigns list, funnel stats, auto-drafted per-reviewer WhatsApp/email messages, campaign builder modal.
+  5. **Reddit Agent** (`/business/reddit`) — query + preset chips, 4 opportunity threads with match scores, reply composer anchored to a real review, guardrails card.
+  6. **Insights** (`/business/insights`) — 6 KPI cards, SVG trend chart, funnel visualisation, channel attribution table, "Apply recommendation" CTA.
+  7. **Settings** (`/business/settings`) — profile, notifications toggles, integrations list, "Reset workspace" for demo cycling.
+- **Landing Navbar** now has a subtle "Sign in" link that routes to `/business`.
+- All mocked data lives in `/app/frontend/src/mocks/fintech.js`. Auth/state helpers in `/app/frontend/src/lib/business-storage.js`.
+- **Testing status**: `iteration_6.json` — 100% frontend flows passed after routing fix (React Router v7 splat vs exact-path conflict resolved by converting `/business/*` wrapper to a pathless layout route).
+
+
 ## Backlog / Next
 - Rotate the admin token.
 - Optional: add image upload (currently cover_image is a URL you paste).
