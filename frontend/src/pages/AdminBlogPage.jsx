@@ -437,6 +437,14 @@ function F({ label, hint, required, className = "", children }) {
   );
 }
 
+function friendlyUploadError(err) {
+  const detail = err?.response?.data?.detail;
+  if (typeof detail === "string" && detail.length > 0 && detail.length < 200) {
+    return detail;
+  }
+  return "Upload failed. Please try again.";
+}
+
 async function uploadImage(file) {
   if (!file || !file.type.startsWith("image/")) {
     toast.error("Please choose an image file.");
@@ -469,7 +477,7 @@ function CoverUploader({ value, onChange }) {
         toast.success("Image uploaded");
       }
     } catch (err) {
-      toast.error(err?.response?.data?.detail || "Upload failed");
+      toast.error(friendlyUploadError(err));
     } finally {
       setUploading(false);
     }
