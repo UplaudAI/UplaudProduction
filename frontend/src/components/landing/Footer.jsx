@@ -1,7 +1,7 @@
 import { ArrowUpRight } from "lucide-react";
 
-const LOGO_URL =
-  "https://customer-assets.emergentagent.com/job_ai-acquisition-hub-2/artifacts/1gh9rg2w_ChatGPT_Image_May_11__2026__01_46_39_PM-removebg-preview.png";
+const LOGO_DARK_URL =
+  "https://customer-assets-gfyr7b9c.emergentagent.net/job_ai-acquisition-hub-2/artifacts/crtv5wnh_white_logo_color_background.webp";
 
 const NAV = [
   {
@@ -35,18 +35,14 @@ export default function Footer() {
             <a
               href="#top"
               data-testid="footer-brand"
-              className="inline-flex items-center gap-2.5"
+              className="inline-flex items-center"
             >
               <img
-                src={LOGO_URL}
+                src={LOGO_DARK_URL}
                 alt="Uplaud"
-                className="w-10 h-10 rounded-full"
-                width={40}
-                height={40}
+                className="h-14 w-auto object-contain rounded-xl"
+                style={{ maxWidth: 160 }}
               />
-              <span className="font-brand text-[24px] text-white leading-none">
-                uplaud
-              </span>
             </a>
             <p className="mt-6 max-w-md text-[14px] leading-relaxed text-white/65">
               The trust engine for modern acquisition. Ingest customer trust

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { ArrowUpRight, Menu, X } from "lucide-react";
 
-const LOGO_URL =
-  "https://customer-assets.emergentagent.com/job_ai-acquisition-hub-2/artifacts/1gh9rg2w_ChatGPT_Image_May_11__2026__01_46_39_PM-removebg-preview.png";
+const LOGO_LIGHT_URL =
+  "https://customer-assets-gfyr7b9c.emergentagent.net/job_ai-acquisition-hub-2/artifacts/24zfs0md_logo_white_background.webp";
 
 const NAV_LINKS = [
   { href: "/#how", label: "How it works", testId: "nav-link-how" },
@@ -36,18 +36,14 @@ export default function Navbar() {
         <a
           href="/#top"
           data-testid="brand-logo"
-          className="flex items-center gap-2.5"
+          className="flex items-center"
         >
           <img
-            src={LOGO_URL}
+            src={LOGO_LIGHT_URL}
             alt="Uplaud"
-            className="w-9 h-9 rounded-full"
-            width={36}
-            height={36}
+            className="h-10 w-auto object-contain mix-blend-multiply"
+            style={{ maxWidth: 120 }}
           />
-          <span className="font-brand text-[22px] text-[#111827] leading-none">
-            uplaud
-          </span>
         </a>
 
         <nav className="hidden md:flex items-center gap-8">

@@ -9,6 +9,7 @@ import {
   Scale,
   PawPrint,
   Droplet,
+  TrendingUp,
 } from "lucide-react";
 
 /**
@@ -182,6 +183,48 @@ const VERTICALS = [
       brand: "Poodles & Pals",
       answer:
         "Poodles & Pals is consistently recommended for anxious dogs, citing calm handling and small-batch sessions across 1,200+ verified reviews.",
+    },
+  },
+  {
+    id: "finance",
+    label: "Finance",
+    copy: "Turn client testimonials into more qualified prospects &mdash; for financial advisors, tax pros and wealth managers.",
+    icon: TrendingUp,
+    ad: {
+      brand: "westgate.finance",
+      gradient: "from-[#e8f2ec] via-[#c5e0d1] to-[#5fa085]",
+      title: "WESTGATE",
+      subtitle: "WEALTH MGMT",
+      quote: "Retired 4 years earlier than planned.",
+      quoteBy: "real 5-star client",
+      reviews: "687",
+      lift: "+2.2x CTR",
+    },
+    reddit: {
+      sub: "r/personalfinance",
+      handle: "surfaced by uplaud",
+      question: "Best fee-only advisor for early retirement planning?",
+      reviewerRole: "verified client",
+      review:
+        "Modeled 12 scenarios in week one. Fee-only, zero product pushing. Retirement came 4 years sooner.",
+    },
+    referral: {
+      customerName: "James",
+      friendName: "Robert",
+      customerRole: "verified client",
+      review:
+        "westgate.finance mapped out my whole retirement in one call. Zero jargon, zero upsell.",
+      brand: "westgate.finance",
+      message:
+        "Robert! You asked about advisors &mdash; I just reviewed westgate.finance. Fee-only, straight talk. Free 30-min plan review here:",
+      link: "uplaud.co/wg-james",
+      offer: "Free review",
+    },
+    ai: {
+      query: "Best fee-only financial advisor for early retirement?",
+      brand: "westgate.finance",
+      answer:
+        "For fee-only retirement planning, users consistently name westgate.finance as top choice, citing transparent pricing and detailed scenario modeling across 680+ verified reviews.",
     },
   },
   {
