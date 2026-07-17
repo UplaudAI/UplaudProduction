@@ -1,0 +1,72 @@
+{
+  "summary": "Validated the new inline image upload wiring for the blog MarkdownEditor plus regression on blog and leads endpoints. Backend pytest: 15/15 passing (auth 401 without/with wrong token; 400 for text/plain MIME; 400 for empty file; end-to-end wiring returns 502 as expected due to fal.ai exhausted balance; blog GET/CRUD/leads still work). Frontend Playwright: admin sign-in with 'uplaud-admin-c9f7e2a1' works; the new post form exposes all required testids (admin-content, admin-content-image-btn, admin-content-file, admin-cover-dropzone); the drag/paste/upload hint bar renders under the textarea; setInputFiles on admin-content-file fires POST /api/admin/upload with X-Admin-Token header and multipart/form-data body; on 502 the placeholder '![uploading t.png...]()' is inserted at the cursor then cleanly removed; a sonner error toast IS surfaced. One UX polish issue: the toast title shows the raw Cloudflare 502 HTML page text instead of the intended 'Upload failed' fallback.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "MarkdownEditor / CoverUploader (uploadImage catch handler in AdminBlogPage.jsx)",
+        "issue": "On 502 from /api/admin/upload the ingress (Cloudflare) returns a full HTML 502 page (Content-Type: text/html). The current error handler does `toast.error(err?.response?.data?.detail || 'Upload failed')`. In practice sonner ends up displaying the entire long Cloudflare 'The origin web server returned an invalid or incomplete response to Cloudflare...' string as the toast title — the fallback 'Upload failed' never wins. Users see a scary, dev-flavored message. Recommend: coerce non-string / long / non-JSON detail to a friendly generic (e.g. `const d = err?.response?.data?.detail; toast.error(typeof d === 'string' && d.length < 200 ? d : 'Upload failed — please try again')`). Same fix applies to CoverUploader.",
+        "selector": "[data-sonner-toast][data-type='error']",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verification_details": {
+    "backend_pytest": "15 passed in 29.99s (test_blog_api.py)",
+    "admin_token_used": "uplaud-admin-c9f7e2a1",
+    "admin_upload_wiring": {
+      "request_method": "POST /api/admin/upload",
+      "request_headers": {"x-admin-token": "uplaud-admin-c9f7e2a1", "content-type": "multipart/form-data; boundary=..."},
+      "response_status": 502,
+      "response_content_type": "text/html; charset=UTF-8 (Cloudflare 502 page)",
+      "backend_log_evidence": "fal.ai upload failed: User is locked. Reason: Exhausted balance. Top up your balance at fal.ai/dashboard/billing"
+    },
+    "markdown_editor": {
+      "testids_present": ["admin-content", "admin-content-image-btn", "admin-content-file", "admin-cover-dropzone"],
+      "hint_bar_text": "drag · paste · or upload image",
+      "placeholder_inserted_on_upload": true,
+      "placeholder_removed_on_error": true,
+      "error_toast_surfaced": true,
+      "error_toast_text_polished": false
+    },
+    "curl_checks": {
+      "wrong_token_401": true,
+      "unsupported_mime_400": true
+    },
+    "regression": {
+      "GET /api/blog": "200",
+      "GET /api/blog/latest": "200",
+      "GET /api/blog/{seed}": "200",
+      "POST /api/leads": "201 email_sent=true",
+      "final_post_count": 1
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_blog_api.py",
+    "/app/test_reports/pytest/blog_results.xml"
+  ],
+  "action_items": [
+    "Frontend polish: sanitize the upload error toast in AdminBlogPage.jsx (both MarkdownEditor and CoverUploader) so a 502 with an HTML body does not render the raw Cloudflare 502 page text — validate `err.response.data.detail` is a short JSON string, otherwise fall back to 'Upload failed'."
+  ],
+  "critical_code_review_comments": [
+    "AdminBlogPage.jsx now ~700 lines and mixes admin dashboard + CoverUploader + MarkdownEditor + uploadImage helper. Consider splitting MarkdownEditor and CoverUploader into /components/blog/ for reuse and to stay under the ~700 line guideline.",
+    "uploadImage() is duplicated in behavior across CoverUploader and MarkdownEditor (both call it and both display toast on error). The error handler duplication is where the toast-content bug lives — extracting a single `handleUploadError(err)` helper would prevent future drift.",
+    "server.py /api/admin/upload correctly guards MIME, size and auth, and translates fal.ai failures to 502 with a `detail`. However that detail message is currently never delivered to the client because the ingress rewrites 5xx to an HTML page. Consider mapping fal.ai balance/upstream failures to 424 or 503 (which the ingress may pass through) OR use a 200 envelope like `{ok:false, code:'cdn_error', message:...}` for CDN-side failures so the frontend can show precise UX.",
+    "server.py imports `fal_client` unconditionally at module top; if FAL_KEY is unset, the module still imports fine but silently allows the request path to reach the 503 branch. That's fine, but consider logging a startup warning when FAL_KEY is missing so operators notice immediately.",
+    "The 'admin-content-image-btn' hint bar renders as `drag · paste · oruploadimage` when reading textContent (no spaces around the anchor). Only a minor visual glitch — space adjacency comes from the JSX inline layout — worth double-checking on smaller viewports."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_blog_api.py (added TestAdminUpload class: 5 new cases)",
+    "/app/test_reports/pytest/blog_results.xml (regenerated)",
+    "/app/memory/test_credentials.md (documented admin token + fal.ai state)"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "~93% (12/13 checks; 1 UX polish issue on error toast text)"},
+  "test_credentials": "Admin token: uplaud-admin-c9f7e2a1 (backend/.env ADMIN_TOKEN). fal.ai FAL_KEY set but account balance exhausted → all live uploads return 502.",
+  "seed_data_creation": "None. No test posts persisted. The full-CRUD test creates and deletes 'ai-acquisition-hub-2'. Only the pre-existing seed post 'why-word-of-mouth-converts-5x-better-than-paid-ads' remains.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Blog + admin upload wiring is solid. Regression suite lives in /app/backend/tests/test_blog_api.py (15 tests). To retest the fal.ai path locally, note that the endpoint takes ~30s to return 502 because fal_client retries three CDN targets; use timeouts >= 60s. If the fal.ai balance is topped up, TestAdminUpload::test_upload_valid_png_wiring will start returning 201 (allowed via `assert r.status_code in (201, 502)`).",
+  "rca_of_the_issue": "Toast content bug: FastAPI raises HTTPException(502, detail='CDN upload failed: User is locked...'). The Kubernetes ingress in front of the app (Cloudflare-branded 502 page) replaces the JSON body with a full HTML error page (Content-Type text/html). axios's default transformResponse tries JSON.parse, falls back to keeping the raw HTML string in err.response.data. Somewhere in sonner's rendering pipeline the raw HTML text ends up as the toast title (visible plaintext because the browser strips tags when injected as string). The fallback `|| 'Upload failed'` is effectively dead because `err.response.data.detail` evaluates to something non-null. Mitigation: validate that detail is a short plain-string before showing it; otherwise use a friendly generic message. Note: this bug is only surfaced when the backend truly errors — the wiring, auth and MIME validation themselves are correct."
+}

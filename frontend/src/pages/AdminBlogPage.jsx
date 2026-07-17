@@ -290,12 +290,9 @@ function AdminBlogDashboard({ onSignOut }) {
                 />
               </F>
               <F label="Content (Markdown)" required className="mt-4">
-                <textarea
-                  data-testid="admin-content"
+                <MarkdownEditor
                   value={form.content}
-                  onChange={update("content")}
-                  rows={14}
-                  className="admin-input font-mono text-[13px]"
+                  onChange={(v) => setForm((f) => ({ ...f, content: v }))}
                 />
               </F>
               <label className="mt-4 flex items-center gap-2 text-[13px] text-[#111827]">
@@ -437,5 +434,269 @@ function F({ label, hint, required, className = "", children }) {
       </span>
       {children}
     </label>
+  );
+}
+
+async function uploadImage(file) {
+  if (!file || !file.type.startsWith("image/")) {
+    toast.error("Please choose an image file.");
+    return null;
+  }
+  if (file.size > 8 * 1024 * 1024) {
+    toast.error("Image is over 8MB.");
+    return null;
+  }
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await axios.post(`${API}/admin/upload`, fd, {
+    headers: { ...authHeaders(), "Content-Type": "multipart/form-data" },
+  });
+  return res.data.url;
+}
+
+function CoverUploader({ value, onChange }) {
+  const inputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+
+  const handle = async (file) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const url = await uploadImage(file);
+      if (url) {
+        onChange(url);
+        toast.success("Image uploaded");
+      }
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="mt-2">
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOver(false);
+          const file = e.dataTransfer?.files?.[0];
+          if (file) handle(file);
+        }}
+        onClick={() => inputRef.current?.click()}
+        data-testid="admin-cover-dropzone"
+        className={`cursor-pointer rounded-xl border-2 border-dashed p-4 flex items-center gap-4 transition-colors ${
+          dragOver
+            ? "border-[#6d46c6] bg-[#f5f3ff]"
+            : "border-[#d9d1ee] bg-white hover:border-[#6d46c6]"
+        }`}
+      >
+        {value ? (
+          <div
+            className="w-24 h-16 rounded-lg bg-cover bg-center border border-[#eeeaf6]"
+            style={{ backgroundImage: `url("${value}")` }}
+          />
+        ) : (
+          <div className="w-24 h-16 rounded-lg bg-[#faf9ff] border border-[#eeeaf6] flex items-center justify-center text-[#9ca3af]">
+            <ImageIcon className="w-5 h-5" strokeWidth={1.5} />
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="text-[13px] font-medium text-[#111827]">
+            {value ? "Replace cover image" : "Drag or click to upload"}
+          </div>
+          <div className="text-[11px] text-[#4b5563] truncate">
+            {value || "PNG, JPG, WebP · up to 8MB · hosted on fal.ai CDN"}
+          </div>
+        </div>
+        <button
+          type="button"
+          data-testid="admin-cover-upload-btn"
+          disabled={uploading}
+          className="btn-secondary shrink-0 disabled:opacity-70"
+          onClick={(e) => {
+            e.stopPropagation();
+            inputRef.current?.click();
+          }}
+        >
+          {uploading ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Uploading
+            </>
+          ) : (
+            <>
+              <Upload className="w-4 h-4" strokeWidth={1.75} />
+              {value ? "Replace" : "Upload"}
+            </>
+          )}
+        </button>
+        <input
+          ref={inputRef}
+          type="file"
+          data-testid="admin-cover-file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          className="hidden"
+          onChange={(e) => handle(e.target.files?.[0])}
+        />
+      </div>
+      {value && (
+        <button
+          type="button"
+          onClick={() => onChange("")}
+          data-testid="admin-cover-clear"
+          className="mt-2 text-[11px] font-mono uppercase tracking-widest text-[#4b5563] hover:text-red-500"
+        >
+          Remove cover
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Markdown editor with inline image upload via drag-drop or paste.
+ * Uploaded images become Markdown `![alt](url)` at the cursor position.
+ */
+function MarkdownEditor({ value, onChange }) {
+  const taRef = useRef(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef(null);
+
+  const insertAtCursor = (text) => {
+    const ta = taRef.current;
+    if (!ta) {
+      onChange((value || "") + text);
+      return;
+    }
+    const start = ta.selectionStart ?? value.length;
+    const end = ta.selectionEnd ?? value.length;
+    const next = (value || "").slice(0, start) + text + (value || "").slice(end);
+    onChange(next);
+    // Restore cursor position after React updates
+    requestAnimationFrame(() => {
+      const pos = start + text.length;
+      ta.focus();
+      ta.setSelectionRange(pos, pos);
+    });
+  };
+
+  const handleFile = async (file, altHint = "") => {
+    if (!file) return;
+    setUploading(true);
+    // insert a placeholder so authors see progress inline
+    const placeholder = `![uploading ${file.name}...]()`;
+    insertAtCursor(placeholder);
+    try {
+      const url = await uploadImage(file);
+      const currentVal = taRef.current?.value ?? "";
+      if (url) {
+        const alt = altHint || file.name.replace(/\.[^.]+$/, "");
+        const md = `![${alt}](${url})`;
+        onChange(currentVal.replace(placeholder, md));
+        toast.success("Image inserted");
+      } else {
+        onChange(currentVal.replace(placeholder, ""));
+      }
+    } catch (err) {
+      const currentVal = taRef.current?.value ?? "";
+      onChange(currentVal.replace(placeholder, ""));
+      toast.error(err?.response?.data?.detail || "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const onDrop = (e) => {
+    const files = Array.from(e.dataTransfer?.files || []).filter((f) =>
+      f.type.startsWith("image/")
+    );
+    if (files.length === 0) return;
+    e.preventDefault();
+    setDragOver(false);
+    files.forEach((f) => handleFile(f));
+  };
+
+  const onPaste = (e) => {
+    const items = Array.from(e.clipboardData?.items || []);
+    const imgs = items
+      .filter((i) => i.type.startsWith("image/"))
+      .map((i) => i.getAsFile())
+      .filter(Boolean);
+    if (imgs.length === 0) return;
+    e.preventDefault();
+    imgs.forEach((f) => handleFile(f, "pasted-image"));
+  };
+
+  return (
+    <div className="mt-2">
+      <div
+        onDragOver={(e) => {
+          if (Array.from(e.dataTransfer?.types || []).includes("Files")) {
+            e.preventDefault();
+            setDragOver(true);
+          }
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={onDrop}
+        className={`relative rounded-xl border transition-colors ${
+          dragOver ? "border-[#6d46c6] bg-[#f5f3ff]" : "border-[#eeeaf6] bg-white"
+        }`}
+      >
+        <textarea
+          ref={taRef}
+          data-testid="admin-content"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onPaste={onPaste}
+          rows={16}
+          spellCheck={true}
+          className="w-full bg-transparent rounded-t-xl px-3 py-3 font-mono text-[13px] text-[#111827] outline-none resize-y"
+          placeholder={
+            "Write your post in Markdown. Drag or paste images anywhere in the text to upload and embed them."
+          }
+        />
+        <div className="flex items-center justify-between gap-3 border-t border-[#eeeaf6] px-3 py-2 rounded-b-xl bg-[#faf9ff]">
+          <div className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-widest text-[#4b5563]">
+            <Upload className="w-3.5 h-3.5" strokeWidth={1.75} />
+            drag &middot; paste &middot; or
+            <button
+              type="button"
+              data-testid="admin-content-image-btn"
+              onClick={() => fileRef.current?.click()}
+              className="text-[#6d46c6] hover:underline normal-case tracking-normal"
+            >
+              upload
+            </button>
+            image
+          </div>
+          {uploading && (
+            <span className="text-[11px] text-[#6d46c6] font-mono flex items-center gap-1.5">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              uploading
+            </span>
+          )}
+        </div>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          data-testid="admin-content-file"
+          className="hidden"
+          multiple
+          onChange={(e) => {
+            Array.from(e.target.files || []).forEach((f) => handleFile(f));
+            e.target.value = "";
+          }}
+        />
+      </div>
+    </div>
   );
 }

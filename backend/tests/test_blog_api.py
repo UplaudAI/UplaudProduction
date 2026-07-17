@@ -154,3 +154,83 @@ class TestLeadsRegression:
         data = r.json()
         assert data.get("email_sent") is True, f"Expected email_sent=true, got: {data}"
         assert "id" in data
+
+
+# --- Admin Upload endpoint (fal.ai balance is exhausted; wiring / auth / MIME only) ---
+class TestAdminUpload:
+    def _png_bytes(self):
+        # 1x1 transparent PNG
+        import base64
+        return base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+        )
+
+    def test_upload_without_token_401(self):
+        r = requests.post(
+            f"{BASE_URL}/api/admin/upload",
+            files={"file": ("t.png", self._png_bytes(), "image/png")},
+        )
+        assert r.status_code == 401, f"expected 401, got {r.status_code} {r.text}"
+
+    def test_upload_wrong_token_401(self):
+        r = requests.post(
+            f"{BASE_URL}/api/admin/upload",
+            headers={"X-Admin-Token": "totally-wrong"},
+            files={"file": ("t.png", self._png_bytes(), "image/png")},
+        )
+        assert r.status_code == 401, f"expected 401, got {r.status_code} {r.text}"
+
+    def test_upload_bad_mime_400(self):
+        r = requests.post(
+            f"{BASE_URL}/api/admin/upload",
+            headers={"X-Admin-Token": ADMIN_TOKEN},
+            files={"file": ("t.txt", b"hello world", "text/plain")},
+        )
+        assert r.status_code == 400, f"expected 400 for text/plain, got {r.status_code} {r.text}"
+        detail = (r.json() or {}).get("detail", "")
+        assert "Unsupported" in detail or "unsupported" in detail.lower()
+
+    def test_upload_empty_image_400(self):
+        r = requests.post(
+            f"{BASE_URL}/api/admin/upload",
+            headers={"X-Admin-Token": ADMIN_TOKEN},
+            files={"file": ("empty.png", b"", "image/png")},
+        )
+        assert r.status_code == 400, f"expected 400 for empty file, got {r.status_code} {r.text}"
+
+    def test_upload_valid_png_wiring(self):
+        """
+        With a valid PNG + correct token + allowed MIME, the request should reach fal.ai.
+        Because the fal.ai account has zero balance, expected result is 502 (CDN upload failed).
+        Any 2xx is also acceptable (would mean balance was topped up).
+        We assert that we did NOT get 400/401/413/503 — meaning our wiring/auth/validation
+        passed and the failure (if any) is strictly upstream.
+        """
+        r = requests.post(
+            f"{BASE_URL}/api/admin/upload",
+            headers={"X-Admin-Token": ADMIN_TOKEN},
+            files={"file": ("t.png", self._png_bytes(), "image/png")},
+            timeout=120,
+        )
+        assert r.status_code not in (400, 401, 413, 503), (
+            f"Wiring broken: {r.status_code} {r.text}"
+        )
+        assert r.status_code in (201, 502), (
+            f"Unexpected status: {r.status_code} {r.text}"
+        )
+        if r.status_code == 502:
+            # Confirm the failure was routed through fal.ai path.
+            # Note: response body may be an HTML error page from the ingress rather than the
+            # backend's JSON detail, so we accept either shape.
+            body_text = r.text or ""
+            try:
+                detail = (r.json() or {}).get("detail", "")
+            except Exception:
+                detail = body_text
+            assert (
+                "CDN upload failed" in detail
+                or "fal" in detail.lower()
+                or "502" in body_text
+                or "bad gateway" in body_text.lower()
+            ), f"expected fal.ai/CDN error on 502, got: {detail!r} / body={body_text[:200]!r}"
+
