@@ -61,6 +61,13 @@ export default function Navbar() {
 
         <div className="hidden md:flex items-center gap-3">
           <a
+            href="/business"
+            data-testid="nav-sign-in-link"
+            className="text-[13px] text-[#4b5563] hover:text-[#6d46c6] transition-colors"
+          >
+            Sign in
+          </a>
+          <a
             href="/#demo"
             data-testid="nav-book-demo-btn"
             className="btn-primary"
@@ -97,6 +104,14 @@ export default function Navbar() {
                 {l.label}
               </a>
             ))}
+            <a
+              href="/business"
+              data-testid="nav-sign-in-link-mobile"
+              onClick={() => setOpen(false)}
+              className="text-[14px] text-[#111827] py-2"
+            >
+              Sign in
+            </a>
             <a
               href="/#demo"
               data-testid="nav-book-demo-btn-mobile"
