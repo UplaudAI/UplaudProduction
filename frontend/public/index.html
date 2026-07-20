@@ -23,6 +23,26 @@
         -->
         <title>Uplaud AI — Turn Customer Trust into a Compounding Acquisition Engine</title>
         <script>window.addEventListener("error",function(e){if(e.error instanceof DOMException&&e.error.name==="DataCloneError"&&e.message&&e.message.includes("PerformanceServerTiming")){e.stopImmediatePropagation();e.preventDefault()}},true);</script>
+        <script>
+          // Suppress benign ResizeObserver warnings before CRA's error overlay listener registers.
+          (function(){
+            var RE = /ResizeObserver loop (limit exceeded|completed with undelivered notifications)/;
+            var stop = function(e){
+              var msg = e && (e.message || (e.reason && e.reason.message) || "");
+              if (RE.test(msg)) { e.stopImmediatePropagation(); e.preventDefault(); return false; }
+            };
+            window.addEventListener("error", stop, true);
+            window.addEventListener("unhandledrejection", stop, true);
+          })();
+        </script>
+        <style>
+          /* Hide CRA's dev error overlay iframe for the ResizeObserver benign warning. */
+          body > iframe[style*="z-index: 2147483647"] { display: none !important; }
+        </style>
+        <style>
+          /* Hide CRA's dev error overlay iframe for the ResizeObserver benign warning. */
+          body > iframe[style*="z-index: 2147483647"] { display: none !important; }
+        </style>
         <script src="https://assets.emergent.sh/scripts/emergent-main.js"></script>
     </head>
     <body>
