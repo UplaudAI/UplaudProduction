@@ -13,6 +13,7 @@ import SocialAgentPage from "@/pages/business/SocialAgentPage";
 import ReferralAgentPage from "@/pages/business/ReferralAgentPage";
 import RedditAgentPage from "@/pages/business/RedditAgentPage";
 import InsightsPage from "@/pages/business/InsightsPage";
+import RoiSimulatorPage from "@/pages/business/RoiSimulatorPage";
 import SettingsPage from "@/pages/business/SettingsPage";
 import InteractionsPage from "@/pages/business/InteractionsPage";
 import ConversationsPage from "@/pages/business/ConversationsPage";
@@ -38,6 +39,7 @@ function App() {
             <Route path="/business/referrals" element={<ReferralAgentPage />} />
             <Route path="/business/reddit" element={<RedditAgentPage />} />
             <Route path="/business/insights" element={<InsightsPage />} />
+            <Route path="/business/roi-simulator" element={<RoiSimulatorPage />} />
             <Route path="/business/settings" element={<SettingsPage />} />
           </Route>
         </Routes>

@@ -7,6 +7,7 @@ import {
   Users,
   Ghost,
   LineChart,
+  Calculator,
   Settings,
   Bell,
   LogOut,
@@ -25,6 +26,7 @@ const NAV = [
     section: "Business Impact",
     items: [
       { to: "/business/insights", label: "Growth Overview", icon: LineChart, testId: "nav-insights" },
+      { to: "/business/roi-simulator", label: "ROI Simulator", icon: Calculator, testId: "nav-roi" },
       { to: "/business/referrals", label: "Warm Pipeline", icon: Users, testId: "nav-referrals" },
     ],
   },
@@ -185,6 +187,7 @@ function Topbar({ user, pathname }) {
 
   const titles = {
     "/business/insights": "Growth Overview",
+    "/business/roi-simulator": "ROI Simulator",
     "/business/import": "Data Sources",
     "/business/interactions": "Untapped Opportunities",
     "/business/conversations": "Growth Signals",

@@ -29,6 +29,20 @@ Build a high-converting, AI/tech-forward landing page for Uplaud AI. It must com
 - Admin token stored in `/app/backend/.env` as `ADMIN_TOKEN=uplaud-admin-c9f7e2a1` — user should rotate this in production.
 
 
+## What's Implemented (updated 2026-02-13 v19 — ROI Simulator for PayRewards board deck)
+- **NEW `/business/roi-simulator`** — a Status Quo vs With Uplaud side-by-side projection tool built for the PayRewards demo.
+  - **Sidebar entry** added under `Business Impact` between Growth Overview and Warm Pipeline (nav-roi test id, Calculator icon).
+  - **11 editable inputs** across two groups:
+    - *Your paid engine today*: demos attended/mo, demo→customer %, paid CAC, ACV, gross margin, annual retention.
+    - *Uplaud lift assumptions*: capture rate, approval rate, intros per testimonial, warm→customer, Uplaud CAC.
+  - **Live model** recomputes every metric on any change: monthly customers, new ARR/yr, blended CAC, LTV/CAC, payback (months).
+  - **Two comparison cards** side-by-side: Status Quo (calm grey) vs With Uplaud (mint gradient · shadow · Sparkles). Uplaud card also surfaces testimonials/mo, warm intros/mo, Uplaud-sourced customers/mo.
+  - **Boardroom deltas table** with sq → up + delta chip (+customers, +ARR, -CAC%, +LTV/CAC, -payback months).
+  - **"Ready for slide 3"** dark purple summary card with 3 headline stats and a one-line narrative (`+$X ARR · +N customers · Y% lower CAC`), plus **Copy summary** button that writes a slide-paste-ready block to clipboard.
+  - **Reset to PayRewards defaults** button in the toolbar.
+- **Testing status**: Smoke-tested end-to-end via screenshot tool. Editing an input from 641 → 1,200 demos live-updated deltas from +246 → +460 customers and +$4.52M → +$8.46M ARR. Copy button fired sonner toast confirming clipboard write.
+
+
 ## What's Implemented (updated 2026-02-13 v18 — Editable funnel + insight tips + IA reorder)
 - **Growth Overview redesigned to feel calmer and more designed**:
   - Value Chain preserved (already redesigned in v17)

@@ -1799,3 +1799,108 @@ export const WARM_LEADS = [
   },
 ];
 
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  ROI SIMULATOR — Status Quo vs With Uplaud (12-month projection)          */
+/* ────────────────────────────────────────────────────────────────────────── */
+export const ROI_SIMULATOR_DEFAULTS = {
+  paid: {
+    demosAttendedMo: 641,
+    demoToCustomer: 3.3,        // %
+    paidCac: 1204,              // $
+    acv: 18400,                 // $
+    grossMargin: 68,            // %
+    retention: 88,              // %
+  },
+  uplaud: {
+    extractionRate: 60,         // % of demos activated → feedback captured
+    approvalRate: 44,           // % of feedback approved as testimonials
+    introsPerTestimonial: 0.55, // warm intros produced per approved testimonial
+    warmToCustomer: 22,         // %
+    uplaudCac: 186,             // $
+  },
+};
+
+export const ROI_INPUT_LABELS = {
+  paid: [
+    {
+      key: "demosAttendedMo",
+      label: "Demos attended / month",
+      hint: "Meta + Google → demo booked & attended",
+      step: 10,
+      suffix: "",
+    },
+    {
+      key: "demoToCustomer",
+      label: "Demo → paid customer",
+      hint: "Your current close rate on paid demos",
+      step: 0.1,
+      suffix: "%",
+    },
+    {
+      key: "paidCac",
+      label: "Paid CAC",
+      hint: "Blended cost per paid-acquired customer",
+      step: 25,
+      prefix: "$",
+    },
+    {
+      key: "acv",
+      label: "Annual contract value",
+      hint: "ACV of a PayRewards customer",
+      step: 500,
+      prefix: "$",
+    },
+    {
+      key: "grossMargin",
+      label: "Gross margin",
+      hint: "Used in LTV & payback",
+      step: 1,
+      suffix: "%",
+    },
+    {
+      key: "retention",
+      label: "Annual retention",
+      hint: "Used in LTV. 88% ≈ 12% annual churn",
+      step: 1,
+      suffix: "%",
+    },
+  ],
+  uplaud: [
+    {
+      key: "extractionRate",
+      label: "Feedback capture rate",
+      hint: "% of demo attendees Uplaud activates",
+      step: 1,
+      suffix: "%",
+    },
+    {
+      key: "approvalRate",
+      label: "Testimonial approval",
+      hint: "% of feedback approved by customer",
+      step: 1,
+      suffix: "%",
+    },
+    {
+      key: "introsPerTestimonial",
+      label: "Warm intros per testimonial",
+      hint: "Referral yield of an approved testimonial",
+      step: 0.05,
+      suffix: "",
+    },
+    {
+      key: "warmToCustomer",
+      label: "Warm intro → customer",
+      hint: "Historically 3.1× your paid close rate",
+      step: 1,
+      suffix: "%",
+    },
+    {
+      key: "uplaudCac",
+      label: "Uplaud CAC",
+      hint: "Blended CAC on the referral cohort",
+      step: 10,
+      prefix: "$",
+    },
+  ],
+};
