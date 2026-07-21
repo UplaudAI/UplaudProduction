@@ -104,7 +104,7 @@ export const JOURNEY_STAGES = [
     count: 14,
     delta: "+4",
     color: "#5eead4",
-    hint: "NPS ≥ 9 · shared story",
+    hint: "NPS ≥ 9 · shared testimonial",
     opportunity: true,
     opportunityText: "6 happy customers not yet activated",
   },
@@ -122,7 +122,7 @@ export const OPPORTUNITIES = [
     stage: "Growth Activation",
     title: "253 demo attendees haven't shared feedback",
     subtitle: "Auto-drafted feedback prompts ready — average response rate 61%",
-    impact: "~154 signals · ~38 stories · ~$412k pipeline lift",
+    impact: "~154 signals · ~38 testimonials · ~$412k pipeline lift",
     cta: "Send feedback prompts",
     ctaPath: "/business/interactions",
   },
@@ -269,7 +269,7 @@ export const INTERACTIONS = [
     source: "Podcast attribution",
     state: "approved",
     signalScore: 0.92,
-    note: "Loved onboarding. Approved a full customer story quote.",
+    note: "Loved onboarding. Approved a full customer testimonial quote.",
   },
   {
     id: "in_006",
@@ -297,7 +297,7 @@ export const INTERACTIONS = [
     source: "Renewal CS motion",
     state: "amplified",
     signalScore: 0.9,
-    note: "Renewed 2yr. Story amplified on LinkedIn + Reddit.",
+    note: "Renewed 2yr. Testimonial amplified on LinkedIn + Reddit.",
   },
   {
     id: "in_008",
@@ -339,7 +339,7 @@ export const INTERACTIONS = [
     source: "Referral from customer",
     state: "feedback_received",
     signalScore: 0.89,
-    note: "Impressed with the vendor lookup. Feedback captured, story draft pending.",
+    note: "Impressed with the vendor lookup. Feedback captured, testimonial draft pending.",
   },
 ];
 
@@ -887,7 +887,7 @@ export const AGENT_RECOMMENDATIONS = {
     { id: "r2", agent: "attribution", label: "Meta lookalike from SaaS CFOs", confidence: 0.74 },
   ],
   rv_007: [
-    { id: "r1", agent: "social", label: "Healthcare CFO story · Instagram", confidence: 0.91 },
+    { id: "r1", agent: "social", label: "Healthcare CFO testimonial · Instagram", confidence: 0.91 },
     { id: "r2", agent: "referral", label: "Refer-a-CFO (healthcare)", confidence: 0.87 },
   ],
 };
@@ -926,11 +926,11 @@ export const SOCIAL_POSTS = [
     id: "sp_003",
     reviewId: "rv_004",
     platform: "linkedin",
-    tone: "founder-story",
+    tone: "founder-testimonial",
     status: "published",
     scheduled: "2026-02-01T14:00:00Z",
     body:
-      `Solo founder story ↓\n\nJames W. @ Kettle & Fire Coffee onboarded in less time than a coffee tasting. Every roast batch he ships now pays for itself in Amex points.\n\nSmall-business AP shouldn't be this fun. But here we are.`,
+      `Solo founder testimonial ↓\n\nJames W. @ Kettle & Fire Coffee onboarded in less time than a coffee tasting. Every roast batch he ships now pays for itself in Amex points.\n\nSmall-business AP shouldn't be this fun. But here we are.`,
     hashtags: ["#founders", "#smallbusiness"],
     predictedReach: "22.8k",
     predictedEngagement: "5.9%",
@@ -1061,7 +1061,7 @@ export const REDDIT_THREADS = [
     suggestedReply: {
       reviewId: "rv_005",
       body:
-        "PayRewards has a decent nonprofit story — the rewards ledger is fully separated and auditable. Palermo Print (2yr customer) uses the export for their board packet. Might fit your restricted-fund need.",
+        "PayRewards has a decent nonprofit angle — the rewards ledger is fully separated and auditable. Palermo Print (2yr customer) uses the export for their board packet. Might fit your restricted-fund need.",
       tone: "empathetic",
     },
   },
@@ -1080,7 +1080,7 @@ export const KPIS = {
 };
 
 export const CHANNEL_ATTRIBUTION = [
-  { channel: "Growth Activation (Demo → Story)", touches: 641, converted: 14, revenue: "$412,800", cac: "$186" },
+  { channel: "Growth Activation (Demo → Testimonial)", touches: 641, converted: 14, revenue: "$412,800", cac: "$186" },
   { channel: "Referral Agent", touches: 152, converted: 6, revenue: "$118,400", cac: "$210" },
   { channel: "Social Amplification", touches: 1284, converted: 11, revenue: "$284,100", cac: "$412" },
   { channel: "Reddit Insert", touches: 89, converted: 5, revenue: "$92,800", cac: "$168" },
@@ -1191,7 +1191,7 @@ export const PAGE_OUTCOMES = {
     },
   },
   social: {
-    eyebrow: "Story Amplification",
+    eyebrow: "Testimonial Amplification",
     question: "How much qualified reach did approved testimonials generate?",
     northStar: {
       label: "Qualified impressions from testimonials",
@@ -1252,7 +1252,7 @@ export const PAGE_OUTCOMES = {
 export const GROWTH_LOOPS = {
   preCustomer: {
     title: "Pre-Customer Growth Loop",
-    subtitle: "Paid Ads → Demo → Feedback → Story → Referrals → New Prospects",
+    subtitle: "Paid Ads → Demo → Feedback → Testimonial → Referrals → New Prospects",
     revenue: "$531,200",
     revenueLabel: "Pipeline generated",
     cac: "$186",

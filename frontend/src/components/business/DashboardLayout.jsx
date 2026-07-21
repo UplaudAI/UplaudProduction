@@ -44,7 +44,7 @@ const NAV = [
   {
     section: "Amplification",
     items: [
-      { to: "/business/social", label: "Story Amplification", icon: Megaphone, testId: "nav-social" },
+      { to: "/business/social", label: "Testimonial Amplification", icon: Megaphone, testId: "nav-social" },
       { to: "/business/reddit", label: "High-Intent Demand", icon: Ghost, testId: "nav-reddit" },
     ],
   },
@@ -189,7 +189,7 @@ function Topbar({ user, pathname }) {
     "/business/interactions": "Untapped Opportunities",
     "/business/conversations": "Customer Signals",
     "/business/reviews": "Trust Assets",
-    "/business/social": "Story Amplification",
+    "/business/social": "Testimonial Amplification",
     "/business/referrals": "Warm Pipeline",
     "/business/reddit": "High-Intent Demand",
     "/business/settings": "Settings",

@@ -24,7 +24,7 @@ const PLATFORMS = [
   { id: "instagram", label: "Instagram", icon: Instagram, color: "#e1306c" },
 ];
 
-const TONES = ["professional", "punchy", "founder-story", "data-forward", "warm"];
+const TONES = ["professional", "punchy", "founder-testimonial", "data-forward", "warm"];
 
 const STATUS_META = {
   draft: { label: "Draft", color: "text-[#6d46c6]", bg: "bg-[#f5f3ff]", icon: Pencil },
@@ -73,7 +73,7 @@ export default function SocialAgentPage() {
         northStar={PAGE_OUTCOMES.social.northStar}
         action={PAGE_OUTCOMES.social.action}
         onAction={() =>
-          toast.success("Marcus B.'s story amplified", {
+          toast.success("Marcus B.'s testimonial amplified", {
             description: "Scheduled for LinkedIn 9am + X 11am ET.",
           })
         }
@@ -86,7 +86,7 @@ export default function SocialAgentPage() {
             Compose from a customer testimonial
           </h2>
           <p className="text-[12.5px] text-[#9ca3af] mt-1">
-            Every post is anchored to a real, approved story.
+            Every post is anchored to a real, approved testimonial.
           </p>
         </div>
         <button
@@ -413,7 +413,7 @@ function draftFor(review, platform, tone) {
     return `"${trim(review.body, 90)}"\n\n— ${attrib}, ${review.location}\n\nAt Westgate, we don't sell products. We rebuild plans.\n\nWant to see what fee-only really looks like? →`;
   if (platform === "x")
     return `"${trim(review.body, 140)}"\n\n— ${attrib}\n\nFee-only. Flat rate. Zero product pushing.`;
-  return `${attrib}'s story ↓\n\n"${trim(review.body, 110)}"\n\nWhat a real plan looks like. Link in bio.`;
+  return `${attrib}'s testimonial ↓\n\n"${trim(review.body, 110)}"\n\nWhat a real plan looks like. Link in bio.`;
 }
 
 function trim(str, n) {

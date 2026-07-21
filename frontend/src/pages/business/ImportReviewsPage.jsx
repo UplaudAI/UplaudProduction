@@ -170,7 +170,7 @@ export default function ImportReviewsPage() {
                 </h3>
                 <p className="mt-2 text-[13.5px] text-[#4b5563]">
                   Agents have flagged <b>253 demo attendees</b> awaiting
-                  activation and <b>38 stories ready for approval</b>.
+                  activation and <b>38 testimonials ready for approval</b>.
                 </p>
                 <div className="mt-6 flex items-center justify-center gap-3">
                   <button

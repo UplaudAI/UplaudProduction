@@ -357,7 +357,7 @@ function ConversationDetail({ conversation: c }) {
         </div>
       </div>
 
-      {/* Drafted story + approval flow */}
+      {/* Drafted testimonial + approval flow */}
       {c.draftedStory ? (
         <div className="rounded-2xl border border-[#6d46c6]/25 bg-white p-6 relative overflow-hidden">
           <div
