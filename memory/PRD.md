@@ -29,6 +29,17 @@ Build a high-converting, AI/tech-forward landing page for Uplaud AI. It must com
 - Admin token stored in `/app/backend/.env` as `ADMIN_TOKEN=uplaud-admin-c9f7e2a1` — user should rotate this in production.
 
 
+## What's Implemented (updated 2026-02-13 v18 — Editable funnel + insight tips + IA reorder)
+- **Growth Overview redesigned to feel calmer and more designed**:
+  - Value Chain preserved (already redesigned in v17)
+  - **New editable funnel**: click "Edit funnel" → every stage's People count becomes an editable input. Conversion percentages recalc live so a demo can plug in PayRewards' real numbers.
+  - **Per-stage Uplaud tip** on every funnel row (Lightbulb icon + actionable insight). Examples: *"Move the incentive AFTER the referral campaign launch — historically lifts feedback-share by 22%"*, *"Send approval reminder Day 3. 68% of eventual approvals happen on the 3-day nudge"*.
+- **Sidebar reorder**: `Growth Signals` moved ABOVE `Untapped Opportunities` under Pre-Customer Growth.
+- **Conversation detail reorder**: the drafted customer testimonial block now renders **above** the AI-extracted signals grid (CSS `order` on flex-col section).
+- **Tests**: compile clean, funnel edit-mode + input change smoke-tested successfully.
+
+
+
 ## What's Implemented (updated 2026-02-13 v17 — Modern UX + Funnel + Warm Pipeline agentic + IA polish)
 - **Value Chain reimagined as modern product UI**: numbered nodes on a gradient rail (purple → mint), conversion pills below each stage, calm bordered outcome bar. No more hand-drawn feel.
 - **Sophisticated funnel is back**: colour-coded by phase (Acquisition/Activation/Pipeline/Revenue/Advocacy), trapezoidal bars with inline conversion %, delta chips on the right, opportunity annotations, and a phase legend footer.

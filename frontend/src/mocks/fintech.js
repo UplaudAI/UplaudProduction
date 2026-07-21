@@ -29,6 +29,7 @@ export const JOURNEY_STAGES = [
     delta: "+8.2%",
     color: "#e2d9f5",
     hint: "Meta + Google Ads",
+    tip: "Rewrite headline creative with \"pays for itself\" — projected 1.7× CTR based on your conversion history.",
   },
   {
     id: "demo_booked",
@@ -38,6 +39,7 @@ export const JOURNEY_STAGES = [
     delta: "+14%",
     color: "#d9c9f2",
     hint: "1.8% booked-to-clicked",
+    tip: "Bookings peak on Tuesdays. Rebalance ad spend +18% Mon/Tue to lift booked-to-clicked.",
   },
   {
     id: "demo_attended",
@@ -47,6 +49,7 @@ export const JOURNEY_STAGES = [
     delta: "+11%",
     color: "#c9b3ee",
     hint: "72% show-up rate",
+    tip: "Send calendar reminders + a 30-sec teaser video 24h prior. Historical lift: +9% show-up.",
   },
   {
     id: "feedback_captured",
@@ -56,6 +59,7 @@ export const JOURNEY_STAGES = [
     delta: "+42%",
     color: "#b394e6",
     hint: "60% of attendees · Uplaud",
+    tip: "Move the incentive AFTER the referral campaign launch — historically lifts feedback-share by 22%.",
     opportunity: true,
     opportunityText: "253 attendees haven't shared feedback yet",
   },
@@ -67,6 +71,7 @@ export const JOURNEY_STAGES = [
     delta: "+38%",
     color: "#8f66d8",
     hint: "44% of captured · Uplaud",
+    tip: "Send approval reminder Day 3. 68% of eventual approvals happen on the 3-day nudge.",
     opportunity: true,
     opportunityText: "38 drafts waiting for customer approval",
   },
@@ -78,6 +83,7 @@ export const JOURNEY_STAGES = [
     delta: "+27%",
     color: "#6d46c6",
     hint: "Referral Agent",
+    tip: "Seed campaigns to advocates with ≥2 mutual LinkedIn connections — converts 4.2× baseline.",
   },
   {
     id: "qualified_ops",
@@ -87,6 +93,7 @@ export const JOURNEY_STAGES = [
     delta: "+22%",
     color: "#5b32b2",
     hint: "SQL created in HubSpot",
+    tip: "Warm-intro SQLs convert 3.1× faster. Auto-prioritise these in your AE queue.",
   },
   {
     id: "customers",
@@ -96,6 +103,7 @@ export const JOURNEY_STAGES = [
     delta: "+5",
     color: "#4a1f9a",
     hint: "New logos MTD",
+    tip: "Trigger onboarding testimonial capture at Day 14 — highest-quality quotes come in early.",
   },
   {
     id: "advocates",
@@ -105,6 +113,7 @@ export const JOURNEY_STAGES = [
     delta: "+4",
     color: "#5eead4",
     hint: "NPS ≥ 9 · shared testimonial",
+    tip: "Re-invite advocates for a fresh testimonial every 90 days — quotes decay in ad performance after 60d.",
     opportunity: true,
     opportunityText: "6 happy customers not yet activated",
   },

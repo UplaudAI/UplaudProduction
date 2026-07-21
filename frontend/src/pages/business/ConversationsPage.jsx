@@ -262,7 +262,7 @@ export default function ConversationsPage() {
         </aside>
 
         {/* Detail */}
-        <section className="lg:col-span-8 space-y-5">
+        <section className="lg:col-span-8 space-y-5 flex flex-col">
           {selected && <ConversationDetail conversation={selected} />}
         </section>
       </div>
@@ -323,7 +323,7 @@ function ConversationDetail({ conversation: c }) {
   return (
     <>
       {/* Header card */}
-      <div className="rounded-2xl border border-[#eeeaf6] bg-white p-6">
+      <div className="rounded-2xl border border-[#eeeaf6] bg-white p-6 order-1">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#9ca3af]">
@@ -359,7 +359,7 @@ function ConversationDetail({ conversation: c }) {
       </div>
 
       {/* Extracted signals */}
-      <div className="rounded-2xl border border-[#eeeaf6] bg-white p-6">
+      <div className="rounded-2xl border border-[#eeeaf6] bg-white p-6 order-3">
         <div className="flex items-center gap-2 mb-5">
           <Sparkles className="w-4 h-4 text-[#6d46c6]" strokeWidth={1.75} />
           <div className="text-[13px] font-display font-semibold text-[#111827]">
@@ -418,7 +418,7 @@ function ConversationDetail({ conversation: c }) {
 
       {/* Drafted testimonial + approval flow */}
       {c.draftedStory ? (
-        <div className="rounded-2xl border border-[#6d46c6]/25 bg-white p-6 relative overflow-hidden">
+        <div className="rounded-2xl border border-[#6d46c6]/25 bg-white p-6 relative overflow-hidden order-2">
           <div
             aria-hidden
             className="absolute -top-16 -right-8 w-[240px] h-[240px] rounded-full"
@@ -521,7 +521,7 @@ function ConversationDetail({ conversation: c }) {
           </div>
         </div>
       ) : (
-        <div className="rounded-2xl border border-dashed border-[#d9d1ee] bg-[#faf9ff] p-8 text-center">
+        <div className="rounded-2xl border border-dashed border-[#d9d1ee] bg-[#faf9ff] p-8 text-center order-2">
           <FileCheck
             className="w-6 h-6 text-[#6d46c6] mx-auto"
             strokeWidth={1.5}

@@ -31,8 +31,8 @@ const NAV = [
   {
     section: "Pre-Customer Growth",
     items: [
-      { to: "/business/interactions", label: "Untapped Opportunities", icon: Radio, testId: "nav-interactions" },
       { to: "/business/conversations", label: "Growth Signals", icon: Mic, testId: "nav-conversations" },
+      { to: "/business/interactions", label: "Untapped Opportunities", icon: Radio, testId: "nav-interactions" },
     ],
   },
   {
