@@ -108,11 +108,10 @@ export default function SocialAgentPage() {
                 onChange={(e) => setSelectedReviewId(e.target.value)}
                 className="mt-2 w-full h-11 px-4 rounded-xl border border-[#eeeaf6] bg-white text-[13px] focus:outline-none focus:border-[#d9d1ee]"
               >
-                {REVIEWS.filter((r) => r.rating >= 4).map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.customer} · {r.title}
-                  </option>
-                ))}
+                {REVIEWS.filter((r) => r.rating >= 4).map((r) => {
+                  const label = r.customer + " · " + r.title;
+                  return <option key={r.id} value={r.id} label={label}>{label}</option>;
+                })}
               </select>
             </div>
 

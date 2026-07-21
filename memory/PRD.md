@@ -29,6 +29,30 @@ Build a high-converting, AI/tech-forward landing page for Uplaud AI. It must com
 - Admin token stored in `/app/backend/.env` as `ADMIN_TOKEN=uplaud-admin-c9f7e2a1` — user should rotate this in production.
 
 
+## What's Implemented (updated 2026-02-13 v14 — Growth Activation Platform reframe)
+- **Narrative reframe from feature-first → outcome-first**. Positioning: *"The operating system for customer-led growth"*. Two connected loops:
+  1. **Growth Activation** (pre-customer): Interactions + Conversation Intelligence
+  2. **Customer Advocacy** (post-customer): Reviews + Referrals
+  Both feed into **Amplification** (Social + Reddit) and roll up to a **Growth Engine** dashboard.
+- **Rebranded mocked workspace**: Westgate Wealth → **PayRewards** (B2B payments platform; card-earned rewards on vendor bills; acquires via Meta + Google ads). New personas: Rohan Sethi @ Blueprint Robotics, Marcus Beltran @ Halo Skincare, Sara Kim @ Trellis SaaS, James Wu @ Kettle & Fire Coffee, etc.
+- **Sidebar restructured** into 5 sections with hint labels:
+  - Growth Engine → Overview (rebuilt Insights page)
+  - Growth Activation (Pre-customer) → **Interactions**, **Conversations** *(both new)*
+  - Customer Advocacy (Post-customer) → Reviews & Feedback, Referrals
+  - Amplification → Social Agent, Reddit Agent
+  - Data → Import
+  - Settings
+- **NEW `/business/insights` — Growth Engine dashboard**: "Where should I focus next" opportunity cards on top, 9-stage journey funnel (Ad Clicked → Advocates) with opportunity pills, KPI grid (interactions, stories, warm intros, posts, pipeline, CAC), trend chart, channel attribution, executive recommendation.
+- **NEW `/business/interactions`** — table of 10 lifecycle interactions (demo/trial/webinar/onboarding/CS/QBR) with activation status (pending → prompt_sent → feedback_received → story_drafted → awaiting_approval → approved → amplified), summary tiles, filters, drawer with 4 suggested activation actions.
+- **NEW `/business/conversations`** — Conversation Intelligence pillar. 5 sources (Zoom AI, Gong, Fireflies, Fathom, HubSpot). 7 mocked conversations with AI-extracted signals (motivations, pain points, buying signals, objections, customer language, product feedback, FAQs). **Customer approval flow** for drafted stories: Draft → Sent for approval → Approved → Amplified. Different action buttons appear based on status.
+- **Import page** now shows **dual source columns** (Conversations + Customer feedback) and reframed messaging.
+- **Login page copy** refreshed: "The operating system for customer-led growth." · Growth Engine preview panel.
+- **Landing navbar** link renamed "Sign in" → "Log in" (both desktop + mobile).
+- Preserved: Reviews table + drawer, Social Agent, Referral Agent, Reddit Agent, Settings — all working with new PayRewards data.
+- **Testing status**: `iteration_7.json` — 100% frontend flows pass; hydration warning from Social Agent `<option>` fixed with explicit `label` attribute.
+
+
+
 ## What's Implemented (updated 2026-02-13 v13 — Product MVP Dashboard UI)
 - **Business Dashboard MVP** — frontend-only, mocked (no backend calls added). Vertical showcased: **Fintech / Wealth Management** (Westgate Wealth).
 - Route entry `/business` → **Login page** (mocked auth via localStorage `uplaud_business_auth_v1`). Any email/password accepted. Pre-filled: `hello@westgate.finance` / `demo1234`.
