@@ -13,6 +13,8 @@ import {
   LogOut,
   ChevronDown,
   Plus,
+  Radio,
+  Mic,
 } from "lucide-react";
 import { getAuth, clearAuth } from "@/lib/business-storage";
 import { BRAND } from "@/mocks/fintech";
@@ -22,24 +24,38 @@ const LOGO_URL =
 
 const NAV = [
   {
-    section: "Overview",
+    section: "Growth Engine",
     items: [
-      { to: "/business/insights", label: "Insights", icon: LineChart, testId: "nav-insights" },
+      { to: "/business/insights", label: "Overview", icon: LineChart, testId: "nav-insights" },
     ],
   },
   {
-    section: "Ingest",
+    section: "Growth Activation",
+    hint: "Pre-customer",
     items: [
-      { to: "/business/import", label: "Import Reviews", icon: Upload, testId: "nav-import" },
-      { to: "/business/reviews", label: "Reviews", icon: MessagesSquare, testId: "nav-reviews" },
+      { to: "/business/interactions", label: "Interactions", icon: Radio, testId: "nav-interactions" },
+      { to: "/business/conversations", label: "Conversations", icon: Mic, testId: "nav-conversations" },
     ],
   },
   {
-    section: "Agents",
+    section: "Customer Advocacy",
+    hint: "Post-customer",
+    items: [
+      { to: "/business/reviews", label: "Reviews & Feedback", icon: MessagesSquare, testId: "nav-reviews" },
+      { to: "/business/referrals", label: "Referrals", icon: Users, testId: "nav-referrals" },
+    ],
+  },
+  {
+    section: "Amplification",
     items: [
       { to: "/business/social", label: "Social Agent", icon: Megaphone, testId: "nav-social" },
-      { to: "/business/referrals", label: "Referral Agent", icon: Users, testId: "nav-referrals" },
       { to: "/business/reddit", label: "Reddit Agent", icon: Ghost, testId: "nav-reddit" },
+    ],
+  },
+  {
+    section: "Data",
+    items: [
+      { to: "/business/import", label: "Import", icon: Upload, testId: "nav-import" },
     ],
   },
 ];
@@ -105,8 +121,15 @@ export default function DashboardLayout() {
         <nav className="flex-1 overflow-y-auto px-2 pb-4">
           {NAV.map((sec) => (
             <div key={sec.section} className="mb-4">
-              <div className="px-3 py-1.5 text-[10.5px] font-mono uppercase tracking-[0.18em] text-[#9ca3af]">
-                {sec.section}
+              <div className="px-3 py-1.5 flex items-baseline gap-2">
+                <span className="text-[10.5px] font-mono uppercase tracking-[0.18em] text-[#9ca3af]">
+                  {sec.section}
+                </span>
+                {sec.hint && (
+                  <span className="text-[9.5px] font-mono text-[#6d46c6] uppercase tracking-[0.14em]">
+                    {sec.hint}
+                  </span>
+                )}
               </div>
               <div className="space-y-0.5">
                 {sec.items.map((it) => (
@@ -172,12 +195,14 @@ function Topbar({ user, pathname }) {
     .join("");
 
   const titles = {
-    "/business/insights": "Insights",
-    "/business/import": "Import Reviews",
-    "/business/reviews": "Reviews",
-    "/business/social": "Social Post Agent",
-    "/business/referrals": "Referral Agent",
-    "/business/reddit": "Reddit Agent",
+    "/business/insights": "Growth Engine",
+    "/business/import": "Import",
+    "/business/interactions": "Interactions",
+    "/business/conversations": "Conversation Intelligence",
+    "/business/reviews": "Reviews & Feedback",
+    "/business/social": "Social Amplification",
+    "/business/referrals": "Referral Engine",
+    "/business/reddit": "Reddit Insertion",
     "/business/settings": "Settings",
   };
 

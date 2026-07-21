@@ -14,6 +14,8 @@ import ReferralAgentPage from "@/pages/business/ReferralAgentPage";
 import RedditAgentPage from "@/pages/business/RedditAgentPage";
 import InsightsPage from "@/pages/business/InsightsPage";
 import SettingsPage from "@/pages/business/SettingsPage";
+import InteractionsPage from "@/pages/business/InteractionsPage";
+import ConversationsPage from "@/pages/business/ConversationsPage";
 
 function App() {
   return (
@@ -29,6 +31,8 @@ function App() {
           <Route path="/business" element={<BusinessLoginPage />} />
           <Route element={<DashboardLayout />}>
             <Route path="/business/import" element={<ImportReviewsPage />} />
+            <Route path="/business/interactions" element={<InteractionsPage />} />
+            <Route path="/business/conversations" element={<ConversationsPage />} />
             <Route path="/business/reviews" element={<ReviewsPage />} />
             <Route path="/business/social" element={<SocialAgentPage />} />
             <Route path="/business/referrals" element={<ReferralAgentPage />} />

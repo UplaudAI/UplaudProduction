@@ -8,9 +8,11 @@ import {
   Zap,
   ArrowUpRight,
   Plus,
+  Mic,
+  MessagesSquare,
 } from "lucide-react";
 import { setImported } from "@/lib/business-storage";
-import { REVIEW_SOURCES } from "@/mocks/fintech";
+import { REVIEW_SOURCES, CONVERSATION_SOURCES } from "@/mocks/fintech";
 
 export default function ImportReviewsPage() {
   const nav = useNavigate();
@@ -42,15 +44,16 @@ export default function ImportReviewsPage() {
         <div>
           <span className="chip">
             <span className="dot" />
-            Zero-state · Let's import your customer trust
+            Zero-state · Let's activate your customer data
           </span>
           <h1 className="font-display text-[36px] leading-[1.05] font-semibold tracking-tight text-[#111827] mt-4">
-            Import your reviews to <span className="mint-underline">wake the agents</span>.
+            Import interactions to <span className="mint-underline">wake the Growth Engine</span>.
           </h1>
-          <p className="mt-3 max-w-[560px] text-[15px] leading-relaxed text-[#4b5563]">
-            Drop a CSV or connect a source. Once imported, your six agents will
-            start turning reviews into social posts, referrals, Reddit replies
-            and paid-media proof — automatically.
+          <p className="mt-3 max-w-[620px] text-[15px] leading-relaxed text-[#4b5563]">
+            Uplaud reads two streams: your <b>interactions</b> (demos, trials,
+            QBRs — via Zoom AI, Gong, Fireflies) and your <b>customer feedback</b>{" "}
+            (G2, Capterra, Google, CSV). Every one becomes a signal your agents
+            can activate.
           </p>
         </div>
       </div>
@@ -105,7 +108,7 @@ export default function ImportReviewsPage() {
                   onClick={runImport}
                   className="mt-3 text-[12.5px] text-[#6d46c6] hover:underline"
                 >
-                  or use our sample fintech dataset (687 reviews)
+                  or use our sample PayRewards dataset (1,521 interactions · 687 reviews)
                 </button>
               </>
             )}
@@ -164,11 +167,11 @@ export default function ImportReviewsPage() {
                   />
                 </div>
                 <h3 className="font-display text-[22px] font-semibold text-[#111827]">
-                  687 reviews imported.
+                  1,521 interactions · 687 reviews imported.
                 </h3>
                 <p className="mt-2 text-[13.5px] text-[#4b5563]">
-                  Agents have flagged <b>341 as high-signal</b> and are
-                  drafting your first campaign.
+                  Agents have flagged <b>253 demo attendees</b> awaiting
+                  activation and <b>38 stories ready for approval</b>.
                 </p>
                 <div className="mt-6 flex items-center justify-center gap-3">
                   <button
@@ -192,51 +195,112 @@ export default function ImportReviewsPage() {
           </div>
         </div>
 
-        {/* Right — sources */}
-        <div className="lg:col-span-2 space-y-3">
-          <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#4b5563]">
-            Or connect a source
-          </div>
-          {REVIEW_SOURCES.map((s) => (
-            <div
-              key={s.id}
-              data-testid={`source-card-${s.id}`}
-              className="rounded-2xl border border-[#eeeaf6] bg-white p-4 hover:border-[#d9d1ee] transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <div
-                  className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-[13px] font-semibold"
-                  style={{ backgroundColor: s.color }}
-                >
-                  {s.label[0]}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[13.5px] font-semibold text-[#111827] leading-tight">
-                    {s.label}
-                  </div>
-                  <div className="text-[11px] font-mono text-[#9ca3af] mt-0.5">
-                    {s.connected
-                      ? `${s.count} reviews synced`
-                      : "Not connected"}
-                  </div>
-                </div>
-                {s.connected ? (
-                  <span className="text-[10.5px] font-mono text-[#0f9b7c] bg-[#ecfdf7] border border-[#c8f0e4] rounded-full px-2.5 py-1 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#0f9b7c]" />
-                    live
-                  </span>
-                ) : (
-                  <button
-                    data-testid={`source-connect-${s.id}`}
-                    className="text-[11.5px] font-medium text-[#6d46c6] hover:underline flex items-center gap-1"
-                  >
-                    <Plus className="w-3.5 h-3.5" strokeWidth={2} />
-                    Connect
-                  </button>
-                )}
+        {/* Right — sources (dual streams) */}
+        <div className="lg:col-span-2 space-y-5">
+          {/* Conversation sources */}
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Mic className="w-3.5 h-3.5 text-[#6d46c6]" strokeWidth={1.75} />
+              <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#4b5563]">
+                Conversations
               </div>
             </div>
-          ))}
+            <div className="space-y-2">
+              {CONVERSATION_SOURCES.slice(0, 4).map((s) => (
+                <div
+                  key={s.id}
+                  data-testid={`source-card-${s.id}`}
+                  className="rounded-xl border border-[#eeeaf6] bg-white p-3 hover:border-[#d9d1ee] transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-[12px] font-semibold"
+                      style={{ backgroundColor: s.color }}
+                    >
+                      {s.label[0]}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[12.5px] font-semibold text-[#111827] leading-tight">
+                        {s.label}
+                      </div>
+                      <div className="text-[10.5px] font-mono text-[#9ca3af] mt-0.5">
+                        {s.connected
+                          ? `${s.syncs} synced`
+                          : "Not connected"}
+                      </div>
+                    </div>
+                    {s.connected ? (
+                      <span className="text-[10px] font-mono text-[#0f9b7c] bg-[#ecfdf7] border border-[#c8f0e4] rounded-full px-2 py-0.5">
+                        live
+                      </span>
+                    ) : (
+                      <button
+                        data-testid={`source-connect-${s.id}`}
+                        className="text-[11px] font-medium text-[#6d46c6] hover:underline flex items-center gap-1"
+                      >
+                        <Plus className="w-3 h-3" strokeWidth={2} />
+                        Connect
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Review sources */}
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <MessagesSquare
+                className="w-3.5 h-3.5 text-[#6d46c6]"
+                strokeWidth={1.75}
+              />
+              <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#4b5563]">
+                Customer feedback
+              </div>
+            </div>
+            <div className="space-y-2">
+              {REVIEW_SOURCES.map((s) => (
+                <div
+                  key={s.id}
+                  data-testid={`source-card-${s.id}`}
+                  className="rounded-xl border border-[#eeeaf6] bg-white p-3 hover:border-[#d9d1ee] transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-[12px] font-semibold"
+                      style={{ backgroundColor: s.color }}
+                    >
+                      {s.label[0]}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[12.5px] font-semibold text-[#111827] leading-tight">
+                        {s.label}
+                      </div>
+                      <div className="text-[10.5px] font-mono text-[#9ca3af] mt-0.5">
+                        {s.connected
+                          ? `${s.count} reviews synced`
+                          : "Not connected"}
+                      </div>
+                    </div>
+                    {s.connected ? (
+                      <span className="text-[10px] font-mono text-[#0f9b7c] bg-[#ecfdf7] border border-[#c8f0e4] rounded-full px-2 py-0.5">
+                        live
+                      </span>
+                    ) : (
+                      <button
+                        data-testid={`source-connect-${s.id}`}
+                        className="text-[11px] font-medium text-[#6d46c6] hover:underline flex items-center gap-1"
+                      >
+                        <Plus className="w-3 h-3" strokeWidth={2} />
+                        Connect
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 

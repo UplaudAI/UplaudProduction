@@ -8,7 +8,7 @@ const LOGO_URL =
 
 export default function BusinessLoginPage() {
   const nav = useNavigate();
-  const [email, setEmail] = useState("hello@westgate.finance");
+  const [email, setEmail] = useState("alex@payrewards.com");
   const [password, setPassword] = useState("demo1234");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -28,7 +28,7 @@ export default function BusinessLoginPage() {
     }
     setLoading(true);
     setTimeout(() => {
-      setAuth({ email, name: "Nick Patel", workspace: "Westgate Wealth" });
+      setAuth({ email, name: "Alex Morgan", workspace: "PayRewards" });
       const dest = getImported() ? "/business/insights" : "/business/import";
       nav(dest, { replace: true });
     }, 600);
@@ -63,15 +63,15 @@ export default function BusinessLoginPage() {
             data-testid="login-headline"
             className="font-display text-[38px] md:text-[44px] leading-[1.02] font-semibold tracking-tight text-[#111827]"
           >
-            Turn customer trust into your{" "}
-            <span className="text-[#6d46c6]">#1 acquisition channel</span>.
+            The operating system for{" "}
+            <span className="text-[#6d46c6]">customer-led growth</span>.
           </h1>
           <p
             data-testid="login-subhead"
             className="mt-4 text-[15px] leading-relaxed text-[#4b5563]"
           >
-            Log in to run your review agents, referral engine and Reddit
-            insertions from one place.
+            Activate every meaningful interaction — before and after purchase —
+            into compounding business growth.
           </p>
 
           <form
@@ -198,18 +198,18 @@ export default function BusinessLoginPage() {
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-xl p-6">
             <div className="flex items-center gap-2 text-[11px] font-mono text-white/60">
               <span className="w-2 h-2 rounded-full bg-[#5eead4]" />
-              Insights preview · Westgate Wealth
+              Growth Engine · PayRewards
             </div>
             <div className="mt-4 grid grid-cols-3 gap-4">
-              <Stat label="Reviews" value="687" />
-              <Stat label="Referrals" value="152" />
-              <Stat label="Revenue" value="$284k" />
+              <Stat label="Interactions" value="1.5k" />
+              <Stat label="Stories" value="172" />
+              <Stat label="Pipeline" value="$1.4M" />
             </div>
             <div className="mt-5 space-y-2">
               {[
-                { label: "Social posts", value: 92 },
-                { label: "Referrals sent", value: 58 },
-                { label: "Reddit replies", value: 41 },
+                { label: "Demo → story", value: 60 },
+                { label: "Story approvals", value: 44 },
+                { label: "Warm intros", value: 27 },
               ].map((r) => (
                 <div key={r.label} className="flex items-center gap-3">
                   <div className="text-[12px] w-28 text-white/60">{r.label}</div>
@@ -220,7 +220,7 @@ export default function BusinessLoginPage() {
                     />
                   </div>
                   <div className="text-[12px] font-mono w-8 text-right">
-                    {r.value}
+                    {r.value}%
                   </div>
                 </div>
               ))}
@@ -228,12 +228,12 @@ export default function BusinessLoginPage() {
           </div>
 
           <p className="mt-8 font-display text-[26px] leading-[1.15] max-w-[420px]">
-            <span className="mint-underline text-[#261c4d]">Every review</span>{" "}
-            <span className="text-white/95">is a warm intro waiting to happen.</span>
+            <span className="mint-underline text-[#261c4d]">Every interaction</span>{" "}
+            <span className="text-white/95">is a growth asset waiting to compound.</span>
           </p>
           <p className="mt-4 text-[13px] text-white/60 max-w-[400px]">
-            Six agents. One inbox. Ship trust-driven acquisition without
-            spinning up another team.
+            Pre-customer to advocate. One continuous engine, sitting on top of
+            your paid acquisition.
           </p>
         </div>
 

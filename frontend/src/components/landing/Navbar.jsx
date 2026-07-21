@@ -65,7 +65,7 @@ export default function Navbar() {
             data-testid="nav-sign-in-link"
             className="text-[13px] text-[#4b5563] hover:text-[#6d46c6] transition-colors"
           >
-            Sign in
+            Log in
           </a>
           <a
             href="/#demo"
@@ -110,7 +110,7 @@ export default function Navbar() {
               onClick={() => setOpen(false)}
               className="text-[14px] text-[#111827] py-2"
             >
-              Sign in
+              Log in
             </a>
             <a
               href="/#demo"
