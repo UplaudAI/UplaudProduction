@@ -83,7 +83,7 @@ export default function SocialAgentPage() {
       <div className="flex items-start justify-between gap-6">
         <div>
           <h2 className="font-display text-[20px] font-semibold tracking-tight text-[#111827]">
-            Compose from a customer story
+            Compose from a customer testimonial
           </h2>
           <p className="text-[12.5px] text-[#9ca3af] mt-1">
             Every post is anchored to a real, approved story.

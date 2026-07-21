@@ -201,15 +201,15 @@ export default function BusinessLoginPage() {
               Growth Engine · PayRewards
             </div>
             <div className="mt-4 grid grid-cols-3 gap-4">
-              <Stat label="Interactions" value="1.5k" />
-              <Stat label="Stories" value="172" />
-              <Stat label="Pipeline" value="$1.4M" />
+              <Stat label="Prospects" value="388" />
+              <Stat label="Warm intros" value="94" />
+              <Stat label="New customers" value="21" />
             </div>
             <div className="mt-5 space-y-2">
               {[
-                { label: "Demo → story", value: 60 },
-                { label: "Story approvals", value: 44 },
-                { label: "Warm intros", value: 27 },
+                { label: "Demo → prospect", value: 60 },
+                { label: "Testimonial approved", value: 44 },
+                { label: "Warm intro delivered", value: 27 },
               ].map((r) => (
                 <div key={r.label} className="flex items-center gap-3">
                   <div className="text-[12px] w-28 text-white/60">{r.label}</div>

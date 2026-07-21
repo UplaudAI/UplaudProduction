@@ -57,7 +57,7 @@ export default function ReferralAgentPage() {
             Active referral campaigns
           </h2>
           <p className="text-[12.5px] text-[#9ca3af] mt-1">
-            Every campaign is seeded from a real customer story.
+            Every campaign is seeded from a real customer testimonial.
           </p>
         </div>
         <button

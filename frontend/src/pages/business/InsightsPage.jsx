@@ -1,6 +1,23 @@
-import { ArrowRight, ArrowUpRight, TrendingUp } from "lucide-react";
-import { PAGE_OUTCOMES, GROWTH_LOOPS } from "@/mocks/fintech";
+import { useNavigate } from "react-router-dom";
+import {
+  Sparkles,
+  ArrowUpRight,
+  MessageSquare,
+  FileCheck,
+  TrendingUp,
+  Ghost,
+  Target,
+  ArrowRight,
+} from "lucide-react";
+import {
+  PAGE_OUTCOMES,
+  OPPORTUNITIES,
+  JOURNEY_STAGES,
+  CHANNEL_ATTRIBUTION,
+} from "@/mocks/fintech";
 import PageHero from "@/components/business/PageHero";
+
+const OPP_ICONS = { MessageSquare, FileCheck, Sparkles, TrendingUp, Ghost };
 
 export default function InsightsPage() {
   const outcome = PAGE_OUTCOMES.overview;
@@ -14,157 +31,260 @@ export default function InsightsPage() {
         action={outcome.action}
       />
 
-      {/* Two growth loops */}
-      <section className="space-y-6" data-testid="growth-loops">
+      {/* Where should I focus next */}
+      <section data-testid="opportunities" className="space-y-6">
         <div className="flex items-baseline gap-3">
-          <h2 className="font-display text-[22px] font-semibold tracking-tight text-[#111827]">
-            Two connected growth loops
+          <h2 className="font-display text-[20px] font-semibold tracking-tight text-[#111827]">
+            Where should you focus next
           </h2>
           <span className="text-[12px] text-[#9ca3af]">
-            One continuous flywheel
+            {OPPORTUNITIES.length} opportunities ranked by expected impact
           </span>
         </div>
 
-        <LoopCard
-          testId="loop-pre-customer"
-          data={GROWTH_LOOPS.preCustomer}
-          accent="#6d46c6"
-        />
-        <LoopCard
-          testId="loop-post-customer"
-          data={GROWTH_LOOPS.postCustomer}
-          accent="#5eead4"
-          dark
-        />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {OPPORTUNITIES.slice(0, 2).map((op) => (
+            <OpportunityCard key={op.id} op={op} large />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {OPPORTUNITIES.slice(2).map((op) => (
+            <OpportunityCard key={op.id} op={op} />
+          ))}
+        </div>
       </section>
 
-      {/* Subtle explore link */}
-      <div className="pt-4 border-t border-[#eeeaf6]">
-        <a
-          href="#"
-          className="inline-flex items-center gap-2 text-[13px] text-[#4b5563] hover:text-[#6d46c6] transition-colors"
-        >
-          Explore attribution, channels & trends
-          <ArrowRight className="w-3.5 h-3.5" strokeWidth={1.75} />
-        </a>
-      </div>
+      {/* PayRewards growth funnel */}
+      <section
+        data-testid="growth-funnel"
+        className="rounded-2xl border border-[#eeeaf6] bg-white p-8"
+      >
+        <div className="flex items-baseline gap-3 mb-2">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-[#6d46c6]" strokeWidth={1.75} />
+            <h2 className="font-display text-[18px] font-semibold text-[#111827]">
+              The PayRewards growth funnel
+            </h2>
+          </div>
+          <span className="ml-auto text-[10.5px] font-mono text-[#9ca3af] uppercase tracking-[0.14em]">
+            Meta + Google → Uplaud → Advocates
+          </span>
+        </div>
+        <p className="text-[12.5px] text-[#4b5563] mb-8">
+          Every stage is an activation opportunity — not just a metric. All
+          counts pulled live from HubSpot + Uplaud activation logs.
+        </p>
+
+        <JourneyFunnel stages={JOURNEY_STAGES} />
+      </section>
+
+      {/* Channel attribution */}
+      <section
+        data-testid="channel-attribution"
+        className="rounded-2xl border border-[#eeeaf6] bg-white p-8"
+      >
+        <div className="flex items-baseline gap-3 mb-2">
+          <div className="flex items-center gap-2">
+            <Target className="w-4 h-4 text-[#6d46c6]" strokeWidth={1.75} />
+            <h2 className="font-display text-[18px] font-semibold text-[#111827]">
+              Channel attribution
+            </h2>
+          </div>
+          <span className="ml-auto text-[10.5px] font-mono text-[#9ca3af] uppercase tracking-[0.14em]">
+            Multi-touch · attributed via UTM + HubSpot
+          </span>
+        </div>
+        <p className="text-[12.5px] text-[#4b5563] mb-6">
+          How Uplaud-sourced channels compare to your paid baseline. Every won
+          deal is traceable to source records in HubSpot.
+        </p>
+
+        <div className="space-y-2">
+          {CHANNEL_ATTRIBUTION.map((row, i) => (
+            <AttributionRow key={row.channel} row={row} baseline={i === CHANNEL_ATTRIBUTION.length - 1} />
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
 
-/* ─────────────── Loop Card ─────────────── */
-function LoopCard({ data, accent, dark, testId }) {
-  const bg = dark ? "bg-[#261c4d]" : "bg-white";
-  const border = dark ? "border-white/10" : "border-[#eeeaf6]";
-  const textPrimary = dark ? "text-white" : "text-[#111827]";
-  const textSecondary = dark ? "text-white/60" : "text-[#4b5563]";
-  const textMuted = dark ? "text-white/40" : "text-[#9ca3af]";
-  const stageBg = dark ? "bg-white/[0.04]" : "bg-[#faf9ff]";
-  const stageBorder = dark ? "border-white/10" : "border-[#eeeaf6]";
+/* ─────────────── Opportunity card ─────────────── */
+function OpportunityCard({ op, large }) {
+  const nav = useNavigate();
+  const Icon = OPP_ICONS[op.icon] || Sparkles;
+  const isHigh = op.priority === "high";
+  const isMint = op.tone === "mint";
 
   return (
-    <article
-      data-testid={testId}
-      className={`relative overflow-hidden rounded-3xl border ${border} ${bg} p-10 md:p-12 ${
-        dark ? "noise" : ""
+    <button
+      data-testid={`opp-${op.id}`}
+      onClick={() => op.ctaPath && nav(op.ctaPath)}
+      className={`w-full text-left rounded-2xl border border-[#eeeaf6] bg-white p-6 hover:border-[#d9d1ee] transition-colors group ${
+        large ? "min-h-[176px]" : ""
       }`}
     >
-      {dark && (
+      <div className="flex items-start gap-3">
         <div
-          aria-hidden
-          className="absolute -top-32 -right-32 w-[540px] h-[540px] rounded-full pointer-events-none"
-          style={{
-            background:
-              "radial-gradient(circle, rgba(94,234,212,0.22), transparent 60%)",
-          }}
-        />
-      )}
-
-      <div className="relative grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
-        {/* Left — title + revenue */}
-        <div className="lg:col-span-5">
-          <div
-            className={`text-[11px] font-mono uppercase tracking-[0.22em] ${textMuted}`}
-          >
-            {data.title}
-          </div>
-          <p className={`mt-3 text-[14px] leading-relaxed ${textSecondary} max-w-[380px]`}>
-            {data.subtitle}
-          </p>
-
-          <div className="mt-8">
-            <div className={`text-[11px] font-mono uppercase tracking-[0.18em] ${textMuted}`}>
-              {data.revenueLabel}
-            </div>
-            <div
-              className={`mt-2 font-display font-semibold text-[52px] md:text-[64px] leading-[0.95] tracking-tight ${textPrimary}`}
-            >
-              {data.revenue}
-            </div>
-            <div className="mt-4 flex items-center gap-4">
-              <div className={`text-[13px] font-mono ${textSecondary}`}>
-                CAC <span className={textPrimary + " font-semibold"}>{data.cac}</span>
-              </div>
-              <div
-                className="inline-flex items-center gap-1.5 text-[12px] font-mono text-[#5eead4]"
-              >
-                <TrendingUp className="w-3 h-3" strokeWidth={2} />
-                {data.cacDelta}
-              </div>
-            </div>
-          </div>
+          className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+            isMint ? "bg-[#ecfdf7] text-[#0f9b7c]" : "bg-[#f5f3ff] text-[#6d46c6]"
+          }`}
+        >
+          <Icon className="w-4 h-4" strokeWidth={1.75} />
         </div>
-
-        {/* Right — stage flow */}
-        <div className="lg:col-span-7">
-          <div
-            className={`text-[11px] font-mono uppercase tracking-[0.18em] ${textMuted} mb-4`}
-          >
-            The loop
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#9ca3af]">
+              {op.stage}
+            </span>
+            {isHigh && (
+              <span className="text-[9.5px] font-mono text-[#e35b3a] bg-[#fef3f0] border border-[#f5d5cc] rounded-full px-1.5 py-0.5 uppercase">
+                high
+              </span>
+            )}
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {data.stages.map((s, i) => (
-              <div
-                key={s.label}
-                className={`relative rounded-xl border ${stageBorder} ${stageBg} p-4`}
-              >
-                {/* Step number */}
-                <div
-                  className={`text-[10px] font-mono ${textMuted}`}
-                >
-                  0{i + 1}
-                </div>
-                <div
-                  className={`mt-1 font-display font-semibold text-[22px] leading-none ${textPrimary}`}
-                >
-                  {s.value}
-                </div>
-                <div
-                  className={`mt-2 text-[12px] leading-tight ${textPrimary} font-medium`}
-                >
+          <div
+            className={`mt-1.5 font-display font-semibold text-[#111827] leading-tight ${
+              large ? "text-[17px]" : "text-[14px]"
+            }`}
+          >
+            {op.title}
+          </div>
+          <p className="mt-1.5 text-[12.5px] text-[#4b5563] leading-relaxed">
+            {op.subtitle}
+          </p>
+          {large && (
+            <div className="mt-3 text-[11.5px] font-mono text-[#6d46c6]">
+              {op.impact}
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="mt-4 flex items-center justify-between">
+        <span className="text-[12px] font-medium text-[#6d46c6] group-hover:text-[#261c4d] transition-colors">
+          {op.cta}
+        </span>
+        <ArrowUpRight
+          className="w-4 h-4 text-[#9ca3af] group-hover:text-[#6d46c6] transition-colors"
+          strokeWidth={1.75}
+        />
+      </div>
+    </button>
+  );
+}
+
+/* ─────────────── Growth funnel ─────────────── */
+function JourneyFunnel({ stages }) {
+  const max = Math.max(...stages.map((s) => s.count));
+  const phaseColors = {
+    acquisition: "#d9c9f2",
+    activation: "#8f66d8",
+    pipeline: "#5b32b2",
+    revenue: "#4a1f9a",
+    advocacy: "#5eead4",
+  };
+
+  return (
+    <div className="space-y-2.5">
+      {stages.map((s, i) => {
+        const pct = Math.max(6, (s.count / max) * 100);
+        return (
+          <div
+            key={s.id}
+            data-testid={`funnel-stage-${s.id}`}
+            className="grid grid-cols-12 items-center gap-3"
+          >
+            <div className="col-span-3 flex items-center gap-2">
+              <span
+                className="w-1 h-8 rounded-full shrink-0"
+                style={{ backgroundColor: phaseColors[s.phase] }}
+              />
+              <div>
+                <div className="text-[12.5px] font-medium text-[#111827] leading-tight">
                   {s.label}
                 </div>
-                <div className={`mt-1 text-[10.5px] font-mono ${textMuted}`}>
+                <div className="text-[10px] font-mono text-[#9ca3af] mt-0.5">
                   {s.hint}
                 </div>
+              </div>
+            </div>
 
-                {/* Connector arrow — subtle */}
-                {i < data.stages.length - 1 && i % 3 !== 2 && (
-                  <div
-                    className="hidden md:block absolute top-1/2 -translate-y-1/2 -right-2 z-10"
-                    aria-hidden
-                  >
-                    <ArrowRight
-                      className={`w-3 h-3 ${textMuted}`}
-                      strokeWidth={1.75}
-                    />
+            <div className="col-span-6">
+              <div className="h-8 rounded-lg bg-[#faf9ff] relative overflow-hidden">
+                <div
+                  className="h-full rounded-lg flex items-center px-3 transition-all"
+                  style={{
+                    width: `${pct}%`,
+                    backgroundColor: s.color,
+                    color: i < 3 ? "#261c4d" : "#ffffff",
+                  }}
+                >
+                  <span className="text-[12px] font-mono font-semibold">
+                    {s.count.toLocaleString()}
+                  </span>
+                </div>
+                {s.opportunity && (
+                  <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                    <span className="text-[10.5px] font-mono text-[#111827] bg-[#5eead4] rounded-full px-2 py-0.5">
+                      opportunity
+                    </span>
                   </div>
                 )}
               </div>
-            ))}
+            </div>
+
+            <div className="col-span-1 text-[11px] font-mono text-[#0f9b7c] text-right">
+              {s.delta}
+            </div>
+
+            <div className="col-span-2 text-[11.5px] text-[#4b5563] leading-tight">
+              {s.opportunity ? (
+                <span className="text-[#6d46c6] font-medium">
+                  {s.opportunityText}
+                </span>
+              ) : (
+                <span className="text-[#9ca3af]">—</span>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ─────────────── Channel attribution row ─────────────── */
+function AttributionRow({ row, baseline }) {
+  return (
+    <div
+      className={`rounded-xl border p-4 ${
+        baseline
+          ? "border-[#eeeaf6] bg-[#faf9ff]"
+          : "border-[#eeeaf6] bg-white hover:bg-[#faf9ff]"
+      } transition-colors`}
+    >
+      <div className="flex items-center gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="text-[13px] font-medium text-[#111827]">
+            {row.channel}
+          </div>
+          <div className="mt-1 text-[11px] font-mono text-[#4b5563]">
+            Touches {row.touches.toLocaleString()} · Won {row.converted}
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="font-display text-[16px] font-semibold text-[#111827] leading-none">
+            {row.revenue}
+          </div>
+          <div
+            className={`mt-1 text-[11px] font-mono ${
+              baseline ? "text-[#9ca3af]" : "text-[#0f9b7c]"
+            }`}
+          >
+            CAC {row.cac}
           </div>
         </div>
       </div>
-    </article>
+    </div>
   );
 }

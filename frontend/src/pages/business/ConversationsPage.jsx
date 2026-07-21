@@ -375,7 +375,7 @@ function ConversationDetail({ conversation: c }) {
                 strokeWidth={1.75}
               />
               <div className="text-[13px] font-display font-semibold text-[#111827]">
-                Drafted customer story
+                Drafted customer testimonial
               </div>
               <span className="ml-auto text-[10.5px] font-mono text-[#9ca3af] flex items-center gap-1">
                 <ShieldCheck className="w-3 h-3 text-[#0f9b7c]" strokeWidth={1.75} />
@@ -397,7 +397,7 @@ function ConversationDetail({ conversation: c }) {
             <div className="mt-5 flex flex-wrap items-center gap-2">
               <button
                 data-testid="story-edit-btn"
-                onClick={() => toast.info("Opens inline story editor")}
+                onClick={() => toast.info("Opens inline testimonial editor")}
                 className="btn-secondary h-10 !py-0"
               >
                 <Edit3 className="w-4 h-4" strokeWidth={1.75} />
@@ -455,7 +455,7 @@ function ConversationDetail({ conversation: c }) {
                   className="ml-auto btn-primary h-10 !py-0"
                 >
                   <Zap className="w-4 h-4" strokeWidth={1.75} />
-                  Amplify story
+                  Amplify testimonial
                 </button>
               )}
             </div>
@@ -468,7 +468,7 @@ function ConversationDetail({ conversation: c }) {
             strokeWidth={1.5}
           />
           <div className="mt-3 text-[14px] font-display font-semibold text-[#111827]">
-            No story drafted yet
+            No testimonial drafted yet
           </div>
           <p className="mt-1 text-[12.5px] text-[#4b5563] max-w-[420px] mx-auto">
             Ask Uplaud to draft an authentic customer perspective from this
@@ -477,14 +477,14 @@ function ConversationDetail({ conversation: c }) {
           <button
             data-testid="story-draft-btn"
             onClick={() =>
-              toast.success("Story draft generated", {
+              toast.success("Testimonial draft generated", {
                 description: "Grounded in the transcript, ready for review.",
               })
             }
             className="btn-primary mt-4 h-11 !py-0 mx-auto"
           >
             <Sparkles className="w-4 h-4" strokeWidth={2} />
-            Draft customer story
+            Draft customer testimonial
           </button>
         </div>
       )}

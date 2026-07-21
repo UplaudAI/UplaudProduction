@@ -227,7 +227,7 @@ function InteractionDrawer({ interaction, onClose }) {
     },
     {
       id: "story",
-      label: "Draft a customer story",
+      label: "Draft a customer testimonial",
       icon: Sparkles,
       hint: "From conversation transcript",
       priority: "high",
