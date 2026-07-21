@@ -20,10 +20,11 @@ import {
   ArrowRight,
   ShieldCheck,
   TrendingUp,
+  Plus,
 } from "lucide-react";
 import PageHero from "@/components/business/PageHero";
 import { toast } from "sonner";
-import { CONVERSATIONS, CONVERSATION_SOURCES, SIGNAL_THEMES, PAGE_OUTCOMES, SMART_NBA } from "@/mocks/fintech";
+import { CONVERSATIONS, CONVERSATION_SOURCES, PAGE_OUTCOMES, SMART_NBA } from "@/mocks/fintech";
 
 const SOURCE_META = {
   Gong: { color: "#8236f7" },
@@ -87,35 +88,93 @@ export default function ConversationsPage() {
         }
       />
 
-      {/* Acquisition-ready themes */}
-      <section data-testid="signal-themes" className="space-y-6">
-        <div className="flex items-baseline gap-3">
-          <h2 className="font-display text-[20px] font-semibold tracking-tight text-[#111827]">
-            Themes ready to move acquisition
-          </h2>
-          <span className="text-[12px] text-[#9ca3af]">
-            Aggregated across {CONVERSATIONS.length} conversations
-          </span>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {SIGNAL_THEMES.map((t) => (
-            <ThemeCard key={t.id} theme={t} />
-          ))}
-        </div>
-      </section>
+      {/* Latest approved testimonial — the key takeaway */}
+      {(() => {
+        const latest = CONVERSATIONS.find((c) => c.draftedStory?.status === "approved");
+        if (!latest) return null;
+        return (
+          <section
+            data-testid="latest-testimonial"
+            className="rounded-2xl border border-[#eeeaf6] bg-white p-8 relative overflow-hidden"
+          >
+            <div
+              aria-hidden
+              className="absolute -top-20 -right-16 w-[320px] h-[320px] rounded-full pointer-events-none"
+              style={{
+                background:
+                  "radial-gradient(circle, rgba(94,234,212,0.18), transparent 60%)",
+              }}
+            />
+            <div className="relative">
+              <div className="flex items-center gap-2">
+                <FileCheck className="w-4 h-4 text-[#0f9b7c]" strokeWidth={1.75} />
+                <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#0f9b7c]">
+                  Latest customer-approved testimonial
+                </div>
+              </div>
+              <p className="mt-4 font-display text-[22px] md:text-[26px] leading-[1.25] text-[#111827] max-w-[820px]">
+                &ldquo;{latest.draftedStory.body}&rdquo;
+              </p>
+              <div className="mt-5 flex flex-wrap items-center gap-3">
+                <div className="text-[13px] font-mono text-[#6d46c6]">
+                  — {latest.draftedStory.attribution}
+                </div>
+                <span className="text-[11px] font-mono text-[#9ca3af]">
+                  approved {new Date(latest.draftedStory.approvedAt).toLocaleDateString()} · source: {latest.source}
+                </span>
+              </div>
+              <div className="mt-6 flex items-center gap-2">
+                <button
+                  data-testid="latest-amplify-btn"
+                  onClick={() =>
+                    toast.success("Sent to Growth Amplification", {
+                      description: "Drafts ready for LinkedIn, Instagram, X.",
+                    })
+                  }
+                  className="btn-primary h-10 !py-0"
+                >
+                  Amplify across channels
+                  <ArrowUpRight className="w-4 h-4" strokeWidth={1.75} />
+                </button>
+                <button
+                  data-testid="latest-referral-btn"
+                  onClick={() =>
+                    toast.success("Seeded a referral campaign from this testimonial")
+                  }
+                  className="btn-secondary h-10 !py-0"
+                >
+                  Seed referral campaign
+                </button>
+              </div>
+            </div>
+          </section>
+        );
+      })()}
 
       {/* Divider */}
       <div className="pt-2 border-t border-[#eeeaf6]" />
 
       {/* Explore individual conversations */}
       <section className="space-y-6">
-        <div className="flex items-baseline gap-3">
-          <h2 className="font-display text-[20px] font-semibold tracking-tight text-[#111827]">
-            Explore individual conversations
-          </h2>
-          <span className="text-[12px] text-[#9ca3af]">
-            {filtered.length} of {CONVERSATIONS.length}
-          </span>
+        <div className="flex items-baseline justify-between gap-3 flex-wrap">
+          <div className="flex items-baseline gap-3">
+            <h2 className="font-display text-[20px] font-semibold tracking-tight text-[#111827]">
+              Explore individual conversations
+            </h2>
+            <span className="text-[12px] text-[#9ca3af]">
+              {filtered.length} of {CONVERSATIONS.length}
+            </span>
+          </div>
+          <button
+            data-testid="conversations-connect-source-btn"
+            onClick={() =>
+              toast.info("Would open Zoom / Gong / Fireflies OAuth")
+            }
+            className="btn-secondary h-10 !py-0"
+          >
+            <Plus className="w-4 h-4" strokeWidth={2} />
+            Connect a source
+          </button>
         </div>
 
         {/* Split layout */}

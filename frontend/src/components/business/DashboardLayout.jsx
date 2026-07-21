@@ -25,26 +25,26 @@ const NAV = [
     section: "Business Impact",
     items: [
       { to: "/business/insights", label: "Growth Overview", icon: LineChart, testId: "nav-insights" },
+      { to: "/business/referrals", label: "Warm Pipeline", icon: Users, testId: "nav-referrals" },
     ],
   },
   {
     section: "Pre-Customer Growth",
     items: [
       { to: "/business/interactions", label: "Untapped Opportunities", icon: Radio, testId: "nav-interactions" },
-      { to: "/business/conversations", label: "Customer Signals", icon: Mic, testId: "nav-conversations" },
+      { to: "/business/conversations", label: "Growth Signals", icon: Mic, testId: "nav-conversations" },
     ],
   },
   {
     section: "Post-Customer Advocacy",
     items: [
       { to: "/business/reviews", label: "Trust Assets", icon: MessagesSquare, testId: "nav-reviews" },
-      { to: "/business/referrals", label: "Warm Pipeline", icon: Users, testId: "nav-referrals" },
     ],
   },
   {
     section: "Amplification",
     items: [
-      { to: "/business/social", label: "Testimonial Amplification", icon: Megaphone, testId: "nav-social" },
+      { to: "/business/social", label: "Growth Amplification", icon: Megaphone, testId: "nav-social" },
       { to: "/business/reddit", label: "High-Intent Demand", icon: Ghost, testId: "nav-reddit" },
     ],
   },
@@ -187,9 +187,9 @@ function Topbar({ user, pathname }) {
     "/business/insights": "Growth Overview",
     "/business/import": "Data Sources",
     "/business/interactions": "Untapped Opportunities",
-    "/business/conversations": "Customer Signals",
+    "/business/conversations": "Growth Signals",
     "/business/reviews": "Trust Assets",
-    "/business/social": "Testimonial Amplification",
+    "/business/social": "Growth Amplification",
     "/business/referrals": "Warm Pipeline",
     "/business/reddit": "High-Intent Demand",
     "/business/settings": "Settings",

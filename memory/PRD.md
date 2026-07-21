@@ -29,6 +29,31 @@ Build a high-converting, AI/tech-forward landing page for Uplaud AI. It must com
 - Admin token stored in `/app/backend/.env` as `ADMIN_TOKEN=uplaud-admin-c9f7e2a1` — user should rotate this in production.
 
 
+## What's Implemented (updated 2026-02-13 v17 — Modern UX + Funnel + Warm Pipeline agentic + IA polish)
+- **Value Chain reimagined as modern product UI**: numbered nodes on a gradient rail (purple → mint), conversion pills below each stage, calm bordered outcome bar. No more hand-drawn feel.
+- **Sophisticated funnel is back**: colour-coded by phase (Acquisition/Activation/Pipeline/Revenue/Advocacy), trapezoidal bars with inline conversion %, delta chips on the right, opportunity annotations, and a phase legend footer.
+- **Sidebar IA polish**:
+  - **Business Impact**: Growth Overview · Warm Pipeline
+  - Pre-Customer Growth: Untapped Opportunities · **Growth Signals** (renamed from Customer Signals)
+  - Post-Customer Advocacy: Trust Assets
+  - Amplification: **Growth Amplification** (renamed from Testimonial Amplification) · High-Intent Demand
+  - Data: Sources
+- **Warm Pipeline evolutions**:
+  - Closed-won leads no longer appear (they're customers, shown as a small counter chip on the section header)
+  - Leads sorted by **urgency + potential value** (custom score: stage weight × 100 + hotness × 60 + spend/20k)
+  - New **"Agentic actions awaiting approval"** panel — top 5 leads with a per-lead one-click Approve / Skip flow (drafted by Uplaud)
+- **Growth Signals** page:
+  - **Latest customer-approved testimonial** section at the top as the key takeaway (with "Amplify across channels" and "Seed referral campaign" CTAs)
+  - Themes section **moved out** to Growth Amplification
+  - **"Connect a source"** button added on the section header
+- **Growth Amplification** page:
+  - Renamed
+  - Live preview now shows **all 3 platforms side-by-side**: LinkedIn (text post), **Instagram Reel** (visual gradient card with punch quote), **X** (short punchy post)
+  - Themes moved here (they belong to amplification — turning buyer language into ads)
+- **Testing status**: all 4 major flow checkpoints (Overview, Warm Pipeline, Growth Signals, Growth Amplification) verified via smoke test.
+
+
+
 ## What's Implemented (updated 2026-02-13 v16 — Value-chain + Intelligent NBAs + Warm Leads)
 - **Value Chain visualisation replaces the dense "388" text block** on Overview. Renders as a 6-stage horizontal flow (Demos attended → Testimonials extracted → Approved → Referral campaigns → Warm leads → New customers) with conversion pills between stages and a bottom outcome bar showing **$284k attributed revenue · CAC $186 vs $1,204 paid baseline (-84.6%)**. Every stage is a countable, HubSpot-traceable number.
 - **Intelligent Next Best Actions**. Each page's NBA now shows **rationale** (3 signal bullets), **segmentation** (which specific cohort) and **projected outcome** with numbers. Example on Overview: *"76 of your 253 unactivated demo attendees match every high-conversion signal: monthly vendor spend ≥ $200k, positive sentiment on call, 1+ PayRewards customer in their LinkedIn network. Segment & launch to 76 →"*.

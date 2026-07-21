@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import PageHero from "@/components/business/PageHero";
 import { toast } from "sonner";
-import { SOCIAL_POSTS, REVIEWS, PAGE_OUTCOMES, SMART_NBA } from "@/mocks/fintech";
+import { SOCIAL_POSTS, REVIEWS, PAGE_OUTCOMES, SMART_NBA, SIGNAL_THEMES } from "@/mocks/fintech";
 
 const PLATFORMS = [
   { id: "linkedin", label: "LinkedIn", icon: Linkedin, color: "#0a66c2" },
@@ -224,21 +224,65 @@ export default function SocialAgentPage() {
           </div>
         </div>
 
-        {/* Preview / Predicted metrics */}
+        {/* Preview / Predicted metrics — all three platforms side-by-side */}
         <div className="lg:col-span-2 space-y-4">
           <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#4b5563]">
-            Live preview
+            Live previews · LinkedIn · Instagram · X
           </div>
-          <PostPreview
-            data={
-              preview ||
-              drafts.find((d) => d.platform === platform && d.status === "draft") ||
-              drafts[0]
-            }
-            review={review}
-          />
+          <LinkedInPreview review={review} body={draftFor(review, "linkedin", tone)} />
+          <InstagramPreview review={review} />
+          <XPreview review={review} body={draftFor(review, "x", tone)} />
         </div>
       </div>
+
+      {/* Themes ready to move acquisition — moved here from Growth Signals */}
+      <section data-testid="signal-themes" className="space-y-4 pt-4">
+        <div className="flex items-baseline gap-3">
+          <h2 className="font-display text-[20px] font-semibold tracking-tight text-[#111827]">
+            Themes ready to move acquisition
+          </h2>
+          <span className="text-[12px] text-[#9ca3af]">
+            Buyer language · ready to become ads and posts
+          </span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {SIGNAL_THEMES.map((t) => (
+            <div
+              key={t.id}
+              data-testid={`theme-${t.id}`}
+              className="rounded-2xl border border-[#eeeaf6] bg-white p-5 hover:border-[#d9d1ee] transition-colors"
+            >
+              <div className="text-[10.5px] font-mono uppercase tracking-[0.18em] text-[#9ca3af]">
+                {t.category}
+              </div>
+              <div className="mt-2 font-display text-[18px] font-semibold leading-tight text-[#111827]">
+                {t.theme}
+              </div>
+              <div className="mt-3 flex items-baseline gap-2">
+                <div className="font-display text-[24px] font-semibold text-[#0f9b7c] leading-none">
+                  {t.lift}
+                </div>
+                <div className="text-[11px] text-[#4b5563]">{t.liftLabel}</div>
+              </div>
+              <div className="mt-3 rounded-lg bg-[#faf9ff] border border-[#eeeaf6] p-2.5">
+                <p className="text-[12px] leading-relaxed text-[#111827] italic">
+                  &ldquo;{t.quote}&rdquo;
+                </p>
+                <div className="mt-1 text-[10.5px] font-mono text-[#6d46c6]">
+                  — {t.quoteAttribution}
+                </div>
+              </div>
+              <button
+                data-testid={`theme-action-${t.id}`}
+                onClick={() => toast.success(`Queued: ${t.action}`)}
+                className="mt-3 text-[11.5px] font-medium text-[#6d46c6] hover:underline"
+              >
+                {t.action} →
+              </button>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* Queue */}
       <div className="rounded-2xl border border-[#eeeaf6] bg-white overflow-hidden">
@@ -419,4 +463,167 @@ function draftFor(review, platform, tone) {
 function trim(str, n) {
   if (str.length <= n) return str;
   return str.slice(0, n).trim() + "…";
+}
+
+
+/* ─────────────── LinkedIn preview ─────────────── */
+function LinkedInPreview({ review, body }) {
+  return (
+    <div
+      data-testid="preview-linkedin"
+      className="rounded-2xl border border-[#eeeaf6] bg-white overflow-hidden shadow-[0_10px_40px_-30px_rgba(38,28,77,0.35)]"
+    >
+      <div className="px-4 py-3 border-b border-[#eeeaf6] flex items-center gap-2">
+        <div className="w-8 h-8 rounded-full bg-[#0a66c2]/15 flex items-center justify-center">
+          <Linkedin className="w-4 h-4 text-[#0a66c2]" strokeWidth={1.75} />
+        </div>
+        <div>
+          <div className="text-[12.5px] font-semibold text-[#111827] leading-tight">
+            PayRewards
+          </div>
+          <div className="text-[10.5px] font-mono text-[#9ca3af]">
+            LinkedIn · 8,412 followers
+          </div>
+        </div>
+        <span className="ml-auto text-[10px] font-mono text-[#6d46c6]">
+          drafted by uplaud
+        </span>
+      </div>
+      <div className="p-4">
+        <p className="text-[13px] leading-relaxed text-[#111827] whitespace-pre-line">
+          {body}
+        </p>
+      </div>
+      <div className="px-4 py-3 bg-[#faf9ff] border-t border-[#eeeaf6] flex items-center gap-4 text-[11px] font-mono text-[#4b5563]">
+        <span>Reach <b className="text-[#111827]">18.4k</b></span>
+        <span>Eng <b className="text-[#111827]">4.6%</b></span>
+        <button
+          className="ml-auto text-[#6d46c6] hover:underline"
+          onClick={() => toast.success("Copied LinkedIn draft")}
+        >
+          Copy
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────── Instagram preview ─────────────── */
+function InstagramPreview({ review }) {
+  const first = review?.customer?.split(" ")[0] || "James";
+  return (
+    <div
+      data-testid="preview-instagram"
+      className="rounded-2xl overflow-hidden bg-white border border-[#eeeaf6] shadow-[0_10px_40px_-30px_rgba(38,28,77,0.35)]"
+    >
+      <div className="px-4 py-3 border-b border-[#eeeaf6] flex items-center gap-2">
+        <div
+          className="w-8 h-8 rounded-full flex items-center justify-center"
+          style={{
+            background:
+              "linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)",
+          }}
+        >
+          <Instagram className="w-4 h-4 text-white" strokeWidth={1.75} />
+        </div>
+        <div>
+          <div className="text-[12.5px] font-semibold text-[#111827] leading-tight">
+            payrewards
+          </div>
+          <div className="text-[10.5px] font-mono text-[#9ca3af]">
+            Instagram · Reel
+          </div>
+        </div>
+        <span className="ml-auto text-[10px] font-mono text-[#6d46c6]">
+          drafted by uplaud
+        </span>
+      </div>
+      {/* Visual card */}
+      <div
+        className="relative aspect-[4/5] flex flex-col justify-between p-5"
+        style={{
+          background:
+            "linear-gradient(135deg, #261c4d 0%, #6d46c6 55%, #5eead4 130%)",
+        }}
+      >
+        <div className="text-[10px] font-mono text-white/70 uppercase tracking-[0.22em]">
+          Customer, unscripted
+        </div>
+        <div className="space-y-2">
+          <div className="font-display text-white text-[22px] leading-[1.15] font-semibold">
+            &ldquo;It's the rare AP tool that actually pays for itself.&rdquo;
+          </div>
+          <div className="text-[12px] font-mono text-[#5eead4]">
+            — {first}, {review?.role || "VP Finance"}
+          </div>
+        </div>
+        <div className="flex items-center justify-between text-white/80">
+          <div className="text-[11px] font-mono">
+            $18.4k/yr in Amex points → recouped in month one
+          </div>
+          <div className="w-8 h-8 rounded-full bg-white/15 border border-white/30 flex items-center justify-center text-white text-[11px] font-semibold">
+            P
+          </div>
+        </div>
+      </div>
+      <div className="px-4 py-3 bg-[#faf9ff] border-t border-[#eeeaf6] flex items-center gap-4 text-[11px] font-mono text-[#4b5563]">
+        <span>Est. reach <b className="text-[#111827]">22.8k</b></span>
+        <span>Eng <b className="text-[#111827]">5.9%</b></span>
+        <button
+          className="ml-auto text-[#6d46c6] hover:underline"
+          onClick={() => toast.success("Instagram Reel scheduled")}
+        >
+          Schedule
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────── X (Twitter) preview ─────────────── */
+function XPreview({ review, body }) {
+  return (
+    <div
+      data-testid="preview-x"
+      className="rounded-2xl border border-[#eeeaf6] bg-white overflow-hidden shadow-[0_10px_40px_-30px_rgba(38,28,77,0.35)]"
+    >
+      <div className="px-4 py-3 border-b border-[#eeeaf6] flex items-center gap-2">
+        <div className="w-8 h-8 rounded-full bg-black flex items-center justify-center">
+          <Twitter className="w-4 h-4 text-white" strokeWidth={1.75} />
+        </div>
+        <div>
+          <div className="text-[12.5px] font-semibold text-[#111827] leading-tight flex items-center gap-1">
+            PayRewards
+            <span className="w-3.5 h-3.5 rounded-full bg-[#1d9bf0] text-white text-[8px] flex items-center justify-center font-bold">
+              ✓
+            </span>
+          </div>
+          <div className="text-[10.5px] font-mono text-[#9ca3af]">
+            @payrewards · 12,204 followers
+          </div>
+        </div>
+        <span className="ml-auto text-[10px] font-mono text-[#6d46c6]">
+          drafted by uplaud
+        </span>
+      </div>
+      <div className="p-4">
+        <p className="text-[14px] leading-[1.4] text-[#111827] whitespace-pre-line">
+          {body}
+        </p>
+        <div className="mt-3 text-[11px] font-mono text-[#9ca3af]">
+          9:00 AM · Feb 14, 2026
+        </div>
+      </div>
+      <div className="px-4 py-3 bg-[#faf9ff] border-t border-[#eeeaf6] flex items-center gap-4 text-[11px] font-mono text-[#4b5563]">
+        <span>Impr <b className="text-[#111827]">42.1k</b></span>
+        <span>Eng <b className="text-[#111827]">3.1%</b></span>
+        <button
+          className="ml-auto text-[#6d46c6] hover:underline"
+          onClick={() => toast.success("Copied X draft")}
+        >
+          Copy
+        </button>
+      </div>
+    </div>
+  );
 }

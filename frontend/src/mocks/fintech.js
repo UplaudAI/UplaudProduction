@@ -1134,8 +1134,8 @@ export const PAGE_OUTCOMES = {
     },
   },
   conversations: {
-    eyebrow: "Customer Signals",
-    question: "What are PayRewards buyers telling you that can lift acquisition?",
+    eyebrow: "Growth Signals",
+    question: "What are your demo leads and customers telling you that can lift growth?",
     northStar: {
       label: "Acquisition-ready insights",
       value: "3",
@@ -1191,7 +1191,7 @@ export const PAGE_OUTCOMES = {
     },
   },
   social: {
-    eyebrow: "Testimonial Amplification",
+    eyebrow: "Growth Amplification",
     question: "How much qualified reach did approved testimonials generate?",
     northStar: {
       label: "Qualified impressions from testimonials",

@@ -74,51 +74,77 @@ export default function PageHero({
 /* ────── Value Chain ────── */
 function ValueChain({ data }) {
   return (
-    <div data-testid="value-chain" className="space-y-4">
+    <div data-testid="value-chain" className="space-y-3">
       <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#9ca3af]">
         The Uplaud value chain · this month
       </div>
-      <div className="rounded-2xl border border-[#eeeaf6] bg-white p-5">
-        <div className="grid grid-cols-6 gap-1">
-          {data.stages.map((s, i) => (
-            <div key={s.id} className="relative">
-              <div
+      <div className="rounded-2xl border border-[#eeeaf6] bg-white overflow-hidden">
+        {/* Chain rail */}
+        <div className="relative px-6 pt-8 pb-6">
+          {/* Connector line */}
+          <div
+            className="absolute left-6 right-6 top-[54px] h-[2px] bg-gradient-to-r from-[#e2d9f5] via-[#8f66d8] to-[#5eead4] rounded-full"
+            aria-hidden
+          />
+          <div className="relative grid grid-cols-6 gap-2">
+            {data.stages.map((s, i) => (
+              <button
+                key={s.id}
                 data-testid={`chain-${s.id}`}
-                className="text-center"
+                className="group flex flex-col items-center text-center focus:outline-none"
               >
-                <div className="font-display font-semibold text-[28px] md:text-[32px] leading-none text-[#111827]">
+                {/* Node */}
+                <div className="relative z-10">
+                  <div
+                    className="w-8 h-8 rounded-full bg-white border-[2px] flex items-center justify-center font-mono text-[10px] font-semibold group-hover:scale-110 transition-transform"
+                    style={{
+                      borderColor:
+                        i <= 2
+                          ? "#8f66d8"
+                          : i <= 4
+                            ? "#6d46c6"
+                            : "#5eead4",
+                      color:
+                        i <= 2
+                          ? "#8f66d8"
+                          : i <= 4
+                            ? "#6d46c6"
+                            : "#0f9b7c",
+                    }}
+                  >
+                    {i + 1}
+                  </div>
+                </div>
+                {/* Value */}
+                <div className="mt-4 font-display font-semibold text-[28px] leading-none text-[#111827]">
                   {s.value}
                 </div>
-                <div className="mt-2 text-[10.5px] font-medium text-[#111827] leading-tight px-1">
+                <div className="mt-2 text-[11px] font-semibold text-[#111827] leading-tight px-1">
                   {s.label}
                 </div>
-                <div className="mt-1 text-[9.5px] font-mono text-[#9ca3af] leading-tight px-1">
+                <div className="mt-1 text-[10px] font-mono text-[#9ca3af] leading-tight px-1">
                   {s.subline}
                 </div>
-              </div>
-              {/* Conversion pill between stages */}
-              {i > 0 && s.conversionFromPrev && s.conversionFromPrev !== "—" && (
-                <div
-                  className="hidden md:flex absolute -left-3 top-3 -translate-y-1/2 items-center"
-                  aria-hidden
-                >
-                  <span className="text-[9px] font-mono text-[#6d46c6] bg-[#f5f3ff] border border-[#e2d9f5] rounded-full px-1.5 py-0.5">
+                {/* Conversion badge */}
+                {i > 0 && s.conversionFromPrev && s.conversionFromPrev !== "—" && (
+                  <div className="mt-3 inline-flex items-center gap-1 text-[10px] font-mono text-[#6d46c6] bg-[#f5f3ff] border border-[#e2d9f5] rounded-full px-2 py-0.5">
+                    <span aria-hidden>↳</span>
                     {s.conversionFromPrev}
-                  </span>
-                </div>
-              )}
-            </div>
-          ))}
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Outcome bar */}
-        <div className="mt-6 pt-5 border-t border-[#eeeaf6] flex items-end justify-between gap-4 flex-wrap">
+        <div className="px-6 py-5 bg-[#faf9ff] border-t border-[#eeeaf6] flex items-end justify-between gap-4 flex-wrap">
           <div>
             <div className="text-[10.5px] font-mono uppercase tracking-[0.18em] text-[#9ca3af]">
               {data.outcome.label}
             </div>
             <div className="mt-1 flex items-baseline gap-3">
-              <div className="font-display font-semibold text-[36px] leading-none text-[#111827]">
+              <div className="font-display font-semibold text-[32px] leading-none text-[#111827]">
                 {data.outcome.value}
               </div>
               <div className="text-[12px] text-[#4b5563]">

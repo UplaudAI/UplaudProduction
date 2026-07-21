@@ -32,17 +32,35 @@ const STAGE_STYLES = {
   grey: "bg-[#f5f5f5] text-[#6b7280] border-[#e5e7eb]",
 };
 
-const STAGE_ORDER = ["converted", "negotiation", "demoed", "booked", "clicked", "new", "cold"];
+const STAGE_ORDER = ["negotiation", "demoed", "booked", "clicked", "new", "cold"];
+
+// Urgency weight per stage — higher = more urgent action needed
+const URGENCY = {
+  negotiation: 5,
+  demoed: 4,
+  booked: 3,
+  new: 2.5,
+  clicked: 2,
+  cold: 0.5,
+  converted: 0,
+};
+
+function leadUrgencyScore(l) {
+  const spendNum = Number(String(l.monthlySpend).replace(/[^\d]/g, "")) || 0;
+  return URGENCY[l.stage] * 100 + l.hotness * 60 + spendNum / 20000;
+}
 
 export default function ReferralAgentPage() {
   const [selected, setSelected] = useState(null);
   const [campaignFilter, setCampaignFilter] = useState("all");
 
-  const sorted = [...WARM_LEADS].sort((a, b) => {
-    const sd = STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage);
-    if (sd !== 0) return sd;
-    return b.hotness - a.hotness;
-  });
+  // Exclude closed-won leads (they're customers, not leads)
+  const activeLeads = WARM_LEADS.filter((l) => l.stage !== "converted");
+  const convertedCount = WARM_LEADS.filter((l) => l.stage === "converted").length;
+
+  const sorted = [...activeLeads].sort(
+    (a, b) => leadUrgencyScore(b) - leadUrgencyScore(a)
+  );
 
   const filtered = sorted.filter((l) =>
     campaignFilter === "all" ? true : l.campaignId === campaignFilter
@@ -67,11 +85,16 @@ export default function ReferralAgentPage() {
         <div className="flex items-baseline justify-between gap-4 flex-wrap">
           <div className="flex items-baseline gap-3">
             <h2 className="font-display text-[20px] font-semibold tracking-tight text-[#111827]">
-              Warm leads generated
+              Active warm leads
             </h2>
             <span className="text-[12px] text-[#9ca3af]">
-              {filtered.length} of {WARM_LEADS.length} · ranked by stage + fit
+              {filtered.length} of {activeLeads.length} · ranked by urgency + potential value
             </span>
+            {convertedCount > 0 && (
+              <span className="text-[11px] font-mono text-[#0f9b7c] bg-[#ecfdf7] border border-[#c8f0e4] rounded-full px-2.5 py-0.5">
+                {convertedCount} converted to customer this month
+              </span>
+            )}
           </div>
           <select
             data-testid="warm-leads-campaign-filter"
@@ -175,6 +198,74 @@ export default function ReferralAgentPage() {
               </tbody>
             </table>
           </div>
+        </div>
+      </section>
+
+      {/* Agentic approvals panel — one-click on suggested actions per top lead */}
+      <section data-testid="agentic-approvals" className="space-y-4">
+        <div className="flex items-baseline gap-3">
+          <h2 className="font-display text-[20px] font-semibold tracking-tight text-[#111827]">
+            Agentic actions awaiting your approval
+          </h2>
+          <span className="text-[12px] text-[#9ca3af]">
+            Uplaud drafted these · one-click to run
+          </span>
+        </div>
+        <div className="rounded-2xl border border-[#eeeaf6] bg-white divide-y divide-[#f2eefa]">
+          {filtered.slice(0, 5).map((l) => {
+            const a = l.suggestedActions[0];
+            if (!a) return null;
+            return (
+              <div
+                key={`${l.id}-${a.id}`}
+                data-testid={`approval-${l.id}`}
+                className="grid grid-cols-12 items-center gap-4 px-5 py-4"
+              >
+                <div className="col-span-4 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-[#f5f3ff] text-[#6d46c6] flex items-center justify-center text-[11px] font-semibold shrink-0">
+                    {l.name.split(" ").map((n) => n[0]).join("")}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[12.5px] font-medium text-[#111827] leading-tight truncate">
+                      {l.name}
+                    </div>
+                    <div className="text-[10.5px] font-mono text-[#9ca3af] truncate">
+                      {l.company} · {l.role}
+                    </div>
+                  </div>
+                </div>
+                <div className="col-span-5 text-[12.5px] text-[#111827] leading-snug">
+                  {a.label}
+                </div>
+                <div className="col-span-1 text-[11px] font-mono text-[#4b5563]">
+                  Fit {Math.round(l.hotness * 100)}
+                </div>
+                <div className="col-span-2 flex items-center justify-end gap-2">
+                  <button
+                    data-testid={`approval-skip-${l.id}`}
+                    onClick={() =>
+                      toast.message(`Skipped for ${l.name}`)
+                    }
+                    className="text-[11.5px] text-[#9ca3af] hover:text-[#4b5563] px-2 py-1"
+                  >
+                    Skip
+                  </button>
+                  <button
+                    data-testid={`approval-approve-${l.id}`}
+                    onClick={() =>
+                      toast.success(`Approved: ${a.label}`, {
+                        description: `For ${l.name} · queued.`,
+                      })
+                    }
+                    className="btn-primary h-9 !py-0 !px-3 !text-[12px]"
+                  >
+                    Approve
+                    <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={1.75} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </section>
 
