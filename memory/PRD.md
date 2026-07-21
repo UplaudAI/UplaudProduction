@@ -29,6 +29,23 @@ Build a high-converting, AI/tech-forward landing page for Uplaud AI. It must com
 - Admin token stored in `/app/backend/.env` as `ADMIN_TOKEN=uplaud-admin-c9f7e2a1` — user should rotate this in production.
 
 
+## What's Implemented (updated 2026-02-13 v15 — Executive-outcome design pivot)
+- **Design philosophy pivot**: every dashboard page now leads with one **executive question + one North Star metric + one recommended action** (business-outcome first, not feature-first).
+- **New `PageHero` component** (`/app/frontend/src/components/business/PageHero.jsx`) — reusable, exposes `page-hero`, `page-hero-question`, `page-hero-northstar-value`, `page-hero-action-cta` test IDs. Used on all 8 dashboard pages.
+- **Sidebar renamed to outcome-focused labels**:
+  - Business Impact → **Growth Overview**
+  - Pre-Customer Growth → **Untapped Opportunities**, **Customer Signals**
+  - Post-Customer Advocacy → **Trust Assets**, **Warm Pipeline**
+  - Amplification → **Story Amplification**, **High-Intent Demand**
+  - Data → **Sources**
+- **Topbar simplified**: no search, no "New campaign" button, no notification dot. Just title + bell + avatar.
+- **Growth Overview rebuilt from scratch**: PageHero ("How much business value has Uplaud created?" · $1.42M influenced revenue) + two stacked loop cards (Pre-Customer $531k + Post-Customer $887k) each showing 6 stages and CAC. Removed KPI grid, trend chart, and attribution table — replaced with subtle "Explore attribution" link.
+- **Customer Signals (Conversations) rebuilt**: leads with 3 aggregated theme cards (buyer language, value framing, addressable objection) with lift metrics and one clear action each. Individual conversations moved into a secondary "Explore" section below.
+- All other pages retain their existing functionality but now lead with the outcome hero. Every page answers its executive question in under 5 seconds.
+- **Testing status**: `iteration_8.json` — 100% flows pass, zero bugs. Unused DashboardLayout imports (Search, Plus) cleaned up post-report.
+
+
+
 ## What's Implemented (updated 2026-02-13 v14 — Growth Activation Platform reframe)
 - **Narrative reframe from feature-first → outcome-first**. Positioning: *"The operating system for customer-led growth"*. Two connected loops:
   1. **Growth Activation** (pre-customer): Interactions + Conversation Intelligence

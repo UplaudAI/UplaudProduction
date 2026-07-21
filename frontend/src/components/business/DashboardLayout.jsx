@@ -8,11 +8,9 @@ import {
   Ghost,
   LineChart,
   Settings,
-  Search,
   Bell,
   LogOut,
   ChevronDown,
-  Plus,
   Radio,
   Mic,
 } from "lucide-react";
