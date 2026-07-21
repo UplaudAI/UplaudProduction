@@ -1,48 +1,60 @@
 import { useState } from "react";
 import {
   Users,
-  Plus,
-  Send,
-  Mail,
-  MessageSquare,
-  Gift,
-  TrendingUp,
+  ArrowUpRight,
   ArrowRight,
-  Copy,
-  Sparkles,
   X,
+  Sparkles,
+  Linkedin,
+  TrendingUp,
+  Zap,
+  Send,
+  DollarSign,
+  Building2,
+  Award,
+  MessageSquare,
+  ChevronRight,
 } from "lucide-react";
-import { REFERRAL_CAMPAIGNS, REVIEWS, PAGE_OUTCOMES } from "@/mocks/fintech";
+import {
+  WARM_LEADS,
+  WARM_LEAD_STAGES,
+  REFERRAL_CAMPAIGNS,
+  PAGE_OUTCOMES,
+  SMART_NBA,
+} from "@/mocks/fintech";
 import { toast } from "sonner";
 import PageHero from "@/components/business/PageHero";
 
-const STATUS_STYLES = {
-  active: "bg-[#ecfdf7] text-[#0f9b7c] border-[#c8f0e4]",
-  draft: "bg-[#f5f3ff] text-[#6d46c6] border-[#e2d9f5]",
-  paused: "bg-[#fef9c3] text-[#a16207] border-[#f4e08a]",
+const STAGE_STYLES = {
+  purple: "bg-[#f5f3ff] text-[#6d46c6] border-[#e2d9f5]",
+  amber: "bg-[#fef9c3] text-[#a16207] border-[#f4e08a]",
+  mint: "bg-[#ecfdf7] text-[#0f9b7c] border-[#c8f0e4]",
+  grey: "bg-[#f5f5f5] text-[#6b7280] border-[#e5e7eb]",
 };
 
+const STAGE_ORDER = ["converted", "negotiation", "demoed", "booked", "clicked", "new", "cold"];
+
 export default function ReferralAgentPage() {
-  const [selectedId, setSelectedId] = useState(REFERRAL_CAMPAIGNS[0].id);
-  const [showBuilder, setShowBuilder] = useState(false);
+  const [selected, setSelected] = useState(null);
+  const [campaignFilter, setCampaignFilter] = useState("all");
 
-  const campaign = REFERRAL_CAMPAIGNS.find((c) => c.id === selectedId);
-  const seedReviews = campaign.seedReviewIds
-    .map((id) => REVIEWS.find((r) => r.id === id))
-    .filter(Boolean);
+  const sorted = [...WARM_LEADS].sort((a, b) => {
+    const sd = STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage);
+    if (sd !== 0) return sd;
+    return b.hotness - a.hotness;
+  });
 
-  const conversionRate =
-    campaign.sent > 0
-      ? ((campaign.converted / campaign.sent) * 100).toFixed(1)
-      : "0.0";
+  const filtered = sorted.filter((l) =>
+    campaignFilter === "all" ? true : l.campaignId === campaignFilter
+  );
 
   return (
-    <div data-testid="referral-agent-page" className="space-y-10">
+    <div data-testid="referral-agent-page" className="space-y-12">
       <PageHero
         eyebrow={PAGE_OUTCOMES.referrals.eyebrow}
         question={PAGE_OUTCOMES.referrals.question}
         northStar={PAGE_OUTCOMES.referrals.northStar}
-        action={PAGE_OUTCOMES.referrals.action}
+        smartAction={SMART_NBA.referrals}
         onAction={() =>
           toast.success("Healthcare CFO campaign launched", {
             description: "22 warm intros dispatching over 5 days.",
@@ -50,267 +62,166 @@ export default function ReferralAgentPage() {
         }
       />
 
-      {/* Section header */}
-      <div className="flex items-start justify-between gap-6">
-        <div>
+      {/* Warm leads */}
+      <section data-testid="warm-leads" className="space-y-6">
+        <div className="flex items-baseline justify-between gap-4 flex-wrap">
+          <div className="flex items-baseline gap-3">
+            <h2 className="font-display text-[20px] font-semibold tracking-tight text-[#111827]">
+              Warm leads generated
+            </h2>
+            <span className="text-[12px] text-[#9ca3af]">
+              {filtered.length} of {WARM_LEADS.length} · ranked by stage + fit
+            </span>
+          </div>
+          <select
+            data-testid="warm-leads-campaign-filter"
+            value={campaignFilter}
+            onChange={(e) => setCampaignFilter(e.target.value)}
+            className="h-10 px-4 rounded-full border border-[#eeeaf6] bg-white text-[13px] text-[#4b5563] focus:outline-none focus:border-[#d9d1ee]"
+          >
+            <option value="all">All campaigns</option>
+            {REFERRAL_CAMPAIGNS.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="rounded-2xl border border-[#eeeaf6] bg-white overflow-hidden">
+          <div className="overflow-x-auto">
+            <table data-testid="warm-leads-table" className="w-full text-[13px]">
+              <thead className="bg-[#faf9ff] border-b border-[#eeeaf6]">
+                <tr className="text-left text-[11px] font-mono uppercase tracking-[0.14em] text-[#4b5563]">
+                  <th className="py-3 px-5">Lead</th>
+                  <th className="py-3 px-5">Referred by</th>
+                  <th className="py-3 px-5">Campaign</th>
+                  <th className="py-3 px-5">Stage</th>
+                  <th className="py-3 px-5">Fit</th>
+                  <th className="py-3 px-5">Signals</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((l) => (
+                  <tr
+                    key={l.id}
+                    data-testid={`warm-lead-${l.id}`}
+                    onClick={() => setSelected(l)}
+                    className="border-b border-[#f2eefa] hover:bg-[#faf9ff] cursor-pointer transition-colors"
+                  >
+                    <td className="py-4 px-5">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-[#f5f3ff] text-[#6d46c6] flex items-center justify-center text-[11px] font-semibold shrink-0">
+                          {l.name.split(" ").map((n) => n[0]).join("")}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[13px] font-medium text-[#111827] leading-tight">
+                            {l.name}
+                          </div>
+                          <div className="text-[11px] text-[#4b5563] mt-0.5 truncate">
+                            {l.role} · {l.company}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-4 px-5">
+                      <div className="text-[12.5px] text-[#111827]">
+                        {l.referrer.name}
+                      </div>
+                      <div className="text-[10.5px] font-mono text-[#9ca3af] mt-0.5">
+                        {l.referrer.company}
+                      </div>
+                    </td>
+                    <td className="py-4 px-5">
+                      <span className="text-[11.5px] font-medium text-[#6d46c6]">
+                        {l.campaign}
+                      </span>
+                    </td>
+                    <td className="py-4 px-5">
+                      <span
+                        className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium border ${STAGE_STYLES[WARM_LEAD_STAGES[l.stage].tone]}`}
+                      >
+                        {WARM_LEAD_STAGES[l.stage].label}
+                      </span>
+                    </td>
+                    <td className="py-4 px-5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-16 h-1.5 rounded-full bg-[#eeeaf6] overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-[#6d46c6] to-[#5eead4]"
+                            style={{ width: `${l.hotness * 100}%` }}
+                          />
+                        </div>
+                        <span className="text-[11px] font-mono text-[#4b5563]">
+                          {Math.round(l.hotness * 100)}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-4 px-5">
+                      <div className="flex items-center gap-1.5">
+                        {l.enrichment.recent.slice(0, 1).map((r, i) => (
+                          <span
+                            key={i}
+                            className="text-[11px] text-[#4b5563] truncate max-w-[220px]"
+                            title={r}
+                          >
+                            · {r}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      {/* Active campaigns as secondary content */}
+      <section data-testid="active-campaigns" className="space-y-6">
+        <div className="flex items-baseline gap-3">
           <h2 className="font-display text-[20px] font-semibold tracking-tight text-[#111827]">
             Active referral campaigns
           </h2>
-          <p className="text-[12.5px] text-[#9ca3af] mt-1">
-            Every campaign is seeded from a real customer testimonial.
-          </p>
-        </div>
-        <button
-          data-testid="referral-new-campaign-btn"
-          onClick={() => setShowBuilder(true)}
-          className="btn-secondary h-10 !py-0"
-        >
-          <Plus className="w-4 h-4" strokeWidth={2} />
-          New campaign
-        </button>
-      </div>
-
-      {/* Layout: campaigns list + detail */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* List */}
-        <aside className="lg:col-span-4 space-y-3">
-          {REFERRAL_CAMPAIGNS.map((c) => (
-            <button
-              key={c.id}
-              data-testid={`campaign-card-${c.id}`}
-              onClick={() => setSelectedId(c.id)}
-              className={`w-full text-left rounded-2xl border p-4 transition-all ${
-                selectedId === c.id
-                  ? "border-[#6d46c6] bg-[#f5f3ff]"
-                  : "border-[#eeeaf6] bg-white hover:border-[#d9d1ee]"
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <div className="text-[13.5px] font-display font-semibold text-[#111827] leading-tight">
-                  {c.name}
-                </div>
-                <span
-                  className={`ml-auto px-2 py-0.5 rounded-full text-[10px] font-mono border ${STATUS_STYLES[c.status]}`}
-                >
-                  {c.status}
-                </span>
-              </div>
-              <div className="mt-2 text-[11.5px] font-mono text-[#9ca3af]">
-                {c.channel} · {c.incentive}
-              </div>
-              <div className="mt-3 grid grid-cols-3 gap-3 text-center">
-                <MiniStat label="Sent" value={c.sent} />
-                <MiniStat label="Booked" value={c.booked} />
-                <MiniStat label="Rev" value={c.revenue} />
-              </div>
-            </button>
-          ))}
-        </aside>
-
-        {/* Detail */}
-        <section className="lg:col-span-8 space-y-5">
-          <div className="rounded-2xl border border-[#eeeaf6] bg-white p-6">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#9ca3af]">
-                  Campaign · {campaign.id}
-                </div>
-                <div className="mt-1 font-display text-[22px] font-semibold text-[#111827]">
-                  {campaign.name}
-                </div>
-                <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-[#4b5563]">
-                  <span className="flex items-center gap-1.5">
-                    <Gift className="w-3.5 h-3.5" strokeWidth={1.75} />
-                    {campaign.incentive}
-                  </span>
-                  <span>·</span>
-                  <span className="flex items-center gap-1.5">
-                    <Send className="w-3.5 h-3.5" strokeWidth={1.75} />
-                    {campaign.channel}
-                  </span>
-                  {campaign.started && (
-                    <>
-                      <span>·</span>
-                      <span className="font-mono">Started {campaign.started}</span>
-                    </>
-                  )}
-                </div>
-              </div>
-              <button
-                data-testid="campaign-launch-btn"
-                onClick={() =>
-                  toast.success("Referrals dispatched", {
-                    description: `${seedReviews.length * 4} warm intros queued for send.`,
-                  })
-                }
-                className="btn-primary h-10 !py-0"
-              >
-                <Send className="w-4 h-4" strokeWidth={1.75} />
-                Launch to seed list
-              </button>
-            </div>
-
-            {/* Funnel */}
-            <div className="mt-6 grid grid-cols-2 md:grid-cols-5 gap-3">
-              {[
-                { label: "Sent", value: campaign.sent, icon: Send },
-                { label: "Clicked", value: campaign.clicked, icon: TrendingUp },
-                { label: "Booked", value: campaign.booked, icon: Users },
-                { label: "Converted", value: campaign.converted, icon: Sparkles },
-                { label: "Revenue", value: campaign.revenue, icon: Gift },
-              ].map((s) => (
-                <div
-                  key={s.label}
-                  className="rounded-xl bg-[#faf9ff] border border-[#eeeaf6] p-3"
-                >
-                  <div className="flex items-center gap-2 text-[10.5px] font-mono uppercase tracking-[0.14em] text-[#9ca3af]">
-                    <s.icon className="w-3 h-3" strokeWidth={1.75} />
-                    {s.label}
-                  </div>
-                  <div className="mt-1 font-display text-[20px] font-semibold text-[#111827]">
-                    {s.value}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-4 flex items-center gap-3 text-[12px]">
-              <div className="flex-1 h-2 rounded-full bg-[#eeeaf6] overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-[#6d46c6] to-[#5eead4]"
-                  style={{
-                    width: `${Math.min(100, Number(conversionRate) * 20)}%`,
-                  }}
-                />
-              </div>
-              <span className="font-mono text-[#4b5563]">
-                {conversionRate}% send → convert
-              </span>
-            </div>
-          </div>
-
-          {/* Message preview */}
-          <div className="rounded-2xl border border-[#eeeaf6] bg-white p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <MessageSquare
-                className="w-4 h-4 text-[#6d46c6]"
-                strokeWidth={1.75}
-              />
-              <div className="text-[13px] font-display font-semibold text-[#111827]">
-                Auto-drafted messages
-              </div>
-              <span className="ml-auto text-[10.5px] font-mono text-[#9ca3af]">
-                Personalised per reviewer · edit before send
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {seedReviews.map((rv) => (
-                <MessageCard
-                  key={rv.id}
-                  reviewer={rv}
-                  channel={campaign.channel}
-                  incentive={campaign.incentive}
-                />
-              ))}
-            </div>
-          </div>
-        </section>
-      </div>
-
-      {showBuilder && <CampaignBuilderModal onClose={() => setShowBuilder(false)} />}
-    </div>
-  );
-}
-
-function MiniStat({ label, value }) {
-  return (
-    <div className="rounded-lg bg-white/60 border border-[#eeeaf6] py-2">
-      <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#9ca3af]">
-        {label}
-      </div>
-      <div className="mt-0.5 text-[13px] font-display font-semibold text-[#111827]">
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function MessageCard({ reviewer, channel, incentive }) {
-  const friendName = ["Rachel", "David", "Priyanka", "Marcus", "Sarah"][
-    reviewer.id.charCodeAt(reviewer.id.length - 1) % 5
-  ];
-  const first = reviewer.customer.split(" ")[0];
-
-  return (
-    <div
-      data-testid={`referral-message-${reviewer.id}`}
-      className="rounded-xl border border-[#eeeaf6] bg-[#faf9ff] p-4"
-    >
-      <div className="flex items-center gap-2">
-        <div className="w-8 h-8 rounded-full bg-[#f5f3ff] text-[#6d46c6] flex items-center justify-center text-[11px] font-semibold">
-          {reviewer.customer.split(" ").map((n) => n[0]).join("")}
-        </div>
-        <div className="min-w-0">
-          <div className="text-[12.5px] font-medium text-[#111827] leading-tight">
-            {reviewer.customer} <span className="text-[#9ca3af]">→</span> {friendName}
-          </div>
-          <div className="text-[10.5px] font-mono text-[#9ca3af]">
-            via {channel} · {reviewer.ltv}
-          </div>
-        </div>
-      </div>
-      <div className="mt-3 rounded-lg bg-white border border-[#eeeaf6] p-3">
-        <p className="text-[12.5px] leading-relaxed text-[#111827]">
-          Hey {friendName}! I know you were asking about advisors last month —
-          I wrote about my experience with Westgate. They handled my {reviewer.tags[0] || "planning"} the way I wish someone had years ago. If you want, they'll waive the intake fee for you: <span className="font-mono text-[#6d46c6]">uplaud.co/wg-{first.toLowerCase()}</span>
-        </p>
-        <div className="mt-2 flex items-center gap-2">
-          <span className="px-1.5 py-0.5 rounded-full bg-[#5eead4] text-[#261c4d] text-[9.5px] font-mono font-semibold">
-            {incentive}
+          <span className="text-[12px] text-[#9ca3af]">
+            Every campaign is seeded from a real customer testimonial
           </span>
         </div>
-      </div>
-      <div className="mt-3 flex items-center gap-2">
-        <button
-          data-testid={`referral-copy-${reviewer.id}`}
-          onClick={() => toast.success("Copied warm intro to clipboard")}
-          className="text-[11.5px] text-[#6d46c6] hover:underline flex items-center gap-1"
-        >
-          <Copy className="w-3.5 h-3.5" strokeWidth={1.75} /> Copy
-        </button>
-        <button
-          data-testid={`referral-send-${reviewer.id}`}
-          onClick={() =>
-            toast.success(`Sent ${first} → ${friendName} via ${channel}`)
-          }
-          className="ml-auto btn-secondary h-8 !py-0 !px-3 !text-[11.5px]"
-        >
-          Send
-          <ArrowRight className="w-3 h-3" strokeWidth={2} />
-        </button>
-      </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {REFERRAL_CAMPAIGNS.map((c) => (
+            <CampaignCard key={c.id} c={c} />
+          ))}
+        </div>
+      </section>
+
+      {selected && (
+        <LeadDrawer lead={selected} onClose={() => setSelected(null)} />
+      )}
     </div>
   );
 }
 
-function CampaignBuilderModal({ onClose }) {
+/* ─────────────── Lead drawer ─────────────── */
+function LeadDrawer({ lead: l, onClose }) {
+  const stage = WARM_LEAD_STAGES[l.stage];
+
   return (
     <div
-      data-testid="campaign-builder-modal"
-      className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#111827]/40 backdrop-blur-sm"
-      onClick={onClose}
+      data-testid="warm-lead-drawer"
+      className="fixed inset-0 z-50 flex justify-end"
     >
       <div
-        className="relative w-full max-w-[560px] rounded-2xl bg-white shadow-2xl p-6"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between">
-          <div className="text-[16px] font-display font-semibold text-[#111827]">
-            New referral campaign
+        className="absolute inset-0 bg-[#111827]/40 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <aside className="relative w-full max-w-[560px] h-full bg-white shadow-2xl overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b border-[#eeeaf6] px-6 h-14 flex items-center justify-between z-10">
+          <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#9ca3af]">
+            Warm lead · {l.id}
           </div>
           <button
-            data-testid="builder-close"
+            data-testid="warm-lead-drawer-close"
             onClick={onClose}
             className="w-9 h-9 rounded-full border border-[#eeeaf6] hover:border-[#d9d1ee] flex items-center justify-center"
           >
@@ -318,74 +229,233 @@ function CampaignBuilderModal({ onClose }) {
           </button>
         </div>
 
-        <div className="mt-5 space-y-4">
-          <FormField label="Campaign name">
-            <input
-              data-testid="builder-name-input"
-              defaultValue="Q1 High-LTV Warm Intros"
-              className="w-full h-11 px-4 rounded-xl border border-[#eeeaf6] bg-white text-[13px] focus:outline-none focus:border-[#d9d1ee]"
-            />
-          </FormField>
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label="Channel">
-              <select
-                data-testid="builder-channel-select"
-                className="w-full h-11 px-4 rounded-xl border border-[#eeeaf6] bg-white text-[13px] focus:outline-none focus:border-[#d9d1ee]"
-              >
-                <option>SMS + Email</option>
-                <option>Email only</option>
-                <option>LinkedIn DM</option>
-              </select>
-            </FormField>
-            <FormField label="Incentive">
-              <input
-                data-testid="builder-incentive-input"
-                defaultValue="$500 statement credit"
-                className="w-full h-11 px-4 rounded-xl border border-[#eeeaf6] bg-white text-[13px] focus:outline-none focus:border-[#d9d1ee]"
-              />
-            </FormField>
-          </div>
-          <FormField label="Seed audience">
-            <div className="rounded-xl border border-[#eeeaf6] bg-[#faf9ff] p-3 text-[12.5px] text-[#4b5563]">
-              <div className="flex items-center gap-2">
-                <Users className="w-3.5 h-3.5 text-[#6d46c6]" strokeWidth={1.75} />
-                <b className="text-[#111827]">Auto-seeded:</b> 47 reviewers with rating ≥ 5, LTV ≥ $10k, positive sentiment
+        <div className="p-6 space-y-6">
+          {/* Header */}
+          <div className="flex items-start gap-4">
+            <div className="w-14 h-14 rounded-full bg-[#f5f3ff] text-[#6d46c6] flex items-center justify-center text-[16px] font-semibold shrink-0">
+              {l.name.split(" ").map((n) => n[0]).join("")}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-display text-[19px] font-semibold text-[#111827]">
+                {l.name}
+              </div>
+              <div className="text-[13px] text-[#4b5563]">
+                {l.role} · {l.company}
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-medium border ${STAGE_STYLES[stage.tone]}`}
+                >
+                  {stage.label}
+                </span>
+                <a
+                  href={`https://${l.enrichment.linkedin}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[11px] font-mono text-[#0a66c2] flex items-center gap-1 hover:underline"
+                >
+                  <Linkedin className="w-3 h-3" strokeWidth={2} />
+                  LinkedIn
+                </a>
               </div>
             </div>
-          </FormField>
-        </div>
+          </div>
 
-        <div className="mt-6 flex items-center gap-2">
+          {/* Referrer + campaign */}
+          <div className="rounded-2xl border border-[#eeeaf6] bg-[#faf9ff] p-4">
+            <div className="text-[10.5px] font-mono uppercase tracking-[0.14em] text-[#9ca3af]">
+              Attributed to
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-4">
+              <div>
+                <div className="text-[10.5px] font-mono text-[#9ca3af]">Referrer</div>
+                <div className="text-[13px] font-medium text-[#111827] mt-0.5">
+                  {l.referrer.name}
+                </div>
+                <div className="text-[11px] text-[#4b5563]">
+                  {l.referrer.company}
+                </div>
+                <div className="text-[10.5px] font-mono text-[#9ca3af] mt-1">
+                  {l.referrer.relationship}
+                </div>
+              </div>
+              <div>
+                <div className="text-[10.5px] font-mono text-[#9ca3af]">Campaign</div>
+                <div className="text-[13px] font-medium text-[#6d46c6] mt-0.5">
+                  {l.campaign}
+                </div>
+                <div className="text-[10.5px] font-mono text-[#9ca3af] mt-1">
+                  Received {l.receivedAt}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Enrichment */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Sparkles className="w-4 h-4 text-[#6d46c6]" strokeWidth={1.75} />
+              <div className="text-[13px] font-display font-semibold text-[#111827]">
+                Lead enrichment
+              </div>
+              <span className="ml-auto text-[10.5px] font-mono text-[#9ca3af]">
+                LinkedIn · Crunchbase · Clearbit
+              </span>
+            </div>
+            <div className="space-y-3">
+              <EnrichRow icon={Building2} label="Company">
+                <div className="text-[12.5px] text-[#111827]">
+                  {l.industry} · {l.headcount} employees
+                </div>
+                <div className="text-[11px] text-[#4b5563] mt-0.5">
+                  {l.enrichment.companyMetrics.arr}
+                  {l.enrichment.companyMetrics.growth &&
+                    ` · ${l.enrichment.companyMetrics.growth}`}
+                </div>
+              </EnrichRow>
+              <EnrichRow icon={DollarSign} label="Monthly vendor spend">
+                <div className="text-[12.5px] font-mono text-[#111827]">
+                  {l.monthlySpend}
+                </div>
+              </EnrichRow>
+              <EnrichRow icon={Award} label="Recent activity">
+                <ul className="space-y-1">
+                  {l.enrichment.recent.map((r, i) => (
+                    <li key={i} className="text-[12px] text-[#111827] leading-relaxed">
+                      · {r}
+                    </li>
+                  ))}
+                </ul>
+              </EnrichRow>
+              {l.enrichment.buyingSignals?.length > 0 && (
+                <EnrichRow icon={Zap} label="Buying signals" accent>
+                  <ul className="space-y-1">
+                    {l.enrichment.buyingSignals.map((r, i) => (
+                      <li
+                        key={i}
+                        className="text-[12px] text-[#0f9b7c] font-medium leading-relaxed"
+                      >
+                        · {r}
+                      </li>
+                    ))}
+                  </ul>
+                </EnrichRow>
+              )}
+            </div>
+          </div>
+
+          {/* Suggested actions */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <TrendingUp className="w-4 h-4 text-[#6d46c6]" strokeWidth={1.75} />
+              <div className="text-[13px] font-display font-semibold text-[#111827]">
+                Suggested next actions
+              </div>
+            </div>
+            <div className="space-y-2">
+              {l.suggestedActions.map((a) => (
+                <button
+                  key={a.id}
+                  data-testid={`suggest-${l.id}-${a.id}`}
+                  onClick={() =>
+                    toast.success(`Queued: ${a.label}`, {
+                      description: `For ${l.name} — projected next-stage advance.`,
+                    })
+                  }
+                  className="w-full text-left rounded-xl border border-[#eeeaf6] hover:border-[#d9d1ee] bg-white p-3 transition-colors group"
+                >
+                  <div className="flex items-center gap-3">
+                    <ChevronRight
+                      className="w-3.5 h-3.5 text-[#6d46c6]"
+                      strokeWidth={2}
+                    />
+                    <div className="text-[12.5px] text-[#111827] leading-tight">
+                      {a.label}
+                    </div>
+                    <ArrowUpRight
+                      className="ml-auto w-3.5 h-3.5 text-[#9ca3af] group-hover:text-[#6d46c6]"
+                      strokeWidth={1.75}
+                    />
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Primary CTA */}
           <button
-            data-testid="builder-cancel"
-            onClick={onClose}
-            className="btn-secondary flex-1 justify-center h-11"
+            data-testid="warm-lead-open-in-crm"
+            onClick={() => toast.info("Would open lead in HubSpot")}
+            className="btn-primary w-full justify-center h-11"
           >
-            Cancel
-          </button>
-          <button
-            data-testid="builder-save"
-            onClick={() => {
-              toast.success("Campaign created — drafting messages");
-              onClose();
-            }}
-            className="btn-primary flex-1 justify-center h-11"
-          >
-            Create campaign
+            Open in HubSpot
+            <ArrowUpRight className="w-4 h-4" strokeWidth={1.75} />
           </button>
         </div>
+      </aside>
+    </div>
+  );
+}
+
+function EnrichRow({ icon: Icon, label, children, accent }) {
+  return (
+    <div
+      className={`rounded-xl border p-3 ${
+        accent
+          ? "border-[#c8f0e4] bg-[#ecfdf7]"
+          : "border-[#eeeaf6] bg-white"
+      }`}
+    >
+      <div className="flex items-center gap-2 mb-1.5">
+        <Icon className="w-3.5 h-3.5 text-[#6d46c6]" strokeWidth={1.75} />
+        <div className="text-[10.5px] font-mono uppercase tracking-[0.14em] text-[#9ca3af]">
+          {label}
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/* ─────────────── Campaign card (secondary) ─────────────── */
+function CampaignCard({ c }) {
+  const status = c.status === "active" ? "mint" : "purple";
+  return (
+    <div
+      data-testid={`campaign-card-${c.id}`}
+      className="rounded-2xl border border-[#eeeaf6] bg-white p-5"
+    >
+      <div className="flex items-center gap-2">
+        <div className="text-[13.5px] font-display font-semibold text-[#111827] leading-tight">
+          {c.name}
+        </div>
+        <span
+          className={`ml-auto px-2 py-0.5 rounded-full text-[10px] font-mono border ${STAGE_STYLES[status]}`}
+        >
+          {c.status}
+        </span>
+      </div>
+      <div className="mt-2 text-[11px] font-mono text-[#9ca3af]">
+        {c.channel} · {c.incentive}
+      </div>
+      <div className="mt-4 grid grid-cols-3 gap-3 text-center">
+        <MiniStat label="Sent" value={c.sent} />
+        <MiniStat label="Booked" value={c.booked} />
+        <MiniStat label="Won" value={c.converted} />
       </div>
     </div>
   );
 }
 
-function FormField({ label, children }) {
+function MiniStat({ label, value }) {
   return (
-    <div>
-      <label className="text-[11px] font-mono uppercase tracking-[0.14em] text-[#4b5563]">
+    <div className="rounded-lg bg-[#faf9ff] border border-[#eeeaf6] py-2">
+      <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#9ca3af]">
         {label}
-      </label>
-      <div className="mt-2">{children}</div>
+      </div>
+      <div className="mt-0.5 text-[13px] font-display font-semibold text-[#111827]">
+        {value}
+      </div>
     </div>
   );
 }

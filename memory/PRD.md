@@ -29,6 +29,23 @@ Build a high-converting, AI/tech-forward landing page for Uplaud AI. It must com
 - Admin token stored in `/app/backend/.env` as `ADMIN_TOKEN=uplaud-admin-c9f7e2a1` — user should rotate this in production.
 
 
+## What's Implemented (updated 2026-02-13 v16 — Value-chain + Intelligent NBAs + Warm Leads)
+- **Value Chain visualisation replaces the dense "388" text block** on Overview. Renders as a 6-stage horizontal flow (Demos attended → Testimonials extracted → Approved → Referral campaigns → Warm leads → New customers) with conversion pills between stages and a bottom outcome bar showing **$284k attributed revenue · CAC $186 vs $1,204 paid baseline (-84.6%)**. Every stage is a countable, HubSpot-traceable number.
+- **Intelligent Next Best Actions**. Each page's NBA now shows **rationale** (3 signal bullets), **segmentation** (which specific cohort) and **projected outcome** with numbers. Example on Overview: *"76 of your 253 unactivated demo attendees match every high-conversion signal: monthly vendor spend ≥ $200k, positive sentiment on call, 1+ PayRewards customer in their LinkedIn network. Segment & launch to 76 →"*.
+- **Warm Pipeline page rebuilt around real leads**. New `WARM_LEADS` mock (8 named leads) with:
+  - Referrer (which customer sent them) + relationship + testimonial link
+  - Campaign (Refer-a-Controller / CFO Cohort / Healthcare CFO)
+  - Stage (New → Clicked → Booked → Demoed → Negotiation → Converted / Cold)
+  - Fit score (0–1)
+  - **Enrichment**: LinkedIn URL, recent activity (funding raised, milestones), company metrics (ARR, growth), buying signals
+  - Suggested next actions per lead
+- **Lead drawer** shows full profile, referrer, campaign, enrichment (Company · Monthly spend · Recent activity · Buying signals) + suggested actions + "Open in HubSpot" primary CTA.
+- All other pages retain their functionality but now use the intelligent NBA pattern.
+- New reusable `PageHero` supports both `valueChain` (Overview) and `northStar` (other pages) + `smartAction` (rationale + outcome).
+- **Testing status**: smoke test passes for value chain, smart NBAs on all 7 pages, warm leads table + drawer. No compile errors.
+
+
+
 ## What's Implemented (updated 2026-02-13 v15 — Executive-outcome design pivot)
 - **Design philosophy pivot**: every dashboard page now leads with one **executive question + one North Star metric + one recommended action** (business-outcome first, not feature-first).
 - **New `PageHero` component** (`/app/frontend/src/components/business/PageHero.jsx`) — reusable, exposes `page-hero`, `page-hero-question`, `page-hero-northstar-value`, `page-hero-action-cta` test IDs. Used on all 8 dashboard pages.

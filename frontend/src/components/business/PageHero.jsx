@@ -1,28 +1,32 @@
 import { useNavigate } from "react-router-dom";
-import { ArrowUpRight, TrendingUp, TrendingDown, Sparkles } from "lucide-react";
+import { ArrowUpRight, TrendingUp, Sparkles, ChevronRight } from "lucide-react";
 
 /**
- * PageHero — the outcome-first block that leads every business page.
+ * PageHero — outcome-first block that leads every business page.
  *
- * <PageHero
- *   eyebrow="Untapped Opportunities"
- *   question="Which people are your biggest untapped growth opportunities?"
- *   northStar={{ label, value, delta, trend: 'up'|'down-good', attribution }}
- *   action={{ title, impact, cta, to }}
- *   onAction={() => ...}     // optional override
- * />
+ * Layout:
+ *   [Eyebrow]
+ *   <H1 question>
+ *   [Optional: short outcome subhead]
+ *   Below (grid): [ValueChain or NorthStar]  ·  [Intelligent NBA]
  */
-export default function PageHero({ eyebrow, question, northStar, action, onAction }) {
+export default function PageHero({
+  eyebrow,
+  question,
+  subhead,
+  valueChain,       // optional — the horizontal chain viz
+  northStar,        // {label, value, delta, trend, attribution}
+  smartAction,      // {eyebrow, headline, reasoning:[{label,value}], outcome, cta, to}
+  action,           // legacy simple action (backwards-compat)
+  onAction,
+}) {
   const nav = useNavigate();
-  const isDown = northStar?.trend?.startsWith("down");
-  const TrendIcon = isDown ? TrendingDown : TrendingUp;
 
   return (
     <section
       data-testid="page-hero"
-      className="pb-10 border-b border-[#eeeaf6] mb-12"
+      className="pb-8 border-b border-[#eeeaf6] mb-12"
     >
-      {/* Eyebrow */}
       <div
         data-testid="page-hero-eyebrow"
         className="text-[11px] font-mono uppercase tracking-[0.22em] text-[#9ca3af]"
@@ -30,93 +34,219 @@ export default function PageHero({ eyebrow, question, northStar, action, onActio
         {eyebrow}
       </div>
 
-      {/* Executive question — H1 */}
       <h1
         data-testid="page-hero-question"
-        className="mt-4 font-display font-semibold tracking-tight text-[#111827] text-[32px] md:text-[44px] leading-[1.08] max-w-[880px]"
+        className="mt-4 font-display font-semibold tracking-tight text-[#111827] text-[30px] md:text-[40px] leading-[1.08] max-w-[880px]"
       >
         {question}
       </h1>
 
-      {/* North Star + Action — side by side on desktop */}
-      <div className="mt-10 grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
-        {/* North Star */}
-        {northStar && (
-          <div
-            data-testid="page-hero-northstar"
-            className="lg:col-span-7"
-          >
-            <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#9ca3af]">
-              {northStar.label}
-            </div>
-            <div className="mt-3 flex items-baseline gap-4 flex-wrap">
+      {subhead && (
+        <p className="mt-4 text-[15px] leading-relaxed text-[#4b5563] max-w-[640px]">
+          {subhead}
+        </p>
+      )}
+
+      {/* Metric + Action grid */}
+      {(valueChain || northStar || smartAction || action) && (
+        <div className="mt-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          {/* Left — metric or value chain */}
+          <div className="lg:col-span-7 space-y-6">
+            {valueChain && <ValueChain data={valueChain} />}
+            {!valueChain && northStar && <NorthStarBlock data={northStar} />}
+          </div>
+
+          {/* Right — intelligent NBA */}
+          {(smartAction || action) && (
+            <SmartActionCard
+              data={smartAction || null}
+              legacy={!smartAction ? action : null}
+              onAction={onAction}
+              nav={nav}
+            />
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/* ────── Value Chain ────── */
+function ValueChain({ data }) {
+  return (
+    <div data-testid="value-chain" className="space-y-4">
+      <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#9ca3af]">
+        The Uplaud value chain · this month
+      </div>
+      <div className="rounded-2xl border border-[#eeeaf6] bg-white p-5">
+        <div className="grid grid-cols-6 gap-1">
+          {data.stages.map((s, i) => (
+            <div key={s.id} className="relative">
               <div
-                data-testid="page-hero-northstar-value"
-                className="font-display font-semibold text-[#111827] text-[64px] md:text-[76px] leading-[0.95] tracking-tight"
+                data-testid={`chain-${s.id}`}
+                className="text-center"
               >
-                {northStar.value}
+                <div className="font-display font-semibold text-[28px] md:text-[32px] leading-none text-[#111827]">
+                  {s.value}
+                </div>
+                <div className="mt-2 text-[10.5px] font-medium text-[#111827] leading-tight px-1">
+                  {s.label}
+                </div>
+                <div className="mt-1 text-[9.5px] font-mono text-[#9ca3af] leading-tight px-1">
+                  {s.subline}
+                </div>
               </div>
-              {northStar.delta && (
+              {/* Conversion pill between stages */}
+              {i > 0 && s.conversionFromPrev && s.conversionFromPrev !== "—" && (
                 <div
-                  className={`inline-flex items-center gap-1.5 text-[13px] font-mono ${
-                    isDown || northStar.trend === "down-good"
-                      ? "text-[#0f9b7c]"
-                      : "text-[#0f9b7c]"
-                  }`}
+                  className="hidden md:flex absolute -left-3 top-3 -translate-y-1/2 items-center"
+                  aria-hidden
                 >
-                  <TrendIcon className="w-3.5 h-3.5" strokeWidth={2} />
-                  {northStar.delta}
+                  <span className="text-[9px] font-mono text-[#6d46c6] bg-[#f5f3ff] border border-[#e2d9f5] rounded-full px-1.5 py-0.5">
+                    {s.conversionFromPrev}
+                  </span>
                 </div>
               )}
             </div>
-            {northStar.attribution && (
-              <p className="mt-5 text-[15px] leading-relaxed text-[#4b5563] max-w-[520px]">
-                {northStar.attribution}
-              </p>
-            )}
-          </div>
-        )}
+          ))}
+        </div>
 
-        {/* Recommended action */}
-        {action && (
-          <aside
-            data-testid="page-hero-action"
-            className="lg:col-span-5 rounded-2xl bg-[#faf9ff] border border-[#eeeaf6] p-6"
-          >
-            <div className="flex items-center gap-2">
-              <Sparkles
-                className="w-3.5 h-3.5 text-[#6d46c6]"
-                strokeWidth={1.75}
-              />
-              <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#6d46c6]">
-                Next best action
+        {/* Outcome bar */}
+        <div className="mt-6 pt-5 border-t border-[#eeeaf6] flex items-end justify-between gap-4 flex-wrap">
+          <div>
+            <div className="text-[10.5px] font-mono uppercase tracking-[0.18em] text-[#9ca3af]">
+              {data.outcome.label}
+            </div>
+            <div className="mt-1 flex items-baseline gap-3">
+              <div className="font-display font-semibold text-[36px] leading-none text-[#111827]">
+                {data.outcome.value}
+              </div>
+              <div className="text-[12px] text-[#4b5563]">
+                {data.outcome.subline}
               </div>
             </div>
-            <div
-              data-testid="page-hero-action-title"
-              className="mt-3 font-display text-[17px] leading-[1.25] font-semibold text-[#111827]"
-            >
-              {action.title}
+          </div>
+          <div className="text-right">
+            <div className="text-[10.5px] font-mono uppercase tracking-[0.18em] text-[#9ca3af]">
+              Blended CAC
             </div>
-            {action.impact && (
-              <p className="mt-3 text-[12.5px] leading-relaxed text-[#4b5563]">
-                {action.impact}
-              </p>
-            )}
-            <button
-              data-testid="page-hero-action-cta"
-              onClick={() => {
-                if (onAction) return onAction();
-                if (action.to) nav(action.to);
-              }}
-              className="btn-primary mt-5 h-10 !py-0"
-            >
-              {action.cta}
-              <ArrowUpRight className="w-4 h-4" strokeWidth={1.75} />
-            </button>
-          </aside>
+            <div className="mt-1 flex items-baseline gap-2 justify-end">
+              <span className="font-display font-semibold text-[22px] leading-none text-[#0f9b7c]">
+                {data.outcome.cac}
+              </span>
+              <span className="text-[11px] font-mono text-[#9ca3af] line-through">
+                {data.outcome.cacBaseline}
+              </span>
+            </div>
+            <div className="mt-1 text-[10.5px] font-mono text-[#0f9b7c]">
+              {data.outcome.cacDelta}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ────── North Star fallback ────── */
+function NorthStarBlock({ data }) {
+  const isDown = data.trend?.startsWith("down");
+  const trendColor = "text-[#0f9b7c]";
+  return (
+    <div data-testid="page-hero-northstar">
+      <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#9ca3af]">
+        {data.label}
+      </div>
+      <div className="mt-3 flex items-baseline gap-4 flex-wrap">
+        <div
+          data-testid="page-hero-northstar-value"
+          className="font-display font-semibold text-[#111827] text-[60px] md:text-[72px] leading-[0.95] tracking-tight"
+        >
+          {data.value}
+        </div>
+        {data.delta && (
+          <div className={`inline-flex items-center gap-1.5 text-[13px] font-mono ${trendColor}`}>
+            <TrendingUp className="w-3.5 h-3.5" strokeWidth={2} />
+            {data.delta}
+          </div>
         )}
       </div>
-    </section>
+      {data.attribution && (
+        <p className="mt-5 text-[14px] leading-relaxed text-[#4b5563] max-w-[520px]">
+          {data.attribution}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/* ────── Intelligent NBA card ────── */
+function SmartActionCard({ data, legacy, onAction, nav }) {
+  if (!data && !legacy) return null;
+
+  const handle = () => {
+    if (onAction) return onAction();
+    if (data?.to) nav(data.to);
+    if (legacy?.to) nav(legacy.to);
+  };
+
+  return (
+    <aside
+      data-testid="page-hero-action"
+      className="lg:col-span-5 rounded-2xl bg-[#faf9ff] border border-[#eeeaf6] p-6"
+    >
+      <div className="flex items-center gap-2">
+        <Sparkles
+          className="w-3.5 h-3.5 text-[#6d46c6]"
+          strokeWidth={1.75}
+        />
+        <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#6d46c6]">
+          {data?.eyebrow || "Next best action"}
+        </div>
+      </div>
+
+      <div
+        data-testid="page-hero-action-title"
+        className="mt-3 font-display text-[16px] leading-[1.3] font-semibold text-[#111827]"
+      >
+        {data?.headline || legacy?.title}
+      </div>
+
+      {data?.reasoning && (
+        <ul className="mt-4 space-y-2">
+          {data.reasoning.map((r, i) => (
+            <li
+              key={i}
+              data-testid={`nba-reason-${i}`}
+              className="flex items-start gap-2 text-[12px] leading-snug"
+            >
+              <ChevronRight
+                className="w-3 h-3 text-[#6d46c6] mt-1 shrink-0"
+                strokeWidth={2}
+              />
+              <div>
+                <span className="text-[#111827] font-medium">{r.label}:</span>{" "}
+                <span className="text-[#4b5563]">{r.value}</span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {(data?.outcome || legacy?.impact) && (
+        <p className="mt-4 pt-4 border-t border-[#eeeaf6] text-[12.5px] leading-relaxed text-[#4b5563]">
+          {data?.outcome || legacy?.impact}
+        </p>
+      )}
+
+      <button
+        data-testid="page-hero-action-cta"
+        onClick={handle}
+        className="btn-primary mt-5 h-10 !py-0"
+      >
+        {data?.cta || legacy?.cta}
+        <ArrowUpRight className="w-4 h-4" strokeWidth={1.75} />
+      </button>
+    </aside>
   );
 }

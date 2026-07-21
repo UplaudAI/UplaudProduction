@@ -21,9 +21,9 @@ import {
   ShieldCheck,
   TrendingUp,
 } from "lucide-react";
-import { CONVERSATIONS, CONVERSATION_SOURCES, SIGNAL_THEMES, PAGE_OUTCOMES } from "@/mocks/fintech";
-import { toast } from "sonner";
 import PageHero from "@/components/business/PageHero";
+import { toast } from "sonner";
+import { CONVERSATIONS, CONVERSATION_SOURCES, SIGNAL_THEMES, PAGE_OUTCOMES, SMART_NBA } from "@/mocks/fintech";
 
 const SOURCE_META = {
   Gong: { color: "#8236f7" },
@@ -79,7 +79,7 @@ export default function ConversationsPage() {
         eyebrow={PAGE_OUTCOMES.conversations.eyebrow}
         question={PAGE_OUTCOMES.conversations.question}
         northStar={PAGE_OUTCOMES.conversations.northStar}
-        action={PAGE_OUTCOMES.conversations.action}
+        smartAction={SMART_NBA.conversations}
         onAction={() =>
           toast.success("Themes exported to Ads Manager", {
             description: "Meta CFO creative refresh queued.",

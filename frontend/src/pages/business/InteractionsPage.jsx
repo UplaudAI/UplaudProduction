@@ -11,9 +11,9 @@ import {
   Zap,
   X,
 } from "lucide-react";
-import { INTERACTIONS, INTERACTION_TYPES, ACTIVATION_STATES, PAGE_OUTCOMES } from "@/mocks/fintech";
-import { toast } from "sonner";
 import PageHero from "@/components/business/PageHero";
+import { toast } from "sonner";
+import { INTERACTIONS, INTERACTION_TYPES, ACTIVATION_STATES, PAGE_OUTCOMES, SMART_NBA } from "@/mocks/fintech";
 
 const STATE_STYLES = {
   grey: "bg-[#f5f5f5] text-[#6b7280] border-[#e5e7eb]",
@@ -47,10 +47,10 @@ export default function InteractionsPage() {
         eyebrow={PAGE_OUTCOMES.interactions.eyebrow}
         question={PAGE_OUTCOMES.interactions.question}
         northStar={PAGE_OUTCOMES.interactions.northStar}
-        action={PAGE_OUTCOMES.interactions.action}
+        smartAction={SMART_NBA.interactions}
         onAction={() =>
-          toast.success("Feedback prompts queued for top 20 attendees", {
-            description: "Projected +$168k pipeline.",
+          toast.success("22 controllers re-engaged with Rohan S.'s testimonial", {
+            description: "Projected ~11 responses · ~4 warm intros.",
           })
         }
       />

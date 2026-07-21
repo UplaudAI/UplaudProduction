@@ -17,9 +17,9 @@ import {
   Meh,
   ThumbsDown,
 } from "lucide-react";
-import { REVIEWS, AGENT_RECOMMENDATIONS, PAGE_OUTCOMES } from "@/mocks/fintech";
-import { toast } from "sonner";
 import PageHero from "@/components/business/PageHero";
+import { toast } from "sonner";
+import { REVIEWS, AGENT_RECOMMENDATIONS, PAGE_OUTCOMES, SMART_NBA } from "@/mocks/fintech";
 
 const AGENT_META = {
   social: { icon: Megaphone, color: "#6d46c6", label: "Social Post Agent" },
@@ -54,7 +54,7 @@ export default function ReviewsPage() {
         eyebrow={PAGE_OUTCOMES.reviews.eyebrow}
         question={PAGE_OUTCOMES.reviews.question}
         northStar={PAGE_OUTCOMES.reviews.northStar}
-        action={PAGE_OUTCOMES.reviews.action}
+        smartAction={SMART_NBA.reviews}
       />
 
       {/* Section header */}

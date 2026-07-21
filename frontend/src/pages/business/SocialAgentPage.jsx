@@ -14,9 +14,9 @@ import {
   ArrowUpRight,
   Zap,
 } from "lucide-react";
-import { SOCIAL_POSTS, REVIEWS, PAGE_OUTCOMES } from "@/mocks/fintech";
-import { toast } from "sonner";
 import PageHero from "@/components/business/PageHero";
+import { toast } from "sonner";
+import { SOCIAL_POSTS, REVIEWS, PAGE_OUTCOMES, SMART_NBA } from "@/mocks/fintech";
 
 const PLATFORMS = [
   { id: "linkedin", label: "LinkedIn", icon: Linkedin, color: "#0a66c2" },
@@ -71,7 +71,7 @@ export default function SocialAgentPage() {
         eyebrow={PAGE_OUTCOMES.social.eyebrow}
         question={PAGE_OUTCOMES.social.question}
         northStar={PAGE_OUTCOMES.social.northStar}
-        action={PAGE_OUTCOMES.social.action}
+        smartAction={SMART_NBA.social}
         onAction={() =>
           toast.success("Marcus B.'s testimonial amplified", {
             description: "Scheduled for LinkedIn 9am + X 11am ET.",

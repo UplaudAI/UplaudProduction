@@ -12,9 +12,9 @@ import {
   Copy,
   ArrowUp,
 } from "lucide-react";
-import { REDDIT_THREADS, REVIEWS, PAGE_OUTCOMES } from "@/mocks/fintech";
-import { toast } from "sonner";
 import PageHero from "@/components/business/PageHero";
+import { toast } from "sonner";
+import { REDDIT_THREADS, REVIEWS, PAGE_OUTCOMES, SMART_NBA } from "@/mocks/fintech";
 
 const PRESET_QUERIES = [
   "fee-only advisor",
@@ -48,7 +48,7 @@ export default function RedditAgentPage() {
         eyebrow={PAGE_OUTCOMES.reddit.eyebrow}
         question={PAGE_OUTCOMES.reddit.question}
         northStar={PAGE_OUTCOMES.reddit.northStar}
-        action={PAGE_OUTCOMES.reddit.action}
+        smartAction={SMART_NBA.reddit}
       />
 
       {/* Section header */}

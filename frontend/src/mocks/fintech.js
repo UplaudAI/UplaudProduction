@@ -1329,3 +1329,464 @@ export const SIGNAL_THEMES = [
   },
 ];
 
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  VALUE CHAIN — the Uplaud conversion path visualisation                   */
+/* ────────────────────────────────────────────────────────────────────────── */
+export const VALUE_CHAIN = {
+  stages: [
+    {
+      id: "demos",
+      label: "Demos attended",
+      value: "641",
+      subline: "Meta + Google",
+      hint: "Source",
+    },
+    {
+      id: "testimonials",
+      label: "Testimonials extracted",
+      value: "388",
+      subline: "60% of demos",
+      hint: "Feedback + Conversation Intelligence",
+      conversionFromPrev: "60%",
+    },
+    {
+      id: "approved",
+      label: "Approved by customer",
+      value: "172",
+      subline: "44% of extracted",
+      hint: "Customer-approved trust asset",
+      conversionFromPrev: "44%",
+    },
+    {
+      id: "campaigns",
+      label: "Referral campaigns launched",
+      value: "12",
+      subline: "Seeded from 172 testimonials",
+      hint: "Refer-a-Controller, CFO Cohort, etc.",
+      conversionFromPrev: "—",
+    },
+    {
+      id: "warm_leads",
+      label: "Warm leads generated",
+      value: "94",
+      subline: "Warm intros in HubSpot",
+      hint: "Named leads · enriched",
+      conversionFromPrev: "55%",
+    },
+    {
+      id: "converted",
+      label: "New customers",
+      value: "21",
+      subline: "22% of warm leads",
+      hint: "Closed-won this month",
+      conversionFromPrev: "22%",
+    },
+  ],
+  outcome: {
+    label: "Estimated revenue impact",
+    value: "$284k",
+    subline: "ARR from Uplaud-sourced customers",
+    cac: "$186",
+    cacBaseline: "$1,204",
+    cacDelta: "84.6% below paid baseline",
+  },
+};
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  INTELLIGENT NEXT-BEST-ACTIONS  (rationale + segmentation + outcome)      */
+/* ────────────────────────────────────────────────────────────────────────── */
+export const SMART_NBA = {
+  overview: {
+    eyebrow: "Intelligent action",
+    headline:
+      "76 of your 253 unactivated demo attendees match every high-conversion signal",
+    reasoning: [
+      { label: "Monthly vendor spend", value: "≥ $200k · 76 people" },
+      { label: "Sentiment on call", value: "positive · from Gong + Zoom AI" },
+      { label: "Peer overlap", value: "1+ PayRewards customer in their LinkedIn network" },
+    ],
+    outcome:
+      "Launch a segmented referral campaign to just this cohort. Projected: ~24 warm intros · ~5 new customers · ~$168k new ARR at a $210 CAC — vs $1,204 paid baseline.",
+    cta: "Segment & launch to 76",
+    to: "/business/interactions",
+  },
+  interactions: {
+    eyebrow: "Intelligent action",
+    headline:
+      "22 controllers went silent after demo — they're your fastest path to referrals",
+    reasoning: [
+      { label: "Role match", value: "Controllers / VPs of Finance (highest referral rate)" },
+      { label: "Signal score", value: "≥ 0.88 on transcript · buying-phase questions asked" },
+      { label: "Peer overlap", value: "Every one has a PayRewards customer in their network" },
+    ],
+    outcome:
+      "Re-engage with a controller-specific testimonial (Rohan S. → 5★, same persona). Projected ~11 responses · ~4 warm intros · ~1 new customer.",
+    cta: "Re-engage the 22",
+    to: null,
+  },
+  conversations: {
+    eyebrow: "Intelligent action",
+    headline:
+      '"Rewards P&L line" is the exact language 22 CFO buyers used on call',
+    reasoning: [
+      { label: "Frequency", value: "22 mentions across 18 conversations" },
+      { label: "Buyer type", value: "CFOs at $10M+ ARR SaaS + fintech" },
+      { label: "Ad performance", value: "Current CFO creative CTR 1.2% · benchmark 2.0%+" },
+    ],
+    outcome:
+      "Rewrite your Meta CFO creative with this phrase. Projected 1.7× CTR uplift · ~34 additional demos/mo based on your current spend.",
+    cta: "Send to Ads Manager",
+    to: null,
+  },
+  reviews: {
+    eyebrow: "Intelligent action",
+    headline:
+      "Rohan S. is your highest-LTV unactivated 5★ — worth 3 warm intros",
+    reasoning: [
+      { label: "Customer LTV", value: "$18.4k/yr subscription + rewards" },
+      { label: "Peer influence", value: "3 controllers in his network already booked demos" },
+      { label: "Language match", value: '"Pays for itself" phrase = highest-CTR ad copy' },
+    ],
+    outcome:
+      "Amplify as a LinkedIn testimonial with a founder-tone caption. Projected 18.4k qualified reach · ~3 warm intros · ~1 new customer.",
+    cta: "Draft the post",
+    to: "/business/social",
+  },
+  referrals: {
+    eyebrow: "Intelligent action",
+    headline:
+      "The Healthcare CFO cohort has 82% peer-overlap — highest conversion probability",
+    reasoning: [
+      { label: "Seed advocate", value: "Diane Morales (Cirrus Health · 5★ · $220k/mo spend)" },
+      { label: "Peer overlap", value: "18 of 22 target CFOs share ≥2 mutual LinkedIn connections" },
+      { label: "Historical benchmark", value: "Peer-overlap ≥ 70% converts at 4.2× the baseline" },
+    ],
+    outcome:
+      "Launch the campaign now. Projected: ~14 accepts · ~6 booked · ~1–2 new customers at CAC ~$168.",
+    cta: "Launch campaign",
+    to: null,
+  },
+  social: {
+    eyebrow: "Intelligent action",
+    headline:
+      "Marcus B.'s CFO testimonial matches 3 open Meta audience segments",
+    reasoning: [
+      { label: "Audience fit", value: "US SaaS CFOs · Canadian ops · Bill.com refugees" },
+      { label: "Language performance", value: '"$63k of rewards leakage" scored top 3% predicted CTR' },
+      { label: "Freshness", value: "Approved 2 days ago · under the 7-day virality window" },
+    ],
+    outcome:
+      "Amplify to LinkedIn + X now. Projected 42.1k qualified reach · ~9 demo requests based on your last 3 amplifications.",
+    cta: "Amplify now",
+    to: null,
+  },
+  reddit: {
+    eyebrow: "Intelligent action",
+    headline:
+      "4 threads today match a specific PayRewards customer testimonial",
+    reasoning: [
+      { label: "Match quality", value: "94% average match score · anchored to real quotes" },
+      { label: "Thread velocity", value: "3 posted in the last 6h · under-answered" },
+      { label: "Historical benchmark", value: "Reply-per-thread produces 2 demo requests on average" },
+    ],
+    outcome:
+      "Approve 4 helpful, source-anchored replies. Projected +13.6k impressions · ~8 attributed demo requests.",
+    cta: "Review the 4 drafts",
+    to: null,
+  },
+};
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  WARM LEADS — real named leads with referrer + campaign + enrichment       */
+/* ────────────────────────────────────────────────────────────────────────── */
+export const WARM_LEAD_STAGES = {
+  new: { label: "New", tone: "purple" },
+  clicked: { label: "Clicked", tone: "purple" },
+  booked: { label: "Meeting booked", tone: "amber" },
+  demoed: { label: "Demoed", tone: "amber" },
+  negotiation: { label: "In negotiation", tone: "amber" },
+  converted: { label: "Closed-won", tone: "mint" },
+  cold: { label: "Cold", tone: "grey" },
+};
+
+export const WARM_LEADS = [
+  {
+    id: "wl_001",
+    name: "Aditi Bhandari",
+    role: "Controller",
+    company: "Tarrow Studios",
+    companyDomain: "tarrow.studio",
+    monthlySpend: "$210k",
+    industry: "Design agency",
+    headcount: 84,
+    stage: "booked",
+    hotness: 0.94,
+    referrer: {
+      name: "Rohan Sethi",
+      company: "Blueprint Robotics",
+      testimonialId: "rv_001",
+      relationship: "Ex-colleague · 4 years",
+    },
+    campaign: "Refer-a-Controller",
+    campaignId: "rc_001",
+    receivedAt: "2026-02-11",
+    enrichment: {
+      linkedin: "linkedin.com/in/aditibhandari",
+      recent: [
+        "Announced Series A close last week ($14M · Sequoia India)",
+        "Posted about AP tool frustration 2 days ago",
+      ],
+      companyMetrics: { arr: "$8M", growth: "+142% YoY" },
+      buyingSignals: [
+        "Reviewed pricing page 4 times in 48h",
+        "Downloaded Bill.com comparison guide",
+      ],
+    },
+    suggestedActions: [
+      { id: "nurture_1", label: "Send Series A congrats + demo booking link" },
+      { id: "nurture_2", label: "Loop in Rohan for a warm intro on LinkedIn" },
+    ],
+  },
+  {
+    id: "wl_002",
+    name: "Julian Ortega",
+    role: "CFO",
+    company: "Aster Health Networks",
+    companyDomain: "asterhealth.co",
+    monthlySpend: "$540k",
+    industry: "Healthcare · Multi-clinic",
+    headcount: 320,
+    stage: "demoed",
+    hotness: 0.92,
+    referrer: {
+      name: "Diane Morales",
+      company: "Cirrus Health",
+      testimonialId: "rv_007",
+      relationship: "Peer CFO network",
+    },
+    campaign: "Healthcare CFO Warm-Intros",
+    campaignId: "rc_003",
+    receivedAt: "2026-02-09",
+    enrichment: {
+      linkedin: "linkedin.com/in/julianortega",
+      recent: [
+        "New CFO — joined Aster 6 weeks ago from Steward Health",
+        "Wrote a LinkedIn post: 'Every new CFO's first-90-days audit'",
+      ],
+      companyMetrics: { arr: "$62M revenue", growth: "+18% YoY" },
+      buyingSignals: [
+        "Attended full demo · asked about SOC 2 + PCI",
+        "Requested contract redlines",
+      ],
+    },
+    suggestedActions: [
+      { id: "close_1", label: "Send SOC 2 + PCI packet + redline draft" },
+      { id: "close_2", label: "Offer implementation credit tied to Q1 close" },
+    ],
+  },
+  {
+    id: "wl_003",
+    name: "Meredith Zhao",
+    role: "VP Finance",
+    company: "Brightpath SaaS",
+    companyDomain: "brightpath.io",
+    monthlySpend: "$180k",
+    industry: "SaaS · Series B",
+    headcount: 128,
+    stage: "negotiation",
+    hotness: 0.96,
+    referrer: {
+      name: "Sara Kim",
+      company: "Trellis SaaS",
+      testimonialId: "rv_003",
+      relationship: "COO peer network",
+    },
+    campaign: "CFO Cohort · SaaS + Fintech",
+    campaignId: "rc_002",
+    receivedAt: "2026-02-07",
+    enrichment: {
+      linkedin: "linkedin.com/in/meredithzhao",
+      recent: [
+        "Company hit $10M ARR milestone (announced on LinkedIn)",
+        "Referenced 'card rewards on AWS' in a comment thread",
+      ],
+      companyMetrics: { arr: "$10M", growth: "+188% YoY" },
+      buyingSignals: [
+        "Legal review in progress",
+        "Compared PayRewards to Ramp Bill Pay",
+      ],
+    },
+    suggestedActions: [
+      { id: "neg_1", label: "Send Sara Kim's ROI case study as decision anchor" },
+      { id: "neg_2", label: "Schedule technical review with their FP&A" },
+    ],
+  },
+  {
+    id: "wl_004",
+    name: "Colin Fraser",
+    role: "Head of AP",
+    company: "Northline Freight",
+    companyDomain: "northline.co",
+    monthlySpend: "$420k",
+    industry: "Logistics",
+    headcount: 210,
+    stage: "clicked",
+    hotness: 0.72,
+    referrer: {
+      name: "Malik Reyes",
+      company: "Bolt Manufacturing",
+      testimonialId: "rv_008",
+      relationship: "Trade association contact",
+    },
+    campaign: "Refer-a-Controller",
+    campaignId: "rc_001",
+    receivedAt: "2026-02-10",
+    enrichment: {
+      linkedin: "linkedin.com/in/colinfraser",
+      recent: [
+        "Rebuilding AP team — hired 2 new specialists",
+        "Company opened new distribution hub in TX",
+      ],
+      companyMetrics: { arr: "$42M revenue", growth: "+31% YoY" },
+      buyingSignals: [
+        "Clicked email · didn't book yet",
+      ],
+    },
+    suggestedActions: [
+      { id: "nurture_a", label: "Follow up with logistics case study" },
+      { id: "nurture_b", label: "Auto-schedule reminder in 3 days" },
+    ],
+  },
+  {
+    id: "wl_005",
+    name: "Rina Patel",
+    role: "Founder",
+    company: "Mesa Coffee Roasters",
+    companyDomain: "mesaroasters.com",
+    monthlySpend: "$62k",
+    industry: "Food & Beverage",
+    headcount: 22,
+    stage: "converted",
+    hotness: 1.0,
+    referrer: {
+      name: "James Wu",
+      company: "Kettle & Fire Coffee",
+      testimonialId: "rv_004",
+      relationship: "Roaster's Guild",
+    },
+    campaign: "Refer-a-Controller",
+    campaignId: "rc_001",
+    receivedAt: "2026-01-28",
+    enrichment: {
+      linkedin: "linkedin.com/in/rinapatel",
+      recent: ["Onboarded Feb 5 · earned first $2.4k in Amex MR"],
+      companyMetrics: { arr: "$3.2M revenue", growth: "+64% YoY" },
+      buyingSignals: [],
+    },
+    suggestedActions: [
+      { id: "advocacy_1", label: "Ask for onboarding feedback → next referral" },
+    ],
+  },
+  {
+    id: "wl_006",
+    name: "David Ng",
+    role: "COO",
+    company: "Verdant Materials",
+    companyDomain: "verdantmat.com",
+    monthlySpend: "$310k",
+    industry: "Manufacturing",
+    headcount: 165,
+    stage: "new",
+    hotness: 0.88,
+    referrer: {
+      name: "Malik Reyes",
+      company: "Bolt Manufacturing",
+      testimonialId: "rv_008",
+      relationship: "Industry peer",
+    },
+    campaign: "CFO Cohort · SaaS + Fintech",
+    campaignId: "rc_002",
+    receivedAt: "2026-02-12",
+    enrichment: {
+      linkedin: "linkedin.com/in/davidng",
+      recent: [
+        "Raised $22M Series C (Insight Partners)",
+        "Hiring VP Finance",
+      ],
+      companyMetrics: { arr: "$28M", growth: "+96% YoY" },
+      buyingSignals: [
+        "Introduction just landed · not yet clicked",
+      ],
+    },
+    suggestedActions: [
+      { id: "warm_1", label: "Send Series C congrats + one-line demo offer" },
+      { id: "warm_2", label: "Ping Malik to reinforce the intro" },
+    ],
+  },
+  {
+    id: "wl_007",
+    name: "Sophie Adekunle",
+    role: "Head of Finance",
+    company: "Lumo Legal Tech",
+    companyDomain: "lumolegal.co",
+    monthlySpend: "$140k",
+    industry: "Legal SaaS",
+    headcount: 62,
+    stage: "booked",
+    hotness: 0.85,
+    referrer: {
+      name: "Sara Kim",
+      company: "Trellis SaaS",
+      testimonialId: "rv_003",
+      relationship: "Advisor network",
+    },
+    campaign: "CFO Cohort · SaaS + Fintech",
+    campaignId: "rc_002",
+    receivedAt: "2026-02-08",
+    enrichment: {
+      linkedin: "linkedin.com/in/sophieadekunle",
+      recent: [
+        "Company won Legal Innovation Award last month",
+      ],
+      companyMetrics: { arr: "$6M ARR", growth: "+72% YoY" },
+      buyingSignals: [
+        "Demo booked for next Tuesday",
+      ],
+    },
+    suggestedActions: [
+      { id: "prep_1", label: "Send Sara Kim's testimonial pre-demo" },
+    ],
+  },
+  {
+    id: "wl_008",
+    name: "Erin Cavanaugh",
+    role: "Controller",
+    company: "Windrose Interiors",
+    companyDomain: "windrose.design",
+    monthlySpend: "$96k",
+    industry: "Interior Design",
+    headcount: 34,
+    stage: "cold",
+    hotness: 0.42,
+    referrer: {
+      name: "Kavita Iyer",
+      company: "Northwind Interiors",
+      testimonialId: "rv_009",
+      relationship: "Design vertical peer",
+    },
+    campaign: "Refer-a-Controller",
+    campaignId: "rc_001",
+    receivedAt: "2026-01-20",
+    enrichment: {
+      linkedin: "linkedin.com/in/erincavanaugh",
+      recent: ["No recent LinkedIn activity"],
+      companyMetrics: { arr: "$2.1M revenue" },
+      buyingSignals: [],
+    },
+    suggestedActions: [
+      { id: "re_1", label: "Try a fresh angle — send interior-design case study" },
+    ],
+  },
+];
+
