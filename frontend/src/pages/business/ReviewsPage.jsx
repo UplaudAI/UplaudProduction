@@ -17,8 +17,9 @@ import {
   Meh,
   ThumbsDown,
 } from "lucide-react";
-import { REVIEWS, AGENT_RECOMMENDATIONS } from "@/mocks/fintech";
+import { REVIEWS, AGENT_RECOMMENDATIONS, PAGE_OUTCOMES } from "@/mocks/fintech";
 import { toast } from "sonner";
+import PageHero from "@/components/business/PageHero";
 
 const AGENT_META = {
   social: { icon: Megaphone, color: "#6d46c6", label: "Social Post Agent" },
@@ -48,15 +49,22 @@ export default function ReviewsPage() {
   });
 
   return (
-    <div data-testid="reviews-page" className="space-y-6">
-      {/* Header */}
+    <div data-testid="reviews-page" className="space-y-10">
+      <PageHero
+        eyebrow={PAGE_OUTCOMES.reviews.eyebrow}
+        question={PAGE_OUTCOMES.reviews.question}
+        northStar={PAGE_OUTCOMES.reviews.northStar}
+        action={PAGE_OUTCOMES.reviews.action}
+      />
+
+      {/* Section header */}
       <div className="flex flex-wrap items-center gap-4 justify-between">
         <div>
-          <h1 className="font-display text-[26px] font-semibold tracking-tight text-[#111827]">
-            All reviews
-          </h1>
-          <p className="text-[13px] text-[#4b5563] mt-1">
-            {filtered.length} of {REVIEWS.length} reviews · showing recent imports
+          <h2 className="font-display text-[20px] font-semibold tracking-tight text-[#111827]">
+            All captured trust
+          </h2>
+          <p className="text-[12.5px] text-[#9ca3af] mt-1">
+            {filtered.length} of {REVIEWS.length} reviews
           </p>
         </div>
         <div className="flex items-center gap-2">

@@ -24,38 +24,36 @@ const LOGO_URL =
 
 const NAV = [
   {
-    section: "Growth Engine",
+    section: "Business Impact",
     items: [
-      { to: "/business/insights", label: "Overview", icon: LineChart, testId: "nav-insights" },
+      { to: "/business/insights", label: "Growth Overview", icon: LineChart, testId: "nav-insights" },
     ],
   },
   {
-    section: "Growth Activation",
-    hint: "Pre-customer",
+    section: "Pre-Customer Growth",
     items: [
-      { to: "/business/interactions", label: "Interactions", icon: Radio, testId: "nav-interactions" },
-      { to: "/business/conversations", label: "Conversations", icon: Mic, testId: "nav-conversations" },
+      { to: "/business/interactions", label: "Untapped Opportunities", icon: Radio, testId: "nav-interactions" },
+      { to: "/business/conversations", label: "Customer Signals", icon: Mic, testId: "nav-conversations" },
     ],
   },
   {
-    section: "Customer Advocacy",
-    hint: "Post-customer",
+    section: "Post-Customer Advocacy",
     items: [
-      { to: "/business/reviews", label: "Reviews & Feedback", icon: MessagesSquare, testId: "nav-reviews" },
-      { to: "/business/referrals", label: "Referrals", icon: Users, testId: "nav-referrals" },
+      { to: "/business/reviews", label: "Trust Assets", icon: MessagesSquare, testId: "nav-reviews" },
+      { to: "/business/referrals", label: "Warm Pipeline", icon: Users, testId: "nav-referrals" },
     ],
   },
   {
     section: "Amplification",
     items: [
-      { to: "/business/social", label: "Social Agent", icon: Megaphone, testId: "nav-social" },
-      { to: "/business/reddit", label: "Reddit Agent", icon: Ghost, testId: "nav-reddit" },
+      { to: "/business/social", label: "Story Amplification", icon: Megaphone, testId: "nav-social" },
+      { to: "/business/reddit", label: "High-Intent Demand", icon: Ghost, testId: "nav-reddit" },
     ],
   },
   {
     section: "Data",
     items: [
-      { to: "/business/import", label: "Import", icon: Upload, testId: "nav-import" },
+      { to: "/business/import", label: "Sources", icon: Upload, testId: "nav-import" },
     ],
   },
 ];
@@ -121,15 +119,8 @@ export default function DashboardLayout() {
         <nav className="flex-1 overflow-y-auto px-2 pb-4">
           {NAV.map((sec) => (
             <div key={sec.section} className="mb-4">
-              <div className="px-3 py-1.5 flex items-baseline gap-2">
-                <span className="text-[10.5px] font-mono uppercase tracking-[0.18em] text-[#9ca3af]">
-                  {sec.section}
-                </span>
-                {sec.hint && (
-                  <span className="text-[9.5px] font-mono text-[#6d46c6] uppercase tracking-[0.14em]">
-                    {sec.hint}
-                  </span>
-                )}
+              <div className="px-3 py-1.5 text-[10.5px] font-mono uppercase tracking-[0.18em] text-[#9ca3af]">
+                {sec.section}
               </div>
               <div className="space-y-0.5">
                 {sec.items.map((it) => (
@@ -161,7 +152,7 @@ export default function DashboardLayout() {
       {/* Main */}
       <main className="flex-1 min-w-0">
         <Topbar user={user} pathname={loc.pathname} />
-        <div data-testid="dashboard-content" className="p-8">
+        <div data-testid="dashboard-content" className="px-12 py-12 max-w-[1360px]">
           <Outlet />
         </div>
       </main>
@@ -195,14 +186,14 @@ function Topbar({ user, pathname }) {
     .join("");
 
   const titles = {
-    "/business/insights": "Growth Engine",
-    "/business/import": "Import",
-    "/business/interactions": "Interactions",
-    "/business/conversations": "Conversation Intelligence",
-    "/business/reviews": "Reviews & Feedback",
-    "/business/social": "Social Amplification",
-    "/business/referrals": "Referral Engine",
-    "/business/reddit": "Reddit Insertion",
+    "/business/insights": "Growth Overview",
+    "/business/import": "Data Sources",
+    "/business/interactions": "Untapped Opportunities",
+    "/business/conversations": "Customer Signals",
+    "/business/reviews": "Trust Assets",
+    "/business/social": "Story Amplification",
+    "/business/referrals": "Warm Pipeline",
+    "/business/reddit": "High-Intent Demand",
     "/business/settings": "Settings",
   };
 
@@ -211,46 +202,28 @@ function Topbar({ user, pathname }) {
   return (
     <header
       data-testid="dashboard-topbar"
-      className="h-16 px-8 border-b border-[#eeeaf6] bg-white/70 backdrop-blur-xl sticky top-0 z-40 flex items-center gap-6"
+      className="h-16 px-8 border-b border-[#eeeaf6] bg-white/80 backdrop-blur-xl sticky top-0 z-40 flex items-center gap-6"
     >
-      <div>
-        <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#9ca3af]">
-          {BRAND.company}
-        </div>
-        <div className="text-[17px] font-display font-semibold text-[#111827] leading-tight">
-          {title}
-        </div>
+      <div
+        data-testid="topbar-title"
+        className="text-[14px] font-display font-semibold text-[#111827]"
+      >
+        {title}
       </div>
-
-      <div className="flex-1 max-w-[520px]">
-        <div className="relative">
-          <Search className="w-4 h-4 text-[#9ca3af] absolute left-4 top-1/2 -translate-y-1/2" />
-          <input
-            data-testid="topbar-search-input"
-            placeholder="Search reviews, campaigns, threads..."
-            className="w-full h-10 pl-10 pr-4 rounded-full border border-[#eeeaf6] bg-[#faf9ff] text-[13px] focus:outline-none focus:border-[#d9d1ee] focus:bg-white transition-all"
-          />
-        </div>
-      </div>
+      <span className="text-[11px] font-mono text-[#9ca3af]">
+        {BRAND.company}
+      </span>
 
       <div className="ml-auto flex items-center gap-3">
         <button
-          data-testid="topbar-new-campaign-btn"
-          className="btn-primary h-10 !py-0"
-        >
-          <Plus className="w-4 h-4" strokeWidth={2} />
-          New campaign
-        </button>
-        <button
           data-testid="topbar-notifications-btn"
-          className="w-10 h-10 rounded-full border border-[#eeeaf6] hover:border-[#d9d1ee] flex items-center justify-center relative transition-colors"
+          className="w-10 h-10 rounded-full hover:bg-[#faf9ff] flex items-center justify-center transition-colors"
         >
           <Bell className="w-4 h-4 text-[#4b5563]" strokeWidth={1.75} />
-          <span className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-[#5eead4]" />
         </button>
         <div
           data-testid="topbar-user-avatar"
-          className="w-10 h-10 rounded-full bg-[#261c4d] text-white text-[12px] font-semibold flex items-center justify-center"
+          className="w-9 h-9 rounded-full bg-[#261c4d] text-white text-[12px] font-semibold flex items-center justify-center"
           title={user.name}
         >
           {initials}

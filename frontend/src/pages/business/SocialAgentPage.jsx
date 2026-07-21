@@ -14,8 +14,9 @@ import {
   ArrowUpRight,
   Zap,
 } from "lucide-react";
-import { SOCIAL_POSTS, REVIEWS } from "@/mocks/fintech";
+import { SOCIAL_POSTS, REVIEWS, PAGE_OUTCOMES } from "@/mocks/fintech";
 import { toast } from "sonner";
+import PageHero from "@/components/business/PageHero";
 
 const PLATFORMS = [
   { id: "linkedin", label: "LinkedIn", icon: Linkedin, color: "#0a66c2" },
@@ -65,16 +66,27 @@ export default function SocialAgentPage() {
   };
 
   return (
-    <div data-testid="social-agent-page" className="space-y-6">
-      {/* Header */}
+    <div data-testid="social-agent-page" className="space-y-10">
+      <PageHero
+        eyebrow={PAGE_OUTCOMES.social.eyebrow}
+        question={PAGE_OUTCOMES.social.question}
+        northStar={PAGE_OUTCOMES.social.northStar}
+        action={PAGE_OUTCOMES.social.action}
+        onAction={() =>
+          toast.success("Marcus B.'s story amplified", {
+            description: "Scheduled for LinkedIn 9am + X 11am ET.",
+          })
+        }
+      />
+
+      {/* Section header */}
       <div className="flex items-start justify-between gap-6">
         <div>
-          <h1 className="font-display text-[26px] font-semibold tracking-tight text-[#111827]">
-            Social Post Agent
-          </h1>
-          <p className="text-[13px] text-[#4b5563] mt-1">
-            Turn any 5★ review into platform-native posts. Approve, schedule,
-            ship.
+          <h2 className="font-display text-[20px] font-semibold tracking-tight text-[#111827]">
+            Compose from a customer story
+          </h2>
+          <p className="text-[12.5px] text-[#9ca3af] mt-1">
+            Every post is anchored to a real, approved story.
           </p>
         </div>
         <button

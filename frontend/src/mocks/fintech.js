@@ -1090,3 +1090,237 @@ export const CHANNEL_ATTRIBUTION = [
 export const TREND_30D = [
   12, 14, 13, 18, 22, 20, 24, 28, 26, 30, 34, 32, 38, 41, 44, 42, 48, 52, 55, 58, 61, 64, 68, 72, 74, 78, 82, 86, 89, 92,
 ];
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  PAGE-LEVEL OUTCOMES — every page has one North Star + one Action         */
+/* ────────────────────────────────────────────────────────────────────────── */
+export const PAGE_OUTCOMES = {
+  overview: {
+    eyebrow: "Business Impact · Last 30 days",
+    question: "How much business value has Uplaud created?",
+    northStar: {
+      label: "Influenced revenue",
+      value: "$1.42M",
+      delta: "+22% MoM",
+      trend: "up",
+      attribution:
+        "Uplaud contributed 68% of pipeline this quarter — with a CAC 34% lower than paid baseline.",
+    },
+    action: {
+      title: "Activate 253 demo attendees who never received a feedback prompt",
+      impact: "+$412k projected pipeline · CAC ↓ 44% · ~24 warm intros",
+      cta: "Activate demo attendees",
+      to: "/business/interactions",
+    },
+  },
+  interactions: {
+    eyebrow: "Untapped Opportunities",
+    question: "Which people are your biggest untapped growth opportunities?",
+    northStar: {
+      label: "Untapped pipeline",
+      value: "$412k",
+      delta: "253 unactivated attendees",
+      trend: "up",
+      attribution:
+        "High-intent demo & trial cohorts that never received a feedback prompt.",
+    },
+    action: {
+      title: "Send feedback prompts to top-20 attendees by monthly vendor spend",
+      impact: "Projected: 12 stories · 8 warm intros · +$168k pipeline",
+      cta: "Prompt top 20 now",
+      to: null,
+    },
+  },
+  conversations: {
+    eyebrow: "Customer Signals",
+    question: "What are customers telling you that can lift acquisition?",
+    northStar: {
+      label: "Acquisition-ready insights",
+      value: "3",
+      delta: "themes ready for Meta + Google ad copy",
+      trend: "up",
+      attribution:
+        "Extracted from 61 demo, trial and QBR transcripts across Gong, Zoom AI & Fireflies.",
+    },
+    action: {
+      title: '"Rewards P&L line" language is repeated by 22 CFO buyers',
+      impact: "Rewrite Meta CFO creative with the same phrase — est. 1.7× CTR",
+      cta: "Send themes to Ads Manager",
+      to: null,
+    },
+  },
+  reviews: {
+    eyebrow: "Trust Assets",
+    question: "What trust have we captured — and what pipeline can it unlock?",
+    northStar: {
+      label: "Pipeline potential from trust",
+      value: "$284k",
+      delta: "12 unactivated 5★ reviews",
+      trend: "up",
+      attribution:
+        "5★ reviews from customers with LTV > $10k that haven't been amplified into content or referrals.",
+    },
+    action: {
+      title: "Turn Rohan S. (Blueprint Robotics) into a LinkedIn testimonial",
+      impact: "Projected 18.4k reach · 4.6% engagement · 3 warm intros",
+      cta: "Draft the post",
+      to: "/business/social",
+    },
+  },
+  referrals: {
+    eyebrow: "Warm Pipeline",
+    question: "How much pipeline came from customer introductions?",
+    northStar: {
+      label: "Referral-sourced revenue",
+      value: "$184k",
+      delta: "CAC $210 · 82% below paid baseline",
+      trend: "down-good",
+      attribution:
+        "Warm intros from happy customers convert 4.7× faster than Meta-sourced leads.",
+    },
+    action: {
+      title: "Launch Healthcare CFO Warm-Intros campaign",
+      impact: "22 seeded reviewers · projected +$62k pipeline · 6 SQLs",
+      cta: "Launch campaign",
+      to: null,
+    },
+  },
+  social: {
+    eyebrow: "Story Amplification",
+    question: "How much demand came from authentic customer stories?",
+    northStar: {
+      label: "Amplified demand",
+      value: "84.3k",
+      delta: "qualified impressions · 27 demos booked",
+      trend: "up",
+      attribution:
+        "Content anchored to real customer stories outperforms brand posts by 3.2× on LinkedIn.",
+    },
+    action: {
+      title: "Amplify Marcus B.'s approved story — highest projected demand this week",
+      impact: "Projected 42.1k reach · 3.1% engagement · 9 demo requests",
+      cta: "Amplify to LinkedIn + X",
+      to: null,
+    },
+  },
+  reddit: {
+    eyebrow: "High-Intent Demand",
+    question: "How much high-intent demand did we capture from existing proof?",
+    northStar: {
+      label: "High-intent captures",
+      value: "13.6k",
+      delta: "impressions · 8 demo requests attributed",
+      trend: "up",
+      attribution:
+        "Every reply is anchored to a real customer review — never generic marketing language.",
+    },
+    action: {
+      title: "Approve 4 helpful replies drafted for r/Accounting & r/SaaS threads",
+      impact: "Projected +3.4k impressions per approved reply · 2 demo requests",
+      cta: "Review drafts",
+      to: null,
+    },
+  },
+  import: {
+    eyebrow: "Data Sources",
+    question: "Where should your Growth Engine listen?",
+    northStar: {
+      label: "Signals synced",
+      value: "1,521",
+      delta: "interactions · 687 reviews · live from 8 sources",
+      trend: "up",
+      attribution:
+        "Connect a source once — Uplaud continuously extracts signals, drafts stories and updates attribution.",
+    },
+    action: {
+      title: "Connect Fathom to close the 12% of demo calls we're missing",
+      impact: "Est. +42 conversations/mo · +$68k of pipeline visibility",
+      cta: "Connect Fathom",
+      to: null,
+    },
+  },
+};
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  TWO GROWTH LOOPS (Overview page)                                          */
+/* ────────────────────────────────────────────────────────────────────────── */
+export const GROWTH_LOOPS = {
+  preCustomer: {
+    title: "Pre-Customer Growth Loop",
+    subtitle: "Paid Ads → Demo → Feedback → Story → Referrals → New Prospects",
+    revenue: "$531,200",
+    revenueLabel: "Pipeline generated",
+    cac: "$186",
+    cacDelta: "84% below paid baseline",
+    stages: [
+      { label: "Paid ads", value: "48,210", hint: "clicks" },
+      { label: "Demo booked", value: "892", hint: "1.8% of clicks" },
+      { label: "Demo attended", value: "641", hint: "72% show-up" },
+      { label: "Feedback captured", value: "388", hint: "60% of attendees" },
+      { label: "Stories approved", value: "172", hint: "44% of captured" },
+      { label: "New prospects", value: "48", hint: "Qualified ops" },
+    ],
+  },
+  postCustomer: {
+    title: "Post-Customer Advocacy Loop",
+    subtitle: "Customer → Review → Referral → Social Proof → New Customers",
+    revenue: "$887,300",
+    revenueLabel: "Revenue attributed",
+    cac: "$168",
+    cacDelta: "86% below paid baseline",
+    stages: [
+      { label: "Customers", value: "218", hint: "Active accounts" },
+      { label: "Reviews captured", value: "687", hint: "G2 + Capterra + Google" },
+      { label: "Referrals sent", value: "152", hint: "Warm intros" },
+      { label: "Social proof", value: "128", hint: "Posts amplified" },
+      { label: "New customers", value: "21", hint: "This month" },
+      { label: "Advocates", value: "14", hint: "NPS ≥ 9 + shared" },
+    ],
+  },
+};
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  CUSTOMER SIGNAL THEMES (aggregated across conversations)                  */
+/* ────────────────────────────────────────────────────────────────────────── */
+export const SIGNAL_THEMES = [
+  {
+    id: "theme_1",
+    theme: '"Rewards P&L line"',
+    category: "Buyer language",
+    mentions: 22,
+    conversations: 18,
+    lift: "+72%",
+    liftLabel: "vs current CFO ad creative",
+    quote:
+      "For the first time our card program has a P&L line item the board asks about.",
+    quoteAttribution: "Marcus B., CFO",
+    action: "Rewrite Meta CFO ad creative with this phrase",
+  },
+  {
+    id: "theme_2",
+    theme: '"Pays for itself"',
+    category: "Value framing",
+    mentions: 34,
+    conversations: 28,
+    lift: "+41%",
+    liftLabel: "predicted CTR uplift",
+    quote:
+      "It's the rare AP tool that actually pays for itself.",
+    quoteAttribution: "Rohan S., VP Finance",
+    action: "Use as primary Meta headline for controller audience",
+  },
+  {
+    id: "theme_3",
+    theme: "Cross-border GST vendors",
+    category: "Objection · addressable",
+    mentions: 19,
+    conversations: 14,
+    lift: "$63k",
+    liftLabel: "avg. recovered rewards leakage",
+    quote:
+      "Bill.com wouldn't process our GST vendors on card. PayRewards did in 20 minutes.",
+    quoteAttribution: "Kavita I., Controller",
+    action: "Create a comparison landing page targeting Bill.com refugees",
+  },
+];
+

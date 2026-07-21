@@ -17,10 +17,13 @@ import {
   Edit3,
   RefreshCcw,
   ArrowUpRight,
+  ArrowRight,
   ShieldCheck,
+  TrendingUp,
 } from "lucide-react";
-import { CONVERSATIONS, CONVERSATION_SOURCES } from "@/mocks/fintech";
+import { CONVERSATIONS, CONVERSATION_SOURCES, SIGNAL_THEMES, PAGE_OUTCOMES } from "@/mocks/fintech";
 import { toast } from "sonner";
+import PageHero from "@/components/business/PageHero";
 
 const SOURCE_META = {
   Gong: { color: "#8236f7" },
@@ -71,64 +74,52 @@ export default function ConversationsPage() {
   const selected = CONVERSATIONS.find((c) => c.id === selectedId) || filtered[0];
 
   return (
-    <div data-testid="conversations-page" className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-6 flex-wrap">
-        <div>
-          <h1 className="font-display text-[26px] font-semibold tracking-tight text-[#111827]">
-            Conversation Intelligence
-          </h1>
-          <p className="text-[13px] text-[#4b5563] mt-1 max-w-[600px]">
-            Every demo, trial call, onboarding session and QBR is a growth
-            asset. We extract the signals — you approve the story.
-          </p>
+    <div data-testid="conversations-page" className="space-y-12">
+      <PageHero
+        eyebrow={PAGE_OUTCOMES.conversations.eyebrow}
+        question={PAGE_OUTCOMES.conversations.question}
+        northStar={PAGE_OUTCOMES.conversations.northStar}
+        action={PAGE_OUTCOMES.conversations.action}
+        onAction={() =>
+          toast.success("Themes exported to Ads Manager", {
+            description: "Meta CFO creative refresh queued.",
+          })
+        }
+      />
+
+      {/* Acquisition-ready themes */}
+      <section data-testid="signal-themes" className="space-y-6">
+        <div className="flex items-baseline gap-3">
+          <h2 className="font-display text-[20px] font-semibold tracking-tight text-[#111827]">
+            Themes ready to move acquisition
+          </h2>
+          <span className="text-[12px] text-[#9ca3af]">
+            Aggregated across {CONVERSATIONS.length} conversations
+          </span>
         </div>
-        <button
-          data-testid="conversations-connect-source-btn"
-          onClick={() =>
-            toast.info("Would open Zoom / Gong / Fireflies OAuth")
-          }
-          className="btn-secondary h-10 !py-0"
-        >
-          Connect a source
-          <ArrowUpRight className="w-4 h-4" strokeWidth={1.75} />
-        </button>
-      </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {SIGNAL_THEMES.map((t) => (
+            <ThemeCard key={t.id} theme={t} />
+          ))}
+        </div>
+      </section>
 
-      {/* Connected sources */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        {CONVERSATION_SOURCES.map((s) => (
-          <div
-            key={s.id}
-            data-testid={`conv-source-${s.id}`}
-            className="rounded-2xl border border-[#eeeaf6] bg-white p-4"
-          >
-            <div className="flex items-center gap-2">
-              <div
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-[13px] font-semibold"
-                style={{ backgroundColor: s.color }}
-              >
-                {s.label[0]}
-              </div>
-              <div className="text-[12.5px] font-medium text-[#111827] leading-tight">
-                {s.label}
-              </div>
-            </div>
-            <div className="mt-3 text-[10.5px] font-mono uppercase tracking-[0.14em] text-[#9ca3af]">
-              {s.connected ? `${s.syncs} synced` : "Not connected"}
-            </div>
-            {s.connected && (
-              <div className="mt-1 flex items-center gap-1.5 text-[10.5px] font-mono text-[#0f9b7c]">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#0f9b7c]" />
-                live
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
+      {/* Divider */}
+      <div className="pt-2 border-t border-[#eeeaf6]" />
 
-      {/* Split layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      {/* Explore individual conversations */}
+      <section className="space-y-6">
+        <div className="flex items-baseline gap-3">
+          <h2 className="font-display text-[20px] font-semibold tracking-tight text-[#111827]">
+            Explore individual conversations
+          </h2>
+          <span className="text-[12px] text-[#9ca3af]">
+            {filtered.length} of {CONVERSATIONS.length}
+          </span>
+        </div>
+
+        {/* Split layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* List */}
         <aside className="lg:col-span-4 space-y-3">
           {/* Filter bar */}
@@ -216,6 +207,7 @@ export default function ConversationsPage() {
           {selected && <ConversationDetail conversation={selected} />}
         </section>
       </div>
+      </section>
     </div>
   );
 }
@@ -560,3 +552,50 @@ function StatCell({ label, value, small }) {
     </div>
   );
 }
+
+function ThemeCard({ theme: t }) {
+  return (
+    <div
+      data-testid={`theme-${t.id}`}
+      className="rounded-2xl border border-[#eeeaf6] bg-white p-6 hover:border-[#d9d1ee] transition-colors"
+    >
+      <div className="text-[10.5px] font-mono uppercase tracking-[0.18em] text-[#9ca3af]">
+        {t.category}
+      </div>
+      <div className="mt-3 font-display text-[20px] font-semibold leading-tight text-[#111827]">
+        {t.theme}
+      </div>
+
+      <div className="mt-4 flex items-baseline gap-3">
+        <div className="font-display text-[28px] font-semibold text-[#0f9b7c] leading-none">
+          {t.lift}
+        </div>
+        <div className="text-[11px] text-[#4b5563] leading-tight">
+          {t.liftLabel}
+        </div>
+      </div>
+
+      <div className="mt-5 rounded-xl bg-[#faf9ff] border border-[#eeeaf6] p-3">
+        <p className="text-[12.5px] leading-relaxed text-[#111827] italic">
+          &ldquo;{t.quote}&rdquo;
+        </p>
+        <div className="mt-1.5 text-[10.5px] font-mono text-[#6d46c6]">
+          — {t.quoteAttribution}
+        </div>
+      </div>
+
+      <div className="mt-4 text-[11px] font-mono text-[#9ca3af]">
+        {t.mentions} mentions · {t.conversations} conversations
+      </div>
+
+      <button
+        data-testid={`theme-action-${t.id}`}
+        className="mt-4 text-[12.5px] font-medium text-[#6d46c6] hover:underline flex items-center gap-1"
+      >
+        {t.action}
+        <ArrowRight className="w-3.5 h-3.5" strokeWidth={1.75} />
+      </button>
+    </div>
+  );
+}
+

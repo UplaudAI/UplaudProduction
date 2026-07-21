@@ -12,8 +12,9 @@ import {
   Copy,
   ArrowUp,
 } from "lucide-react";
-import { REDDIT_THREADS, REVIEWS } from "@/mocks/fintech";
+import { REDDIT_THREADS, REVIEWS, PAGE_OUTCOMES } from "@/mocks/fintech";
 import { toast } from "sonner";
+import PageHero from "@/components/business/PageHero";
 
 const PRESET_QUERIES = [
   "fee-only advisor",
@@ -42,16 +43,22 @@ export default function RedditAgentPage() {
   };
 
   return (
-    <div data-testid="reddit-agent-page" className="space-y-6">
-      {/* Header */}
+    <div data-testid="reddit-agent-page" className="space-y-10">
+      <PageHero
+        eyebrow={PAGE_OUTCOMES.reddit.eyebrow}
+        question={PAGE_OUTCOMES.reddit.question}
+        northStar={PAGE_OUTCOMES.reddit.northStar}
+        action={PAGE_OUTCOMES.reddit.action}
+      />
+
+      {/* Section header */}
       <div className="flex items-start justify-between gap-6">
         <div>
-          <h1 className="font-display text-[26px] font-semibold tracking-tight text-[#111827]">
-            Reddit Agent
-          </h1>
-          <p className="text-[13px] text-[#4b5563] mt-1">
-            Find high-intent threads and draft helpful, review-sourced replies —
-            you approve before anything ships.
+          <h2 className="font-display text-[20px] font-semibold tracking-tight text-[#111827]">
+            High-intent threads worth answering
+          </h2>
+          <p className="text-[12.5px] text-[#9ca3af] mt-1">
+            Every reply anchors to a real customer review.
           </p>
         </div>
         <button

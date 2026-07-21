@@ -190,7 +190,7 @@ export default function BusinessLoginPage() {
         <div className="relative">
           <span className="chip chip-dark">
             <Sparkles className="w-3.5 h-3.5 text-[#5eead4]" strokeWidth={2} />
-            AI trust agents · v1.0
+            Uplaud · Growth Engine
           </span>
         </div>
 

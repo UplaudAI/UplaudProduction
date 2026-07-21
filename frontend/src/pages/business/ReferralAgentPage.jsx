@@ -12,8 +12,9 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { REFERRAL_CAMPAIGNS, REVIEWS } from "@/mocks/fintech";
+import { REFERRAL_CAMPAIGNS, REVIEWS, PAGE_OUTCOMES } from "@/mocks/fintech";
 import { toast } from "sonner";
+import PageHero from "@/components/business/PageHero";
 
 const STATUS_STYLES = {
   active: "bg-[#ecfdf7] text-[#0f9b7c] border-[#c8f0e4]",
@@ -36,22 +37,33 @@ export default function ReferralAgentPage() {
       : "0.0";
 
   return (
-    <div data-testid="referral-agent-page" className="space-y-6">
-      {/* Header */}
+    <div data-testid="referral-agent-page" className="space-y-10">
+      <PageHero
+        eyebrow={PAGE_OUTCOMES.referrals.eyebrow}
+        question={PAGE_OUTCOMES.referrals.question}
+        northStar={PAGE_OUTCOMES.referrals.northStar}
+        action={PAGE_OUTCOMES.referrals.action}
+        onAction={() =>
+          toast.success("Healthcare CFO campaign launched", {
+            description: "22 warm intros dispatching over 5 days.",
+          })
+        }
+      />
+
+      {/* Section header */}
       <div className="flex items-start justify-between gap-6">
         <div>
-          <h1 className="font-display text-[26px] font-semibold tracking-tight text-[#111827]">
-            Referral Agent
-          </h1>
-          <p className="text-[13px] text-[#4b5563] mt-1">
-            Convert happy reviewers into warm referrals — automatically drafted,
-            approved by you.
+          <h2 className="font-display text-[20px] font-semibold tracking-tight text-[#111827]">
+            Active referral campaigns
+          </h2>
+          <p className="text-[12.5px] text-[#9ca3af] mt-1">
+            Every campaign is seeded from a real customer story.
           </p>
         </div>
         <button
           data-testid="referral-new-campaign-btn"
           onClick={() => setShowBuilder(true)}
-          className="btn-primary h-10 !py-0"
+          className="btn-secondary h-10 !py-0"
         >
           <Plus className="w-4 h-4" strokeWidth={2} />
           New campaign

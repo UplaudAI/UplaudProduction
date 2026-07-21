@@ -11,8 +11,9 @@ import {
   Zap,
   X,
 } from "lucide-react";
-import { INTERACTIONS, INTERACTION_TYPES, ACTIVATION_STATES } from "@/mocks/fintech";
+import { INTERACTIONS, INTERACTION_TYPES, ACTIVATION_STATES, PAGE_OUTCOMES } from "@/mocks/fintech";
 import { toast } from "sonner";
+import PageHero from "@/components/business/PageHero";
 
 const STATE_STYLES = {
   grey: "bg-[#f5f5f5] text-[#6b7280] border-[#e5e7eb]",
@@ -40,49 +41,28 @@ export default function InteractionsPage() {
     return true;
   });
 
-  const summary = INTERACTIONS.reduce((acc, i) => {
-    acc[i.state] = (acc[i.state] || 0) + 1;
-    return acc;
-  }, {});
-
   return (
-    <div data-testid="interactions-page" className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-6 flex-wrap">
-        <div>
-          <h1 className="font-display text-[26px] font-semibold tracking-tight text-[#111827]">
-            Interactions
-          </h1>
-          <p className="text-[13px] text-[#4b5563] mt-1 max-w-[560px]">
-            Every meaningful touchpoint across the customer lifecycle — demos,
-            trials, onboarding, QBRs. Turn each one into a growth opportunity.
-          </p>
-        </div>
-        <button
-          data-testid="interactions-bulk-activate-btn"
-          onClick={() =>
-            toast.success("Feedback prompts queued for 253 attendees", {
-              description: "Expected 61% response rate.",
-            })
-          }
-          className="btn-primary h-10 !py-0"
-        >
-          <Sparkles className="w-4 h-4" strokeWidth={2} />
-          Activate all pending
-        </button>
-      </div>
+    <div data-testid="interactions-page" className="space-y-10">
+      <PageHero
+        eyebrow={PAGE_OUTCOMES.interactions.eyebrow}
+        question={PAGE_OUTCOMES.interactions.question}
+        northStar={PAGE_OUTCOMES.interactions.northStar}
+        action={PAGE_OUTCOMES.interactions.action}
+        onAction={() =>
+          toast.success("Feedback prompts queued for top 20 attendees", {
+            description: "Projected +$168k pipeline.",
+          })
+        }
+      />
 
-      {/* Summary strip */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
-        <SumTile label="Total" value={INTERACTIONS.length} active />
-        {Object.entries(ACTIVATION_STATES).map(([key, meta]) => (
-          <SumTile
-            key={key}
-            label={meta.label}
-            value={summary[key] || 0}
-            tone={meta.tone}
-          />
-        ))}
+      {/* Section header */}
+      <div className="flex items-baseline gap-3">
+        <h2 className="font-display text-[20px] font-semibold tracking-tight text-[#111827]">
+          Every interaction, ranked by untapped value
+        </h2>
+        <span className="text-[12px] text-[#9ca3af]">
+          Sorted by monthly spend
+        </span>
       </div>
 
       {/* Filter bar */}
@@ -227,25 +207,9 @@ export default function InteractionsPage() {
   );
 }
 
-function SumTile({ label, value, active, tone = "grey" }) {
-  const tones = {
-    grey: "border-[#eeeaf6] bg-white text-[#111827]",
-    purple: "border-[#e2d9f5] bg-[#f5f3ff] text-[#261c4d]",
-    mint: "border-[#c8f0e4] bg-[#ecfdf7] text-[#0f9b7c]",
-    amber: "border-[#f4e08a] bg-[#fef9c3] text-[#a16207]",
-  };
-  return (
-    <div
-      className={`rounded-xl border p-3 ${active ? "ring-2 ring-[#6d46c6]" : ""} ${tones[tone] || tones.grey}`}
-    >
-      <div className="text-[10px] font-mono uppercase tracking-[0.14em] opacity-70 leading-tight">
-        {label}
-      </div>
-      <div className="mt-1 font-display text-[20px] font-semibold leading-none">
-        {value}
-      </div>
-    </div>
-  );
+function SumTile() {
+  // deprecated — kept as no-op to avoid breaking imports
+  return null;
 }
 
 function InteractionDrawer({ interaction, onClose }) {

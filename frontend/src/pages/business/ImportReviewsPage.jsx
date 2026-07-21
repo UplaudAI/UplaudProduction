@@ -12,7 +12,8 @@ import {
   MessagesSquare,
 } from "lucide-react";
 import { setImported } from "@/lib/business-storage";
-import { REVIEW_SOURCES, CONVERSATION_SOURCES } from "@/mocks/fintech";
+import { REVIEW_SOURCES, CONVERSATION_SOURCES, PAGE_OUTCOMES } from "@/mocks/fintech";
+import PageHero from "@/components/business/PageHero";
 
 export default function ImportReviewsPage() {
   const nav = useNavigate();
@@ -38,24 +39,22 @@ export default function ImportReviewsPage() {
   };
 
   return (
-    <div data-testid="import-page" className="max-w-[1080px] mx-auto space-y-8">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-6">
-        <div>
-          <span className="chip">
-            <span className="dot" />
-            Zero-state · Let's activate your customer data
-          </span>
-          <h1 className="font-display text-[36px] leading-[1.05] font-semibold tracking-tight text-[#111827] mt-4">
-            Import interactions to <span className="mint-underline">wake the Growth Engine</span>.
-          </h1>
-          <p className="mt-3 max-w-[620px] text-[15px] leading-relaxed text-[#4b5563]">
-            Uplaud reads two streams: your <b>interactions</b> (demos, trials,
-            QBRs — via Zoom AI, Gong, Fireflies) and your <b>customer feedback</b>{" "}
-            (G2, Capterra, Google, CSV). Every one becomes a signal your agents
-            can activate.
-          </p>
-        </div>
+    <div data-testid="import-page" className="max-w-[1080px] mx-auto space-y-10">
+      <PageHero
+        eyebrow={PAGE_OUTCOMES.import.eyebrow}
+        question={PAGE_OUTCOMES.import.question}
+        northStar={PAGE_OUTCOMES.import.northStar}
+        action={PAGE_OUTCOMES.import.action}
+      />
+
+      {/* Section header */}
+      <div>
+        <h2 className="font-display text-[20px] font-semibold tracking-tight text-[#111827]">
+          Add another source
+        </h2>
+        <p className="text-[12.5px] text-[#9ca3af] mt-1">
+          Drop a file or connect any of the sources below.
+        </p>
       </div>
 
       {/* Dropzone + sources grid */}
