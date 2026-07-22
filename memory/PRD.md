@@ -21,10 +21,17 @@ Phase 1 features:
 ## Implemented (2026-07-22)
 - JWT email/password auth, seeded demo user (dcameron@payrewards.com), `/api/auth/login`, `/api/auth/me`.
 - Sources: upload+parse .txt/.docx/.pdf (`POST /api/sources`), list (`GET /api/sources`), get one.
-- Growth Signals: `POST /api/sources/{id}/analyze` → GPT-5.5 structured insights (summary, key themes, sentiment score/overview, highlights, pain points, buying signals) + testimonial draft.
+- Growth Signals: `POST /api/sources/{id}/analyze` → GPT-5.5 structured insights (company/speaker/AE, sentiment_label, signal_score 0-100, call_type, motivations, pain_points, buying_signals, objections, customer_language, product_feedback, faqs) + testimonial draft.
 - Edit draft (`PUT /api/sources/{id}/testimonial`); email draft generator (`GET /api/sources/{id}/email-draft`).
-- Frontend: branded login, app shell (sidebar + header), Overview/KPI dashboard, Sources drag-drop upload, Growth Signals insights + testimonial card with Edit Draft & Send-to-Customer email composer.
-- Verified 100% via testing agent (7/7 backend, all frontend flows).
+
+### UI integration (2026-07-22) — user's real GitHub UI wired to backend
+- Adopted the user's actual frontend from GitHub (UplaudAI/UplaudProduction @ Emergent) wholesale into /app/frontend (CRA+craco+Tailwind). Added deps: react-markdown, remark-gfm, react-fast-marquee, @tailwindcss/typography.
+- Wired 3 pages to the backend WITHOUT rebuilding UI:
+  - BusinessLoginPage (/business): real JWT login via /api/auth/login, token stored in localStorage `uplaud_business_auth_v1`.
+  - ImportReviewsPage (/business/import): dropzone now uploads a real transcript → /api/sources then /api/sources/{id}/analyze, drives progress + success, routes to Growth Signals.
+  - ConversationsPage (/business/conversations): fetches GET /api/sources, maps to conversation shape; AI-extracted signals grid + drafted testimonial render from real data. Edit draft (PUT), Regenerate/Draft (analyze), Copy wired. "Send for customer approval" opens the pre-filled email composer (DEMO no-op).
+- Verified 100% via testing agent iteration_2 (7/7 backend, all E2E flows).
+- NOTE: Other business pages (Insights, Reviews, ROI, Referrals, Social, Reddit, Interactions, Settings) remain MOCK-driven and are out of scope for phase 1.
 
 ## Backlog / Remaining
 - **P1**: Real email sending (Resend/SendGrid) + PDF conversation-summary attachment generation (currently email is in-app editor only, no real send).
