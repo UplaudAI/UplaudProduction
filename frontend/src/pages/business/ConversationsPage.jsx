@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Mic,
   Search,
@@ -21,6 +21,11 @@ import {
   ShieldCheck,
   TrendingUp,
   Plus,
+  X,
+  Paperclip,
+  Gift,
+  Linkedin,
+  Award,
 } from "lucide-react";
 import PageHero from "@/components/business/PageHero";
 import { toast } from "sonner";
@@ -273,7 +278,21 @@ export default function ConversationsPage() {
 
 function ConversationDetail({ conversation: c }) {
   const status = STATUS_META[c.status];
-  const [showApprove, setShowApprove] = useState(false);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [localStoryStatus, setLocalStoryStatus] = useState(
+    c.draftedStory?.status || null
+  );
+
+  // Reset local status when switching conversations
+  const currentStoryStatus = localStoryStatus || c.draftedStory?.status;
+
+  const handleSent = () => {
+    setLocalStoryStatus("awaiting_approval");
+    setComposerOpen(false);
+    toast.success(`Approval request sent to ${c.person}`, {
+      description: "One-click approve link expires in 7 days.",
+    });
+  };
 
   const SECTIONS = [
     {
@@ -442,7 +461,18 @@ function ConversationDetail({ conversation: c }) {
               </span>
             </div>
 
-            <ApprovalTimeline story={c.draftedStory} />
+            <ApprovalTimeline
+              story={{
+                ...c.draftedStory,
+                status: currentStoryStatus,
+                approvalRequestedAt:
+                  currentStoryStatus === "awaiting_approval" ||
+                  currentStoryStatus === "approved" ||
+                  currentStoryStatus === "amplified"
+                    ? c.draftedStory.approvalRequestedAt || new Date().toISOString()
+                    : c.draftedStory.approvalRequestedAt,
+              }}
+            />
 
             <div className="mt-5 rounded-xl bg-[#faf9ff] border border-[#eeeaf6] p-5">
               <p className="text-[14px] leading-relaxed text-[#111827] whitespace-pre-line font-display">
@@ -479,21 +509,17 @@ function ConversationDetail({ conversation: c }) {
                 Copy
               </button>
 
-              {c.draftedStory.status === "draft" && (
+              {currentStoryStatus === "draft" && (
                 <button
                   data-testid="story-request-approval-btn"
-                  onClick={() =>
-                    toast.success(`Approval request sent to ${c.person}`, {
-                      description: "One-click approve link expires in 7 days.",
-                    })
-                  }
+                  onClick={() => setComposerOpen(true)}
                   className="ml-auto btn-primary h-10 !py-0"
                 >
                   <Send className="w-4 h-4" strokeWidth={1.75} />
                   Send for customer approval
                 </button>
               )}
-              {c.draftedStory.status === "awaiting_approval" && (
+              {currentStoryStatus === "awaiting_approval" && (
                 <button
                   data-testid="story-resend-btn"
                   onClick={() =>
@@ -505,7 +531,7 @@ function ConversationDetail({ conversation: c }) {
                   Send reminder
                 </button>
               )}
-              {c.draftedStory.status === "approved" && (
+              {currentStoryStatus === "approved" && (
                 <button
                   data-testid="story-amplify-btn"
                   onClick={() =>
@@ -546,6 +572,16 @@ function ConversationDetail({ conversation: c }) {
             Draft customer testimonial
           </button>
         </div>
+      )}
+
+      {/* Approval email composer */}
+      {c.draftedStory && (
+        <ApprovalEmailComposer
+          open={composerOpen}
+          onClose={() => setComposerOpen(false)}
+          onSent={handleSent}
+          conversation={c}
+        />
       )}
     </>
   );
@@ -654,6 +690,349 @@ function ThemeCard({ theme: t }) {
         {t.action}
         <ArrowRight className="w-3.5 h-3.5" strokeWidth={1.75} />
       </button>
+    </div>
+  );
+}
+
+
+/* ────────── Approval Email Composer (right-slide panel) ────────── */
+
+function slugCompany(name) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function deriveEmail(person, company) {
+  const parts = person.toLowerCase().trim().split(/\s+/);
+  const first = parts[0] || "hello";
+  const last = parts.slice(1).join(".") || "team";
+  return `${first}.${last}@${slugCompany(company)}.com`;
+}
+
+function firstName(person) {
+  return person.split(" ")[0] || person;
+}
+
+function generateLinkedInDraft(c) {
+  const quoteLine = c.draftedStory.body.split("\n")[0].replace(/^["“]|["”]$/g, "");
+  return `I don't usually post about vendor tools, but this one earned it.
+
+${quoteLine}
+
+If you run finance ops and haven't looked at @PayRewards yet — it's genuinely one of the cleanest ROI stories I've seen in a while. Happy to intro anyone curious.
+
+#Finance #APAutomation #CFO`;
+}
+
+function generateEmailBody(c) {
+  const fn = firstName(c.person);
+  const testimonial = c.draftedStory.body;
+  return `Hi ${fn},
+
+Thanks again for the demo — genuinely enjoyed hearing how you're thinking about vendor spend and rewards at ${c.company}.
+
+Based on our conversation, we drafted a short testimonial that captures what you shared. Nothing gets published without your green light — a quick read + approve is all we need.
+
+TESTIMONIAL FOR YOUR APPROVAL
+"${testimonial}"
+— ${c.draftedStory.attribution}
+
+A couple of ways we'd love to say thanks:
+
+TIER 1 — Approve + refer
+Approve the testimonial and share PayRewards with at least one qualified peer in your network who could benefit → we'll credit your PayRewards account with $500 in rewards + waive next quarter's platform fee.
+
+TIER 2 — Post on LinkedIn tagging @PayRewards
+Post the testimonial (draft attached) on LinkedIn tagging PayRewards → additional $500 in rewards credit + a co-branded case study we'll publish with your team.
+
+The LinkedIn draft is attached so you can post in one click after any edits.
+
+Really appreciate you taking the time,
+${c.aeName}
+PayRewards`;
+}
+
+function ApprovalEmailComposer({ open, onClose, onSent, conversation: c }) {
+  const [to, setTo] = useState(deriveEmail(c.person, c.company));
+  const [cc, setCc] = useState(`${c.aeName.split(" ")[0].toLowerCase()}@payrewards.com`);
+  const [subject, setSubject] = useState(
+    `Thanks for the demo, ${firstName(c.person)} — a quick approval + a small thank-you`
+  );
+  const [body, setBody] = useState(generateEmailBody(c));
+  const [liDraft, setLiDraft] = useState(generateLinkedInDraft(c));
+  const [attachmentOpen, setAttachmentOpen] = useState(true);
+  const [sending, setSending] = useState(false);
+
+  // Reset composer content when the underlying conversation changes
+  useEffect(() => {
+    if (!open) return;
+    setTo(deriveEmail(c.person, c.company));
+    setCc(`${c.aeName.split(" ")[0].toLowerCase()}@payrewards.com`);
+    setSubject(
+      `Thanks for the demo, ${firstName(c.person)} — a quick approval + a small thank-you`
+    );
+    setBody(generateEmailBody(c));
+    setLiDraft(generateLinkedInDraft(c));
+    setSending(false);
+  }, [open, c.id]);
+
+  if (!open) return null;
+
+  const handleSend = () => {
+    setSending(true);
+    setTimeout(() => {
+      onSent();
+    }, 600);
+  };
+
+  const handleRegenerate = () => {
+    setBody(generateEmailBody(c));
+    toast.success("Email body regenerated");
+  };
+
+  return (
+    <div
+      data-testid="approval-email-composer"
+      className="fixed inset-0 z-[100] flex"
+      role="dialog"
+      aria-modal="true"
+    >
+      {/* Overlay */}
+      <button
+        data-testid="composer-overlay"
+        aria-label="Close composer"
+        onClick={onClose}
+        className="flex-1 bg-black/50 backdrop-blur-[2px] animate-in fade-in-0 duration-200"
+      />
+
+      {/* Panel */}
+      <div className="relative w-full sm:w-[760px] max-w-full h-full bg-white shadow-2xl border-l border-[#eeeaf6] flex flex-col animate-in slide-in-from-right duration-300">
+        {/* Header */}
+        <div className="px-6 h-16 border-b border-[#eeeaf6] flex items-center gap-3 shrink-0">
+          <div className="w-8 h-8 rounded-lg bg-[#f5f3ff] text-[#6d46c6] flex items-center justify-center">
+            <Send className="w-4 h-4" strokeWidth={1.75} />
+          </div>
+          <div className="min-w-0">
+            <div className="text-[10.5px] font-mono uppercase tracking-[0.18em] text-[#9ca3af]">
+              Approval request
+            </div>
+            <div className="text-[14px] font-display font-semibold text-[#111827] leading-tight truncate">
+              To {c.person} · {c.company}
+            </div>
+          </div>
+          <button
+            data-testid="composer-close-btn"
+            onClick={onClose}
+            className="ml-auto w-9 h-9 rounded-full hover:bg-[#faf9ff] flex items-center justify-center transition-colors"
+          >
+            <X className="w-4 h-4 text-[#4b5563]" strokeWidth={1.75} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto">
+          {/* Address fields */}
+          <div className="divide-y divide-[#f2eefa]">
+            <ComposerField
+              label="To"
+              testId="composer-to"
+              value={to}
+              onChange={setTo}
+            />
+            <ComposerField
+              label="Cc"
+              testId="composer-cc"
+              value={cc}
+              onChange={setCc}
+            />
+            <ComposerField
+              label="Subject"
+              testId="composer-subject"
+              value={subject}
+              onChange={setSubject}
+              bold
+            />
+          </div>
+
+          {/* Body textarea */}
+          <div className="px-6 py-5">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#9ca3af]">
+                Message
+              </div>
+              <button
+                data-testid="composer-regenerate-btn"
+                onClick={handleRegenerate}
+                className="text-[11.5px] text-[#6d46c6] hover:text-[#261c4d] flex items-center gap-1"
+              >
+                <RefreshCcw className="w-3 h-3" strokeWidth={1.75} />
+                Regenerate
+              </button>
+            </div>
+            <textarea
+              data-testid="composer-body"
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              className="w-full min-h-[380px] rounded-xl border border-[#eeeaf6] bg-white px-4 py-3 text-[13.5px] leading-relaxed text-[#111827] font-sans focus:outline-none focus:border-[#d9d1ee] focus:ring-2 focus:ring-[#6d46c6]/10 resize-y"
+              spellCheck={false}
+            />
+
+            {/* Reward tiers highlight */}
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <RewardTierCard
+                testId="tier-1"
+                icon={Gift}
+                tier="Tier 1"
+                title="Approve + refer 1 peer"
+                reward="$500 rewards credit + fee waiver"
+                accent="#6d46c6"
+                bg="#f5f3ff"
+              />
+              <RewardTierCard
+                testId="tier-2"
+                icon={Linkedin}
+                tier="Tier 2"
+                title="LinkedIn post tagging PayRewards"
+                reward="+$500 credit + co-branded case study"
+                accent="#0f9b7c"
+                bg="#ecfdf7"
+              />
+            </div>
+          </div>
+
+          {/* Attachment */}
+          <div className="px-6 pb-8">
+            <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#9ca3af] mb-3 flex items-center gap-2">
+              <Paperclip className="w-3 h-3" strokeWidth={2} />
+              1 attachment
+            </div>
+            <div
+              data-testid="composer-attachment"
+              className="rounded-xl border border-[#eeeaf6] bg-white overflow-hidden"
+            >
+              <button
+                onClick={() => setAttachmentOpen((o) => !o)}
+                data-testid="composer-attachment-toggle"
+                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#faf9ff] transition-colors text-left"
+              >
+                <div className="w-9 h-9 rounded-lg bg-[#0a66c2]/10 text-[#0a66c2] flex items-center justify-center shrink-0">
+                  <Linkedin className="w-4 h-4" strokeWidth={2} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] font-medium text-[#111827] truncate">
+                    LinkedIn post — {firstName(c.person)}-testimonial.txt
+                  </div>
+                  <div className="text-[11px] font-mono text-[#9ca3af]">
+                    Ready-to-post draft · 342 chars · tagged @PayRewards
+                  </div>
+                </div>
+                <span className="text-[11px] font-mono text-[#6d46c6]">
+                  {attachmentOpen ? "Hide" : "Preview"}
+                </span>
+              </button>
+              {attachmentOpen && (
+                <div className="border-t border-[#eeeaf6] p-4 bg-[#faf9ff]">
+                  <textarea
+                    data-testid="composer-linkedin-draft"
+                    value={liDraft}
+                    onChange={(e) => setLiDraft(e.target.value)}
+                    className="w-full min-h-[150px] rounded-lg border border-[#eeeaf6] bg-white px-3 py-2.5 text-[12.5px] leading-relaxed text-[#111827] focus:outline-none focus:border-[#d9d1ee] resize-y"
+                    spellCheck={false}
+                  />
+                  <div className="mt-2 flex items-center justify-between text-[11px] font-mono text-[#9ca3af]">
+                    <span>Customer edits inline before posting</span>
+                    <button
+                      data-testid="composer-copy-linkedin"
+                      onClick={() => {
+                        navigator.clipboard.writeText(liDraft);
+                        toast.success("LinkedIn draft copied");
+                      }}
+                      className="text-[#6d46c6] hover:text-[#261c4d] flex items-center gap-1"
+                    >
+                      <Copy className="w-3 h-3" strokeWidth={2} />
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 h-[76px] border-t border-[#eeeaf6] bg-white flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2 text-[11px] font-mono text-[#9ca3af]">
+            <Award className="w-3 h-3 text-[#0f9b7c]" strokeWidth={2} />
+            One-click approve link · expires in 7 days
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              data-testid="composer-cancel-btn"
+              onClick={onClose}
+              className="btn-secondary h-10 !py-0"
+            >
+              Cancel
+            </button>
+            <button
+              data-testid="composer-send-btn"
+              onClick={handleSend}
+              disabled={sending}
+              className="btn-primary h-10 !py-0 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <Send className="w-4 h-4" strokeWidth={1.75} />
+              {sending ? "Sending..." : "Send for approval"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ComposerField({ label, testId, value, onChange, bold }) {
+  return (
+    <div className="grid grid-cols-[64px_1fr] items-center gap-3 px-6 py-3">
+      <div className="text-[11px] font-mono uppercase tracking-[0.14em] text-[#9ca3af]">
+        {label}
+      </div>
+      <input
+        data-testid={testId}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`w-full bg-transparent text-[13.5px] text-[#111827] focus:outline-none ${
+          bold ? "font-semibold" : ""
+        }`}
+      />
+    </div>
+  );
+}
+
+function RewardTierCard({ testId, icon: Icon, tier, title, reward, accent, bg }) {
+  return (
+    <div
+      data-testid={testId}
+      className="rounded-xl border p-4"
+      style={{ borderColor: `${accent}30`, backgroundColor: bg }}
+    >
+      <div className="flex items-center gap-2">
+        <div
+          className="w-7 h-7 rounded-lg flex items-center justify-center"
+          style={{ backgroundColor: `${accent}22`, color: accent }}
+        >
+          <Icon className="w-3.5 h-3.5" strokeWidth={2} />
+        </div>
+        <span
+          className="text-[10px] font-mono uppercase tracking-[0.16em]"
+          style={{ color: accent }}
+        >
+          {tier}
+        </span>
+      </div>
+      <div className="mt-2 text-[12.5px] font-medium text-[#111827] leading-tight">
+        {title}
+      </div>
+      <div className="mt-1 text-[11.5px] text-[#4b5563] leading-snug">
+        {reward}
+      </div>
     </div>
   );
 }
