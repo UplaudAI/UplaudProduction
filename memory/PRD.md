@@ -33,6 +33,12 @@ Phase 1 features:
 - Verified 100% via testing agent iteration_2 (7/7 backend, all E2E flows).
 - NOTE: Other business pages (Insights, Reviews, ROI, Referrals, Social, Reddit, Interactions, Settings) remain MOCK-driven and are out of scope for phase 1.
 
+### Public Testimonial Page + share assets (2026-07-22)
+- Public, no-auth page at `/t/{share_id}` (TestimonialPage.jsx): customer sees the drafted testimonial, can Edit (PUT /api/public/testimonial/{share_id}) and Approve (POST .../approve). Edit locks (400) after approval.
+- On approval, the page reveals branded, PayRewards-styled (navy #0B1F3A + gold #E8B84B) social assets — LinkedIn (1200×800) + Instagram (1080×1080) cards rendered via CSS and exported with html-to-image. Share via LinkedIn / X / device share tray (Web Share API), plus Download PNG and Copy link (with clipboard fallback).
+- Internal: "Send for customer approval" now calls POST /api/sources/{id}/send-approval (persists status draft→sent, returns share_id) and the pre-drafted email body includes the `/t/{share_id}` approval link. Customer approval reflects back as `approved` in Growth Signals (Amplify action). send-approval no longer regresses an approved testimonial.
+- Verified via testing agent iteration_3 (12/12 backend, all E2E). Branded backgrounds generated for reference.
+
 ## Backlog / Remaining
 - **P1**: Real email sending (Resend/SendGrid) + PDF conversation-summary attachment generation (currently email is in-app editor only, no real send).
 - **P1**: Object storage for uploaded files so original transcript can be attached.

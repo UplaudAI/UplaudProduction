@@ -199,9 +199,24 @@ export default function TestimonialPage() {
       "_blank",
       "noopener,width=680,height=640"
     );
-  const copyLink = () => {
-    navigator.clipboard.writeText(publicUrl);
-    toast.success("Link copied");
+  const copyLink = async () => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(publicUrl);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = publicUrl;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      toast.success("Link copied");
+    } catch {
+      toast.info(publicUrl, { description: "Copy this link to share" });
+    }
   };
 
   if (loading)

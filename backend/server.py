@@ -469,9 +469,11 @@ async def send_approval(source_id: str, current=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Source not found")
     now = datetime.now(timezone.utc).isoformat()
     share_id = doc.get("share_id") or uuid.uuid4().hex[:12]
+    # Do not regress an already-approved testimonial back to 'sent'
+    new_status = "sent" if doc.get("testimonial_status") != "approved" else "approved"
     await db.sources.update_one(
         {"id": source_id},
-        {"$set": {"testimonial_status": "sent", "approval_requested_at": now, "share_id": share_id}},
+        {"$set": {"testimonial_status": new_status, "approval_requested_at": now, "share_id": share_id}},
     )
     return {"share_id": share_id, "public_path": f"/t/{share_id}"}
 
