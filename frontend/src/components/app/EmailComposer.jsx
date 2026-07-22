@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,6 +39,7 @@ export default function EmailComposer({ open, onOpenChange, initial }) {
       <DialogContent className="sm:max-w-2xl" data-testid="email-composer">
         <DialogHeader>
           <DialogTitle className="font-heading">Send to Customer</DialogTitle>
+          <DialogDescription>Review and edit the pre-drafted email before sending.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-1.5">
