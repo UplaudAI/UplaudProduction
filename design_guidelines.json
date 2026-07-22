@@ -1,0 +1,152 @@
+{
+  "theme": "Light",
+  "archetype": "Swiss & High-Contrast with Soft Utility",
+  "typography": {
+    "headings": {
+      "font_family": "Cabinet Grotesk",
+      "weights": ["500", "700", "800"],
+      "tracking": "tracking-tight",
+      "usage": "Use for all page titles, dashboard card titles, and marketing headers to provide a strong B2B SaaS presence."
+    },
+    "body": {
+      "font_family": "Inter",
+      "weights": ["400", "500", "600"],
+      "tracking": "tracking-normal",
+      "usage": "Clinical, highly readable data points, tables, and inputs."
+    },
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl font-extrabold tracking-tight text-slate-900",
+      "h2": "text-2xl sm:text-3xl font-bold tracking-tight text-slate-800",
+      "h3": "text-xl sm:text-2xl font-semibold tracking-tight text-slate-800",
+      "h4": "text-lg sm:text-xl font-medium tracking-tight text-slate-700",
+      "body": "text-base text-slate-600 leading-relaxed",
+      "small": "text-sm text-slate-500",
+      "label": "text-xs uppercase tracking-[0.2em] font-semibold text-slate-500"
+    }
+  },
+  "colors": {
+    "background": {
+      "app": "#F8FAFC", 
+      "surface": "#FFFFFF",
+      "surface_hover": "#F1F5F9"
+    },
+    "text": {
+      "primary": "#0F172A",
+      "secondary": "#475569",
+      "muted": "#94A3B8"
+    },
+    "brand": {
+      "primary": "#4338CA", 
+      "primary_hover": "#3730A3",
+      "accent": "#6366F1" 
+    },
+    "status": {
+      "success": "#10B981",
+      "warning": "#F59E0B",
+      "error": "#EF4444",
+      "info": "#3B82F6"
+    },
+    "borders": {
+      "default": "#E2E8F0",
+      "focus": "#818CF8"
+    }
+  },
+  "visual enhancers": {
+    "borders_and_radius": "Subtle roundness. Use `rounded-md` (6px) or `rounded-lg` (8px). Never use overly bubbly pill shapes for structural cards. Always use `border border-slate-200` to ground the elements.",
+    "shadows": "Use layered ambient shadows `shadow-sm` on default cards. Use `shadow-md` on hover to create a slight lift effect.",
+    "textures": "Include a very subtle noise texture overlay on the login page geometric background to reduce digital flatness.",
+    "glassmorphism": "For sticky headers or floating navs, use `backdrop-blur-xl bg-white/80 border-b border-slate-200`.",
+    "data_visualization": "Charts must avoid pure generic blue/green. Use brand primary (Indigo) and contrasting complementary tones (Teal/Emerald) for growth indicators. Use 1px strokes on chart lines."
+  },
+  "grids": {
+    "bento_dashboard": "Base grid: `grid-cols-1 md:grid-cols-2 lg:grid-cols-4`. Gap: Tight (`gap-4` or `gap-6`).",
+    "widget_ratios": {
+      "summary_kpi": "col-span-1",
+      "primary_data": "col-span-2 row-span-2 or col-span-3",
+      "feed_list": "col-span-1 row-span-2"
+    },
+    "alignment": "Items must stretch `h-full`. Every pixel utilized. No jagged bottoms."
+  },
+  "layouts": {
+    "app_shell": "Left sidebar navigation (collapsible-friendly) + Top Header (`h-16`). Content area should have `p-6` or `p-8` for generous spacing.",
+    "login_page": "Split screen layout: Left side login form (centered, 100vh), Right side immersive image (abstract geometric architecture) with a dark overlay and brand value proposition.",
+    "sources_tab": "Split view or focused list view. A massive drag-and-drop zone (`border-2 border-dashed border-slate-300 rounded-lg p-12 bg-slate-50 hover:bg-slate-100 transition-colors`). List of files below it.",
+    "growth_signals_tab": "Bento layout. Left column (col-span-2): AI Insights & Themes. Right column (col-span-2): Auto-generated testimonial draft and 'Send to Customer' call to action."
+  },
+  "motion": {
+    "buttons": "Hover states must include a slight translate (`-translate-y-[1px]`) and `shadow-md`. `transition-transform transition-shadow duration-200 ease-in-out`.",
+    "cards": "Subtle scale on hover (`hover:scale-[1.01]`) for interactive dashboard cards.",
+    "modals": "Email composer modal should slide in from bottom or fade with a subtle zoom (`opacity-0 scale-95` to `opacity-100 scale-100`).",
+    "micro_interactions": "Use Framer Motion or Tailwind transitions for tab switching and file upload state changes."
+  },
+  "accessibility": {
+    "contrast": "Text over backgrounds must meet APCA or WCAG AA standards. Ensure the Indigo primary button has white text (`text-white`).",
+    "focus_states": "All inputs and buttons must have `focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2`.",
+    "test_attributes": "All interactive elements MUST include a `data-testid` attribute (e.g., `data-testid=\"login-submit-button\"`).",
+    "aria_labels": "Include `aria-hidden=\"true\"` for purely decorative SVGs/icons."
+  },
+  "media": {
+    "icons_library": "lucide-react (default). Use Duotone weight equivalent if possible, Regular for dense data.",
+    "images_usage": "Use crisp, high-resolution imagery for marketing/login pages. Do not use generic vector illustrations."
+  },
+  "3d_libraries": {
+    "decision": "Not required for core dashboard functionality. Use lightweight CSS animations or basic SVG/Canvas if needed for growth signal visualizations.",
+    "fallback": "Use Recharts for standard data visualization."
+  },
+  "image_urls": {
+    "login_background": {
+      "url": "https://images.pexels.com/photos/37982071/pexels-photo-37982071.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Geometric dome ceiling. Use this on the right side of the split-screen login page to convey structure and 'growth engine'. Add a dark or indigo gradient overlay (`bg-indigo-900/60 mix-blend-multiply`)."
+    },
+    "user_avatar_1": {
+      "url": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODF8MHwxfHNlYXJjaHwzfHxwcm9mZXNzaW9uYWwlMjBidXNpbmVzcyUyMHBvcnRyYWl0fGVufDB8fHx8MTc4NDY4MTYzOHww&ixlib=rb-4.1.0&q=85",
+      "description": "Professional smiling woman. Use for user profile avatar or placeholder testimonial author."
+    },
+    "user_avatar_2": {
+      "url": "https://images.unsplash.com/photo-1560250097-0b93528c311a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODF8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBidXNpbmVzcyUyMHBvcnRyYWl0fGVufDB8fHx8MTc4NDY4MTYzOHww&ixlib=rb-4.1.0&q=85",
+      "description": "Professional man. Use for client avatar in the Sources/Growth Signals tab."
+    }
+  },
+  "component_name": [
+    "Button",
+    "Input",
+    "Card",
+    "Dialog",
+    "Table",
+    "Tabs",
+    "Badge",
+    "ScrollArea"
+  ],
+  "component_path": "/app/frontend/src/components/ui",
+  "instructions_to_main_agent": [
+    "Generate a functional frontend application using React, Tailwind CSS, and shadcn/ui components (js versions).",
+    "Implement the main views: Login, App Shell (with Sidebar and Dashboard Insights), and the internal Tabs (Sources, Growth Signals).",
+    "Ensure 'Cabinet Grotesk' is used for H1-H4 headings and 'Inter' for body via Tailwind config.",
+    "Implement the Login split screen. Left side: Form (Work Email, Password). Right side: Immersive image (login_background URL) with an overlay and the Uplaud AI branding/tagline.",
+    "App Shell: Left sidebar with links (Dashboard, Sources, Growth Signals). Top header: 'Growth Engine · PayRewards' + KPI Stat Cards.",
+    "Sources Tab: Create a drag-and-drop file upload zone for transcripts. Show a mock list of uploaded files.",
+    "Growth Signals Tab: Split bento layout showing AI generated insights on the left and a 'Draft Testimonial' card on the right.",
+    "Implement the 'Edit Draft' and 'Send to Customer' flow using a generic Modal/Dialog component for the email composer.",
+    "DO NOT use raw HTML for interactive components. Rely heavily on customized shadcn/ui wrappers.",
+    "All interactive and key informational elements MUST include a `data-testid` attribute (e.g., `data-testid=\"login-submit-button\"`)."
+  ],
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": [
+    "You tend to converge toward generic, 'on distribution' outputs. In frontend design, this creates what users call the 'AI slop' aesthetic. Avoid this: make creative, distinctive frontends that surprise and delight.",
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur) for sticky navs or overlays.",
+    "You MUST NOT apply universal transition. Eg: `transition: all`. This results in breaking transforms. Always add transitions for specific interactive elements like button, input excluding transforms.",
+    "You MUST NOT center align the app container, ie do not add `.App { text-align: center; }` in the css file. This disrupts the human natural reading flow of text.",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style.",
+    "NEVER use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯 etc for icons. Use actual SVG icons from Phosphor or Lucide.",
+    "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations. Static = dead.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap. Add padding inside bordered containers.",
+    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations separate good from extraordinary.",
+    "Missing categories (especially sponsor logos) = main agent will use placeholder text which is FORBIDDEN. ALWAYS use actual image URLs provided in `image_urls`.",
+    "Prioritize using pre-existing components from src/components/ui when applicable.",
+    "Create new components that match the style and conventions of existing components when needed.",
+    "Examine existing components to understand the project's component patterns before creating new ones.",
+    "Use `sonner` for toasts. Sonner components are located in `/app/frontend/src/components/ui/sonner.js` or `.jsx`."
+  ]
+}
