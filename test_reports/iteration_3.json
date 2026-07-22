@@ -1,0 +1,32 @@
+{
+  "summary": "Tested the new public testimonial page (/t/{share_id}) and the internal send-for-approval + status reflection flow. Backend: 12/12 pytest cases pass, including 5 new tests for send-approval, public GET/PUT/APPROVE, edit-lock after approve, and 404 for invalid share_id. Frontend: public page renders (testimonial-page), Edit->Save persists via PUT, Approve reveals share-assets with all required data-testids (share-linkedin, download-linkedin, share-instagram, download-instagram, share-x, copy-link, share-tray), edit button hides after approve. Internal flow: login -> conversations -> story-request-approval-btn opens composer with /t/ link in composer-body, composer-send-btn closes composer and shows 'Approval request sent' toast. After public approval, reloading conversations shows Approved state and story-amplify-btn appears; the Growth Signals page also surfaces the 'Latest customer-approved testimonial' block with 'Amplify across channels'. All new endpoints and public route are wired correctly.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "TestimonialPage copy-link", "issue": "In headless/insecure contexts navigator.clipboard.writeText rejects with NotAllowedError, which surfaces as an uncaught error and triggers React dev overlay 'Uncaught runtime errors'. Wrap in try/catch and fall back to document.execCommand('copy') or a small toast-only path so end users on http/embedded contexts don't see a crash overlay.", "selector": "[data-testid=\"copy-link\"]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Public share assets", "issues": ["html-to-image logs SecurityError while inlining Google Fonts CSSRules (cross-origin stylesheet). Download PNG still works but console is noisy; consider self-hosting the Inter font or passing skipFonts/fontEmbedCSS options to toPng."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Handle clipboard write failure on TestimonialPage (catch NotAllowedError, use fallback + toast, don't let it become an uncaught rejection).",
+    "Optional: suppress html-to-image webfont console noise by inlining fonts or using skipFonts."
+  ],
+  "critical_code_review_comments": [
+    "PUT /api/public/testimonial/{share_id} correctly returns 400 after approval; good idempotent guard.",
+    "send-approval reuses share_id if it already exists — good. Consider also returning existing share_id on subsequent calls without changing testimonial_status back from 'approved' to 'sent' (current code always sets status='sent', which could regress an already-approved testimonial if the user clicks Send-for-approval again).",
+    "TestimonialPage.jsx copy-to-clipboard has no try/catch around navigator.clipboard.writeText — causes unhandled promise rejection in headless/insecure contexts.",
+    "html-to-image toPng call has no error handler; a font-embedding failure in a stricter CSP context could throw and leave the user with no toast/feedback."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py"],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "100% (all critical public + internal flows)"},
+  "test_credentials": "dcameron@payrewards.com / P@yRew@rds123",
+  "seed_data_creation": "Uploaded 2 TEST_ transcripts via API (TEST_fresh + TEST_ui_flow), analyzed via GPT-5.5, and generated share_ids 5caef1cc6308 (approved via UI) and 82fffdba92cd (approved via API). Both now visible in the demo user's conversations list.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Public page route is /t/{share_id} (outside auth). After approve, PUT /api/public/testimonial/{id} returns 400 and Edit button is hidden. In headless Chromium, navigator.clipboard.writeText throws; copy-link click currently produces an unhandled rejection. Send-for-approval reuses share_id if already set but re-writes testimonial_status to 'sent' on every call — worth watching if UI re-sends after approval. Existing sources in DB: 6 conversation cards including 'Test Ui Flow · Demo' (approved) and 'Test Fresh · Demo' (approved).",
+  "rca_of_the_issue": "N/A – no functional defects."
+}

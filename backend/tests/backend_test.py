@@ -107,3 +107,70 @@ def test_email_draft(auth_headers, uploaded_source):
     data = r.json()
     assert "subject" in data and "body" in data
     assert data["attachment_name"].endswith(".pdf")
+
+
+# ---- Public testimonial page + send-approval ----
+@pytest.fixture(scope="session")
+def approved_source(auth_headers, uploaded_source):
+    """Analyze then send-approval on the uploaded source to get share_id."""
+    sid = uploaded_source["id"]
+    # ensure analyzed (may already be from test_analyze_source but idempotent-ish)
+    requests.post(f"{API}/sources/{sid}/analyze", headers=auth_headers, timeout=90)
+    r = requests.post(f"{API}/sources/{sid}/send-approval", headers=auth_headers, timeout=30)
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert "share_id" in data and data["share_id"]
+    assert data["public_path"] == f"/t/{data['share_id']}"
+    return {"source_id": sid, "share_id": data["share_id"]}
+
+
+def test_send_approval_updates_status(auth_headers, approved_source):
+    sid = approved_source["source_id"]
+    r = requests.get(f"{API}/sources", headers=auth_headers, timeout=30)
+    assert r.status_code == 200
+    src = next(s for s in r.json() if s["id"] == sid)
+    assert src["share_id"] == approved_source["share_id"]
+    assert src["testimonial_status"] in ("sent", "approved")
+    assert src.get("approval_requested_at")
+
+
+def test_public_get_testimonial(approved_source):
+    sid = approved_source["share_id"]
+    r = requests.get(f"{API}/public/testimonial/{sid}", timeout=30)
+    assert r.status_code == 200
+    data = r.json()
+    assert data["share_id"] == sid
+    assert data["status"] in ("sent", "draft", "approved")
+    assert data["testimonial"]
+
+
+def test_public_update_testimonial(approved_source):
+    sid = approved_source["share_id"]
+    new_text = "TEST_public_edited testimonial."
+    r = requests.put(f"{API}/public/testimonial/{sid}", json={"testimonial_draft": new_text}, timeout=30)
+    assert r.status_code == 200
+    assert r.json()["testimonial"] == new_text
+    # verify persisted via GET
+    r2 = requests.get(f"{API}/public/testimonial/{sid}", timeout=30)
+    assert r2.json()["testimonial"] == new_text
+
+
+def test_public_approve_and_lock(approved_source, auth_headers):
+    sid = approved_source["share_id"]
+    r = requests.post(f"{API}/public/testimonial/{sid}/approve", timeout=30)
+    assert r.status_code == 200
+    data = r.json()
+    assert data["status"] == "approved"
+    # subsequent edit blocked
+    r2 = requests.put(f"{API}/public/testimonial/{sid}", json={"testimonial_draft": "should fail"}, timeout=30)
+    assert r2.status_code == 400
+    # internal source reflects approved
+    r3 = requests.get(f"{API}/sources", headers=auth_headers, timeout=30)
+    src = next(s for s in r3.json() if s["id"] == approved_source["source_id"])
+    assert src["testimonial_status"] == "approved"
+    assert src.get("approved_at")
+
+
+def test_public_get_invalid_share():
+    r = requests.get(f"{API}/public/testimonial/does-not-exist", timeout=30)
+    assert r.status_code == 404

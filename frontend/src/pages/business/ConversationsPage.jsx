@@ -36,9 +36,14 @@ function toConversation(s) {
   const ins = s.insights || {};
   const company = ins.company_name || s.client_name;
   const attribution = [ins.speaker_name, ins.speaker_role, company].filter(Boolean).join(", ");
+  const tStatus = s.testimonial_status || "draft";
+  const storyStatusMap = { draft: "draft", sent: "awaiting_approval", approved: "approved" };
+  const cardStatus =
+    tStatus === "approved" ? "approved" : tStatus === "sent" ? "awaiting_approval" : "signals_extracted";
   return {
     id: s.conversation_code || s.id,
     _sourceId: s.id,
+    shareId: s.share_id,
     title: `${company} · ${ins.call_type || "Demo"}`,
     person: ins.speaker_name || "Customer",
     role: ins.speaker_role || "—",
@@ -47,7 +52,7 @@ function toConversation(s) {
     source: s.source_name || "Upload",
     duration: `${s.duration_min || 0} min`,
     date: (s.created_at || "").slice(0, 10),
-    status: "signals_extracted",
+    status: cardStatus,
     sentiment: ins.sentiment_label || "Positive",
     signalScore: (ins.signal_score || 0) / 100,
     type: ins.call_type || "Demo",
@@ -61,7 +66,13 @@ function toConversation(s) {
       faqs: ins.faqs || [],
     },
     draftedStory: s.testimonial_draft
-      ? { status: "draft", body: s.testimonial_draft, attribution }
+      ? {
+          status: storyStatusMap[tStatus] || "draft",
+          body: s.testimonial_draft,
+          attribution,
+          approvalRequestedAt: s.approval_requested_at || null,
+          approvedAt: s.approved_at || null,
+        }
       : null,
   };
 }
@@ -399,8 +410,9 @@ function ConversationDetail({ conversation: c, onChanged }) {
     setLocalStoryStatus("awaiting_approval");
     setComposerOpen(false);
     toast.success(`Approval request sent to ${c.person}`, {
-      description: "One-click approve link expires in 7 days.",
+      description: "They can review, edit and approve on their own page.",
     });
+    if (onChanged) onChanged();
   };
 
   const SECTIONS = [
@@ -873,15 +885,21 @@ If you run finance ops and haven't looked at @PayRewards yet — it's genuinely 
 function generateEmailBody(c) {
   const fn = firstName(c.person);
   const testimonial = c.draftedStory.body;
+  const link = c.shareId ? `${window.location.origin}/t/${c.shareId}` : "";
   return `Hi ${fn},
 
 Thanks again for the demo — genuinely enjoyed hearing how you're thinking about vendor spend and rewards at ${c.company}.
 
-Based on our conversation, we drafted a short testimonial that captures what you shared. Nothing gets published without your green light — a quick read + approve is all we need.
+Based on our conversation, we drafted a short testimonial that captures what you shared. Nothing gets published without your green light.
+
+REVIEW, EDIT & APPROVE (takes 30 seconds):
+${link}
 
 TESTIMONIAL FOR YOUR APPROVAL
 "${testimonial}"
 — ${c.draftedStory.attribution}
+
+Once you approve on the page above, you'll get ready-to-post, PayRewards-branded assets for LinkedIn, Instagram and X — share in a couple of taps.
 
 A couple of ways we'd love to say thanks:
 
@@ -889,9 +907,7 @@ TIER 1 — Approve + refer
 Approve the testimonial and share PayRewards with at least one qualified peer in your network who could benefit → we'll credit your PayRewards account with $500 in rewards + waive next quarter's platform fee.
 
 TIER 2 — Post on LinkedIn tagging @PayRewards
-Post the testimonial (draft attached) on LinkedIn tagging PayRewards → additional $500 in rewards credit + a co-branded case study we'll publish with your team.
-
-The LinkedIn draft is attached so you can post in one click after any edits.
+Post the testimonial on LinkedIn tagging PayRewards → additional $500 in rewards credit + a co-branded case study we'll publish with your team.
 
 Really appreciate you taking the time,
 ${c.aeName}
@@ -926,9 +942,13 @@ function ApprovalEmailComposer({ open, onClose, onSent, conversation: c }) {
 
   const handleSend = () => {
     setSending(true);
-    setTimeout(() => {
-      onSent();
-    }, 600);
+    api
+      .post(`/sources/${c._sourceId}/send-approval`)
+      .then(() => onSent())
+      .catch((err) => {
+        setSending(false);
+        toast.error(formatApiError(err.response?.data?.detail) || "Could not send");
+      });
   };
 
   const handleRegenerate = () => {

@@ -17,6 +17,7 @@ import RoiSimulatorPage from "@/pages/business/RoiSimulatorPage";
 import SettingsPage from "@/pages/business/SettingsPage";
 import InteractionsPage from "@/pages/business/InteractionsPage";
 import ConversationsPage from "@/pages/business/ConversationsPage";
+import TestimonialPage from "@/pages/business/TestimonialPage";
 
 function App() {
   return (
@@ -30,6 +31,7 @@ function App() {
 
           {/* Business (Product MVP Dashboard) */}
           <Route path="/business" element={<BusinessLoginPage />} />
+          <Route path="/t/:shareId" element={<TestimonialPage />} />
           <Route element={<DashboardLayout />}>
             <Route path="/business/import" element={<ImportReviewsPage />} />
             <Route path="/business/interactions" element={<InteractionsPage />} />

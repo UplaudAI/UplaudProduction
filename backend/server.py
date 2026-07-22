@@ -95,6 +95,24 @@ class SourceOut(BaseModel):
     created_at: str
     insights: Optional[Insights] = None
     testimonial_draft: Optional[str] = None
+    share_id: str = ""
+    testimonial_status: str = "draft"
+    approved_at: Optional[str] = None
+    approval_requested_at: Optional[str] = None
+
+
+class PublicTestimonial(BaseModel):
+    share_id: str
+    company_name: str
+    speaker_name: str
+    speaker_role: str
+    testimonial: str
+    status: str
+    approved_at: Optional[str] = None
+
+
+class PublicUpdate(BaseModel):
+    testimonial_draft: str
 
 
 class TestimonialUpdate(BaseModel):
@@ -286,6 +304,10 @@ def source_to_out(doc: dict) -> SourceOut:
         created_at=doc["created_at"],
         insights=doc.get("insights"),
         testimonial_draft=doc.get("testimonial_draft"),
+        share_id=doc.get("share_id", ""),
+        testimonial_status=doc.get("testimonial_status", "draft"),
+        approved_at=doc.get("approved_at"),
+        approval_requested_at=doc.get("approval_requested_at"),
     )
 
 
@@ -313,6 +335,10 @@ async def upload_source(file: UploadFile = File(...), current=Depends(get_curren
         "created_at": datetime.now(timezone.utc).isoformat(),
         "insights": None,
         "testimonial_draft": None,
+        "share_id": uuid.uuid4().hex[:12],
+        "testimonial_status": "draft",
+        "approved_at": None,
+        "approval_requested_at": None,
     }
     await db.sources.insert_one(doc)
     return source_to_out(doc)
@@ -386,6 +412,68 @@ async def email_draft(source_id: str, current=Depends(get_current_user)):
         body=body,
         attachment_name=f"{client} - Conversation Summary.pdf",
     )
+
+
+def _public_payload(doc: dict) -> PublicTestimonial:
+    ins = doc.get("insights") or {}
+    return PublicTestimonial(
+        share_id=doc["share_id"],
+        company_name=ins.get("company_name") or doc.get("client_name", ""),
+        speaker_name=ins.get("speaker_name") or "",
+        speaker_role=ins.get("speaker_role") or "",
+        testimonial=doc.get("testimonial_draft") or "",
+        status=doc.get("testimonial_status") or "draft",
+        approved_at=doc.get("approved_at"),
+    )
+
+
+@api_router.get("/public/testimonial/{share_id}", response_model=PublicTestimonial)
+async def public_get_testimonial(share_id: str):
+    doc = await db.sources.find_one({"share_id": share_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Testimonial not found")
+    return _public_payload(doc)
+
+
+@api_router.put("/public/testimonial/{share_id}", response_model=PublicTestimonial)
+async def public_update_testimonial(share_id: str, body: PublicUpdate):
+    doc = await db.sources.find_one({"share_id": share_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Testimonial not found")
+    if doc.get("testimonial_status") == "approved":
+        raise HTTPException(status_code=400, detail="This testimonial is already approved and locked.")
+    await db.sources.update_one({"share_id": share_id}, {"$set": {"testimonial_draft": body.testimonial_draft}})
+    doc["testimonial_draft"] = body.testimonial_draft
+    return _public_payload(doc)
+
+
+@api_router.post("/public/testimonial/{share_id}/approve", response_model=PublicTestimonial)
+async def public_approve_testimonial(share_id: str):
+    doc = await db.sources.find_one({"share_id": share_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Testimonial not found")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.sources.update_one(
+        {"share_id": share_id},
+        {"$set": {"testimonial_status": "approved", "approved_at": now}},
+    )
+    doc["testimonial_status"] = "approved"
+    doc["approved_at"] = now
+    return _public_payload(doc)
+
+
+@api_router.post("/sources/{source_id}/send-approval")
+async def send_approval(source_id: str, current=Depends(get_current_user)):
+    doc = await db.sources.find_one({"id": source_id, "owner": current["id"]})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Source not found")
+    now = datetime.now(timezone.utc).isoformat()
+    share_id = doc.get("share_id") or uuid.uuid4().hex[:12]
+    await db.sources.update_one(
+        {"id": source_id},
+        {"$set": {"testimonial_status": "sent", "approval_requested_at": now, "share_id": share_id}},
+    )
+    return {"share_id": share_id, "public_path": f"/t/{share_id}"}
 
 
 app.include_router(api_router)
