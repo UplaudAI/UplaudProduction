@@ -1,41 +1,50 @@
 import "@/App.css";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
-import { AuthProvider, useAuth } from "@/context/AuthContext";
-import Login from "@/pages/Login";
-import Dashboard from "@/pages/Dashboard";
-
-function Protected({ children }) {
-  const { user, loading } = useAuth();
-  if (loading)
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f8fafc]">
-        <div className="h-8 w-8 rounded-full border-2 border-indigo-600 border-t-transparent animate-spin" />
-      </div>
-    );
-  return user ? children : <Navigate to="/login" replace />;
-}
+import LandingPage from "@/pages/LandingPage";
+import BlogListPage from "@/pages/BlogListPage";
+import BlogPostPage from "@/pages/BlogPostPage";
+import AdminBlogPage from "@/pages/AdminBlogPage";
+import BusinessLoginPage from "@/pages/business/BusinessLoginPage";
+import DashboardLayout from "@/components/business/DashboardLayout";
+import ImportReviewsPage from "@/pages/business/ImportReviewsPage";
+import ReviewsPage from "@/pages/business/ReviewsPage";
+import SocialAgentPage from "@/pages/business/SocialAgentPage";
+import ReferralAgentPage from "@/pages/business/ReferralAgentPage";
+import RedditAgentPage from "@/pages/business/RedditAgentPage";
+import InsightsPage from "@/pages/business/InsightsPage";
+import RoiSimulatorPage from "@/pages/business/RoiSimulatorPage";
+import SettingsPage from "@/pages/business/SettingsPage";
+import InteractionsPage from "@/pages/business/InteractionsPage";
+import ConversationsPage from "@/pages/business/ConversationsPage";
 
 function App() {
   return (
     <div className="App">
-      <AuthProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route
-              path="/business/insights"
-              element={
-                <Protected>
-                  <Dashboard />
-                </Protected>
-              }
-            />
-            <Route path="*" element={<Navigate to="/business/insights" replace />} />
-          </Routes>
-        </BrowserRouter>
-        <Toaster position="top-right" richColors />
-      </AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/blog" element={<BlogListPage />} />
+          <Route path="/blog/:slug" element={<BlogPostPage />} />
+          <Route path="/admin/blog" element={<AdminBlogPage />} />
+
+          {/* Business (Product MVP Dashboard) */}
+          <Route path="/business" element={<BusinessLoginPage />} />
+          <Route element={<DashboardLayout />}>
+            <Route path="/business/import" element={<ImportReviewsPage />} />
+            <Route path="/business/interactions" element={<InteractionsPage />} />
+            <Route path="/business/conversations" element={<ConversationsPage />} />
+            <Route path="/business/reviews" element={<ReviewsPage />} />
+            <Route path="/business/social" element={<SocialAgentPage />} />
+            <Route path="/business/referrals" element={<ReferralAgentPage />} />
+            <Route path="/business/reddit" element={<RedditAgentPage />} />
+            <Route path="/business/insights" element={<InsightsPage />} />
+            <Route path="/business/roi-simulator" element={<RoiSimulatorPage />} />
+            <Route path="/business/settings" element={<SettingsPage />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+      <Toaster position="bottom-right" theme="light" />
     </div>
   );
 }

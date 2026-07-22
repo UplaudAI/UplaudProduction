@@ -5,8 +5,13 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const api = axios.create({ baseURL: API });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("uplaud_token");
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  try {
+    const raw = localStorage.getItem("uplaud_business_auth_v1");
+    const auth = raw ? JSON.parse(raw) : null;
+    if (auth?.token) config.headers.Authorization = `Bearer ${auth.token}`;
+  } catch {
+    /* ignore */
+  }
   return config;
 });
 

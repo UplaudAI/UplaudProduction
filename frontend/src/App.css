@@ -1,3 +1,5 @@
+/* App-level styles are minimal; most styling lives in index.css and component files. */
 .App {
     min-height: 100vh;
+    background: var(--bg-light);
 }

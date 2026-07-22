@@ -64,20 +64,22 @@ class LoginResponse(BaseModel):
     user: UserOut
 
 
-class Highlight(BaseModel):
-    quote: str
-    speaker: str
-    sentiment_score: float
-
-
 class Insights(BaseModel):
-    summary: str
-    key_themes: List[str]
-    sentiment_overview: str
-    sentiment_score: float
-    highlights: List[Highlight]
-    pain_points: List[str]
-    buying_signals: List[str]
+    company_name: str = ""
+    speaker_name: str = ""
+    speaker_role: str = ""
+    ae_name: str = ""
+    sentiment_label: str = "Positive"
+    signal_score: int = 0
+    call_type: str = "Demo"
+    summary: str = ""
+    motivations: List[str] = []
+    pain_points: List[str] = []
+    buying_signals: List[str] = []
+    objections: List[str] = []
+    customer_language: List[str] = []
+    product_feedback: List[str] = []
+    faqs: List[str] = []
 
 
 class SourceOut(BaseModel):
@@ -85,6 +87,9 @@ class SourceOut(BaseModel):
     filename: str
     file_type: str
     client_name: str
+    conversation_code: str
+    source_name: str
+    duration_min: int
     word_count: int
     status: str
     created_at: str
@@ -178,26 +183,32 @@ INSIGHTS_SYSTEM = (
 
 
 def build_insights_prompt(transcript: str, client_name: str) -> str:
-    return f"""Analyze the following client demo call transcript for the client "{client_name}".
+    return f"""Analyze the following client sales/demo call transcript. The uploaded file is named after "{client_name}".
 
-Return ONLY a JSON object with EXACTLY these keys:
+Return ONLY a JSON object with EXACTLY these keys (use empty arrays/strings when nothing applies):
 {{
+  "company_name": "the customer/company name mentioned in the call (not the seller). Fall back to a clean version of the file name if unknown",
+  "speaker_name": "full name of the primary customer speaker (the buyer), if mentioned",
+  "speaker_role": "the customer speaker's job title/role, if mentioned",
+  "ae_name": "the name of the seller / account executive on the call, if mentioned",
+  "sentiment_label": "one of: Positive, Neutral, Negative",
+  "signal_score": 0,
+  "call_type": "one of: Demo, Discovery, Onboarding, Support, Renewal",
   "summary": "2-3 sentence summary of the conversation",
-  "key_themes": ["4-6 short theme phrases discussed"],
-  "sentiment_overview": "1-2 sentences describing the client's overall sentiment",
-  "sentiment_score": 0.0,
-  "highlights": [
-    {{"quote": "verbatim positive/high-sentiment quote from the client", "speaker": "who said it", "sentiment_score": 0.0}}
-  ],
-  "pain_points": ["client pain points or objections mentioned"],
-  "buying_signals": ["signals that indicate buying intent"],
-  "testimonial_draft": "A polished, authentic 2-3 sentence testimonial quote written in the client's voice, based on the highest-sentiment comments and exclamations they made. First person, warm, specific and credible."
+  "motivations": ["what is motivating the customer / why they are looking (short phrases)"],
+  "pain_points": ["specific pains, frustrations or problems the customer described"],
+  "buying_signals": ["statements or questions indicating buying intent"],
+  "objections": ["concerns, blockers or objections the customer raised"],
+  "customer_language": ["short verbatim quotes in the customer's own words that are quotable/memorable"],
+  "product_feedback": ["product feedback, feature requests or praise the customer gave"],
+  "faqs": ["explicit questions the customer asked"],
+  "testimonial_draft": "A polished, authentic 2-4 sentence testimonial written in the customer's first-person voice, grounded in their highest-sentiment comments and any concrete numbers/outcomes they mentioned. Sounds like a real person, not marketing copy."
 }}
 
 Rules:
-- sentiment_score is a float from 0 (very negative) to 1 (very positive).
-- highlights must be the 3-5 highest-sentiment, most quotable client statements. Use verbatim text where possible.
-- The testimonial_draft must sound like a real customer quote, not marketing copy.
+- signal_score is an integer from 0 to 100 representing overall opportunity strength (sentiment + buying intent).
+- customer_language items must be verbatim customer quotes (no added quotation marks in the string).
+- Only include items that are actually supported by the transcript. Keep each item short (one line).
 
 Transcript:
 \"\"\"
@@ -267,6 +278,9 @@ def source_to_out(doc: dict) -> SourceOut:
         filename=doc["filename"],
         file_type=doc["file_type"],
         client_name=doc["client_name"],
+        conversation_code=doc.get("conversation_code", "CV_001"),
+        source_name=doc.get("source_name", "Upload"),
+        duration_min=doc.get("duration_min", 0),
         word_count=doc["word_count"],
         status=doc["status"],
         created_at=doc["created_at"],
@@ -282,14 +296,19 @@ async def upload_source(file: UploadFile = File(...), current=Depends(get_curren
     if not text.strip():
         raise HTTPException(status_code=400, detail="Could not extract any text from the file.")
     client_name = file.filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ").title()
+    word_count = len(text.split())
+    seq = await db.sources.count_documents({"owner": current["id"]}) + 1
     doc = {
         "id": str(uuid.uuid4()),
         "owner": current["id"],
         "filename": file.filename,
         "file_type": file.filename.rsplit(".", 1)[-1].lower(),
         "client_name": client_name,
+        "conversation_code": f"CV_{seq:03d}",
+        "source_name": "Upload",
+        "duration_min": max(1, round(word_count / 140)),
         "transcript": text,
-        "word_count": len(text.split()),
+        "word_count": word_count,
         "status": "uploaded",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "insights": None,
@@ -345,8 +364,11 @@ async def email_draft(source_id: str, current=Depends(get_current_user)):
     if not doc:
         raise HTTPException(status_code=404, detail="Source not found")
     client = doc["client_name"]
+    ins = doc.get("insights") or {}
+    company = ins.get("company_name") or client
     testimonial = doc.get("testimonial_draft") or ""
-    first = client.split(" ")[0]
+    speaker = ins.get("speaker_name") or ""
+    first = speaker.split(" ")[0] if speaker else company.split(" ")[0]
     subject = f"A quick thank you, {first} — and one small favor"
     body = (
         f"Hi {first},\n\n"

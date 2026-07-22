@@ -1,0 +1,1186 @@
+import { useEffect, useState, useCallback } from "react";
+import {
+  Mic,
+  Search,
+  Sparkles,
+  Target,
+  AlertCircle,
+  Zap,
+  Quote,
+  MessageSquare,
+  HelpCircle,
+  Send,
+  CheckCircle2,
+  Clock,
+  FileCheck,
+  Copy,
+  Edit3,
+  RefreshCcw,
+  ArrowUpRight,
+  ArrowRight,
+  ShieldCheck,
+  TrendingUp,
+  Plus,
+  X,
+  Paperclip,
+  Gift,
+  Linkedin,
+  Award,
+} from "lucide-react";
+import PageHero from "@/components/business/PageHero";
+import { toast } from "sonner";
+import { PAGE_OUTCOMES, SMART_NBA } from "@/mocks/fintech";
+import api, { formatApiError } from "@/lib/api";
+
+function toConversation(s) {
+  const ins = s.insights || {};
+  const company = ins.company_name || s.client_name;
+  const attribution = [ins.speaker_name, ins.speaker_role, company].filter(Boolean).join(", ");
+  return {
+    id: s.conversation_code || s.id,
+    _sourceId: s.id,
+    title: `${company} · ${ins.call_type || "Demo"}`,
+    person: ins.speaker_name || "Customer",
+    role: ins.speaker_role || "—",
+    company,
+    aeName: ins.ae_name || "—",
+    source: s.source_name || "Upload",
+    duration: `${s.duration_min || 0} min`,
+    date: (s.created_at || "").slice(0, 10),
+    status: "signals_extracted",
+    sentiment: ins.sentiment_label || "Positive",
+    signalScore: (ins.signal_score || 0) / 100,
+    type: ins.call_type || "Demo",
+    signals: {
+      motivations: ins.motivations || [],
+      painPoints: ins.pain_points || [],
+      buyingSignals: ins.buying_signals || [],
+      objections: ins.objections || [],
+      customerLanguage: ins.customer_language || [],
+      productFeedback: ins.product_feedback || [],
+      faqs: ins.faqs || [],
+    },
+    draftedStory: s.testimonial_draft
+      ? { status: "draft", body: s.testimonial_draft, attribution }
+      : null,
+  };
+}
+
+const SOURCE_META = {
+  Gong: { color: "#8236f7" },
+  "Zoom AI": { color: "#2d8cff" },
+  "Fireflies.ai": { color: "#f97316" },
+  Fathom: { color: "#0ea5e9" },
+  HubSpot: { color: "#ff7a59" },
+};
+
+const STATUS_META = {
+  signals_extracted: {
+    label: "Signals extracted",
+    icon: Sparkles,
+    tone: "purple",
+  },
+  awaiting_approval: {
+    label: "Awaiting approval",
+    icon: Clock,
+    tone: "amber",
+  },
+  approved: { label: "Approved", icon: CheckCircle2, tone: "mint" },
+  amplified: { label: "Amplified", icon: Zap, tone: "mint" },
+};
+
+const TONE_STYLES = {
+  purple: "bg-[#f5f3ff] text-[#6d46c6] border-[#e2d9f5]",
+  mint: "bg-[#ecfdf7] text-[#0f9b7c] border-[#c8f0e4]",
+  amber: "bg-[#fef9c3] text-[#a16207] border-[#f4e08a]",
+};
+
+export default function ConversationsPage() {
+  const [conversations, setConversations] = useState([]);
+  const [selectedId, setSelectedId] = useState(null);
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    try {
+      const { data } = await api.get("/sources");
+      const list = data.map(toConversation);
+      setConversations(list);
+      setSelectedId((prev) =>
+        prev && list.some((c) => c.id === prev) ? prev : list[0]?.id ?? null
+      );
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail) || "Failed to load conversations");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const filtered = conversations.filter((c) => {
+    if (
+      query &&
+      !`${c.person} ${c.company} ${c.title}`
+        .toLowerCase()
+        .includes(query.toLowerCase())
+    )
+      return false;
+    if (statusFilter !== "all" && c.status !== statusFilter) return false;
+    return true;
+  });
+
+  const selected = conversations.find((c) => c.id === selectedId) || filtered[0];
+
+  return (
+    <div data-testid="conversations-page" className="space-y-12">
+      <PageHero
+        eyebrow={PAGE_OUTCOMES.conversations.eyebrow}
+        question={PAGE_OUTCOMES.conversations.question}
+        northStar={PAGE_OUTCOMES.conversations.northStar}
+        smartAction={SMART_NBA.conversations}
+        onAction={() =>
+          toast.success("Themes exported to Ads Manager", {
+            description: "Meta CFO creative refresh queued.",
+          })
+        }
+      />
+
+      {/* Latest approved testimonial — the key takeaway */}
+      {(() => {
+        const latest = conversations.find((c) => c.draftedStory?.status === "approved");
+        if (!latest) return null;
+        return (
+          <section
+            data-testid="latest-testimonial"
+            className="rounded-2xl border border-[#eeeaf6] bg-white p-8 relative overflow-hidden"
+          >
+            <div
+              aria-hidden
+              className="absolute -top-20 -right-16 w-[320px] h-[320px] rounded-full pointer-events-none"
+              style={{
+                background:
+                  "radial-gradient(circle, rgba(94,234,212,0.18), transparent 60%)",
+              }}
+            />
+            <div className="relative">
+              <div className="flex items-center gap-2">
+                <FileCheck className="w-4 h-4 text-[#0f9b7c]" strokeWidth={1.75} />
+                <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#0f9b7c]">
+                  Latest customer-approved testimonial
+                </div>
+              </div>
+              <p className="mt-4 font-display text-[22px] md:text-[26px] leading-[1.25] text-[#111827] max-w-[820px]">
+                &ldquo;{latest.draftedStory.body}&rdquo;
+              </p>
+              <div className="mt-5 flex flex-wrap items-center gap-3">
+                <div className="text-[13px] font-mono text-[#6d46c6]">
+                  — {latest.draftedStory.attribution}
+                </div>
+                <span className="text-[11px] font-mono text-[#9ca3af]">
+                  approved {new Date(latest.draftedStory.approvedAt).toLocaleDateString()} · source: {latest.source}
+                </span>
+              </div>
+              <div className="mt-6 flex items-center gap-2">
+                <button
+                  data-testid="latest-amplify-btn"
+                  onClick={() =>
+                    toast.success("Sent to Growth Amplification", {
+                      description: "Drafts ready for LinkedIn, Instagram, X.",
+                    })
+                  }
+                  className="btn-primary h-10 !py-0"
+                >
+                  Amplify across channels
+                  <ArrowUpRight className="w-4 h-4" strokeWidth={1.75} />
+                </button>
+                <button
+                  data-testid="latest-referral-btn"
+                  onClick={() =>
+                    toast.success("Seeded a referral campaign from this testimonial")
+                  }
+                  className="btn-secondary h-10 !py-0"
+                >
+                  Seed referral campaign
+                </button>
+              </div>
+            </div>
+          </section>
+        );
+      })()}
+
+      {/* Divider */}
+      <div className="pt-2 border-t border-[#eeeaf6]" />
+
+      {/* Explore individual conversations */}
+      <section className="space-y-6">
+        <div className="flex items-baseline justify-between gap-3 flex-wrap">
+          <div className="flex items-baseline gap-3">
+            <h2 className="font-display text-[20px] font-semibold tracking-tight text-[#111827]">
+              Explore individual conversations
+            </h2>
+            <span className="text-[12px] text-[#9ca3af]">
+              {filtered.length} of {conversations.length}
+            </span>
+          </div>
+          <button
+            data-testid="conversations-connect-source-btn"
+            onClick={() =>
+              toast.info("Would open Zoom / Gong / Fireflies OAuth")
+            }
+            className="btn-secondary h-10 !py-0"
+          >
+            <Plus className="w-4 h-4" strokeWidth={2} />
+            Connect a source
+          </button>
+        </div>
+
+        {/* Split layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* List */}
+        <aside className="lg:col-span-4 space-y-3">
+          {/* Filter bar */}
+          <div className="space-y-2">
+            <div className="relative">
+              <Search className="w-4 h-4 text-[#9ca3af] absolute left-4 top-1/2 -translate-y-1/2" />
+              <input
+                data-testid="conversations-search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search person, company..."
+                className="w-full h-10 pl-10 pr-4 rounded-full border border-[#eeeaf6] bg-white text-[13px] focus:outline-none focus:border-[#d9d1ee]"
+              />
+            </div>
+            <select
+              data-testid="conversations-status-filter"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full h-10 px-4 rounded-full border border-[#eeeaf6] bg-white text-[13px] text-[#4b5563] focus:outline-none focus:border-[#d9d1ee]"
+            >
+              <option value="all">All statuses</option>
+              {Object.entries(STATUS_META).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#4b5563] px-2 pt-2">
+            {filtered.length} conversations
+          </div>
+
+          <div className="space-y-2">
+            {filtered.map((c) => {
+              const status = STATUS_META[c.status];
+              const StatusIcon = status.icon;
+              const isActive = selectedId === c.id;
+              return (
+                <button
+                  key={c.id}
+                  data-testid={`conv-card-${c.id}`}
+                  onClick={() => setSelectedId(c.id)}
+                  className={`w-full text-left rounded-2xl border p-4 transition-all ${
+                    isActive
+                      ? "border-[#6d46c6] bg-[#f5f3ff]"
+                      : "border-[#eeeaf6] bg-white hover:border-[#d9d1ee]"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="text-[12.5px] font-medium text-[#111827] leading-tight truncate">
+                      {c.title}
+                    </div>
+                    <span
+                      className={`ml-auto shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono border ${TONE_STYLES[status.tone]}`}
+                    >
+                      <StatusIcon className="w-2.5 h-2.5" strokeWidth={2} />
+                      {status.label}
+                    </span>
+                  </div>
+                  <div className="mt-1.5 text-[11px] text-[#4b5563]">
+                    {c.person} · {c.role}
+                  </div>
+                  <div className="mt-2 flex items-center gap-3 text-[10.5px] font-mono text-[#9ca3af]">
+                    <span
+                      className="px-1.5 py-0.5 rounded-full"
+                      style={{
+                        color: SOURCE_META[c.source]?.color || "#6d46c6",
+                        backgroundColor: `${SOURCE_META[c.source]?.color || "#6d46c6"}12`,
+                      }}
+                    >
+                      {c.source}
+                    </span>
+                    <span>{c.duration}</span>
+                    <span className="ml-auto">{c.date}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </aside>
+
+        {/* Detail */}
+        <section className="lg:col-span-8 space-y-5 flex flex-col">
+          {selected && <ConversationDetail conversation={selected} onChanged={load} />}
+          {!loading && conversations.length === 0 && (
+            <div
+              data-testid="conversations-empty"
+              className="rounded-2xl border border-dashed border-[#d9d1ee] bg-[#faf9ff] p-10 text-center"
+            >
+              <Mic className="w-6 h-6 text-[#6d46c6] mx-auto" strokeWidth={1.5} />
+              <div className="mt-3 text-[15px] font-display font-semibold text-[#111827]">
+                No conversations yet
+              </div>
+              <p className="mt-1 text-[12.5px] text-[#4b5563]">
+                Upload a call transcript in <b>Sources</b> to extract growth
+                signals and draft a testimonial.
+              </p>
+            </div>
+          )}
+        </section>
+      </div>
+      </section>
+    </div>
+  );
+}
+
+function ConversationDetail({ conversation: c, onChanged }) {
+  const status = STATUS_META[c.status];
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [localStoryStatus, setLocalStoryStatus] = useState(
+    c.draftedStory?.status || null
+  );
+  const [editing, setEditing] = useState(false);
+  const [draftText, setDraftText] = useState(c.draftedStory?.body || "");
+  const [busy, setBusy] = useState(false);
+
+  // Reset local status when switching conversations
+  const currentStoryStatus = localStoryStatus || c.draftedStory?.status;
+
+  useEffect(() => {
+    setDraftText(c.draftedStory?.body || "");
+    setEditing(false);
+    setLocalStoryStatus(c.draftedStory?.status || null);
+  }, [c.id]);
+
+  const runAnalyze = async () => {
+    setBusy(true);
+    try {
+      await api.post(`/sources/${c._sourceId}/analyze`);
+      toast.success("Testimonial draft generated", {
+        description: "Grounded in the transcript, ready for review.",
+      });
+      if (onChanged) await onChanged();
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail) || "Generation failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveEdit = async () => {
+    setBusy(true);
+    try {
+      await api.put(`/sources/${c._sourceId}/testimonial`, { testimonial_draft: draftText });
+      toast.success("Draft saved");
+      setEditing(false);
+      if (onChanged) await onChanged();
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail) || "Save failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSent = () => {
+    setLocalStoryStatus("awaiting_approval");
+    setComposerOpen(false);
+    toast.success(`Approval request sent to ${c.person}`, {
+      description: "One-click approve link expires in 7 days.",
+    });
+  };
+
+  const SECTIONS = [
+    {
+      key: "motivations",
+      icon: Target,
+      title: "Motivations",
+      accent: "#6d46c6",
+    },
+    {
+      key: "painPoints",
+      icon: AlertCircle,
+      title: "Pain points",
+      accent: "#e35b3a",
+    },
+    {
+      key: "buyingSignals",
+      icon: Zap,
+      title: "Buying signals",
+      accent: "#0f9b7c",
+    },
+    {
+      key: "objections",
+      icon: MessageSquare,
+      title: "Objections",
+      accent: "#a16207",
+    },
+    {
+      key: "customerLanguage",
+      icon: Quote,
+      title: "Customer language",
+      accent: "#6d46c6",
+    },
+    {
+      key: "productFeedback",
+      icon: Sparkles,
+      title: "Product feedback",
+      accent: "#0f9b7c",
+    },
+    {
+      key: "faqs",
+      icon: HelpCircle,
+      title: "Frequently asked questions",
+      accent: "#4285F4",
+    },
+  ];
+
+  return (
+    <>
+      {/* Header card */}
+      <div className="rounded-2xl border border-[#eeeaf6] bg-white p-6 order-1">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#9ca3af]">
+              Conversation · {c.id}
+            </div>
+            <h2 className="font-display text-[22px] font-semibold text-[#111827] mt-1">
+              {c.title}
+            </h2>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-[#4b5563]">
+              <span>{c.person} · {c.role}</span>
+              <span>·</span>
+              <span>AE: {c.aeName}</span>
+              <span>·</span>
+              <span className="font-mono">{c.duration}</span>
+              <span>·</span>
+              <span className="font-mono">{c.date}</span>
+            </div>
+          </div>
+          <span
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border ${TONE_STYLES[status.tone]}`}
+          >
+            <status.icon className="w-3 h-3" strokeWidth={2} />
+            {status.label}
+          </span>
+        </div>
+
+        <div className="mt-5 grid grid-cols-4 gap-3">
+          <StatCell label="Source" value={c.source} small />
+          <StatCell label="Sentiment" value={c.sentiment} small />
+          <StatCell label="Signal score" value={`${Math.round(c.signalScore * 100)}`} />
+          <StatCell label="Type" value={c.type} small />
+        </div>
+      </div>
+
+      {/* Extracted signals */}
+      <div className="rounded-2xl border border-[#eeeaf6] bg-white p-6 order-3">
+        <div className="flex items-center gap-2 mb-5">
+          <Sparkles className="w-4 h-4 text-[#6d46c6]" strokeWidth={1.75} />
+          <div className="text-[13px] font-display font-semibold text-[#111827]">
+            AI-extracted signals
+          </div>
+          <span className="ml-auto text-[10.5px] font-mono text-[#9ca3af]">
+            From transcript · never auto-published
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {SECTIONS.map((sec) => {
+            const items = c.signals[sec.key] || [];
+            if (items.length === 0) return null;
+            const Icon = sec.icon;
+            return (
+              <div
+                key={sec.key}
+                data-testid={`signal-${sec.key}`}
+                className="rounded-xl border border-[#eeeaf6] bg-[#faf9ff] p-4"
+              >
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+                    style={{ backgroundColor: `${sec.accent}18` }}
+                  >
+                    <Icon
+                      className="w-3.5 h-3.5"
+                      strokeWidth={1.75}
+                      style={{ color: sec.accent }}
+                    />
+                  </div>
+                  <div className="text-[12px] font-display font-semibold text-[#111827]">
+                    {sec.title}
+                  </div>
+                  <span className="ml-auto text-[10px] font-mono text-[#9ca3af]">
+                    {items.length}
+                  </span>
+                </div>
+                <ul className="mt-2.5 space-y-1.5 text-[12.5px] text-[#4b5563] leading-relaxed">
+                  {items.map((item, i) => (
+                    <li key={i} className="flex gap-2">
+                      <span
+                        className="mt-1.5 w-1 h-1 rounded-full shrink-0"
+                        style={{ backgroundColor: sec.accent }}
+                      />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Drafted testimonial + approval flow */}
+      {c.draftedStory ? (
+        <div className="rounded-2xl border border-[#6d46c6]/25 bg-white p-6 relative overflow-hidden order-2">
+          <div
+            aria-hidden
+            className="absolute -top-16 -right-8 w-[240px] h-[240px] rounded-full"
+            style={{
+              background:
+                "radial-gradient(circle, rgba(94,234,212,0.16), transparent 60%)",
+            }}
+          />
+          <div className="relative">
+            <div className="flex items-center gap-2 mb-4">
+              <FileCheck
+                className="w-4 h-4 text-[#6d46c6]"
+                strokeWidth={1.75}
+              />
+              <div className="text-[13px] font-display font-semibold text-[#111827]">
+                Drafted customer testimonial
+              </div>
+              <span className="ml-auto text-[10.5px] font-mono text-[#9ca3af] flex items-center gap-1">
+                <ShieldCheck className="w-3 h-3 text-[#0f9b7c]" strokeWidth={1.75} />
+                Customer approves before publish
+              </span>
+            </div>
+
+            <ApprovalTimeline
+              story={{
+                ...c.draftedStory,
+                status: currentStoryStatus,
+                approvalRequestedAt:
+                  currentStoryStatus === "awaiting_approval" ||
+                  currentStoryStatus === "approved" ||
+                  currentStoryStatus === "amplified"
+                    ? c.draftedStory.approvalRequestedAt || new Date().toISOString()
+                    : c.draftedStory.approvalRequestedAt,
+              }}
+            />
+
+            <div className="mt-5 rounded-xl bg-[#faf9ff] border border-[#eeeaf6] p-5">
+              {editing ? (
+                <textarea
+                  data-testid="story-edit-textarea"
+                  value={draftText}
+                  onChange={(e) => setDraftText(e.target.value)}
+                  className="w-full min-h-[130px] rounded-lg border border-[#eeeaf6] bg-white px-3 py-2.5 text-[14px] leading-relaxed text-[#111827] focus:outline-none focus:border-[#d9d1ee] focus:ring-2 focus:ring-[#6d46c6]/10 resize-y font-display"
+                  spellCheck={false}
+                />
+              ) : (
+                <p className="text-[14px] leading-relaxed text-[#111827] whitespace-pre-line font-display">
+                  &ldquo;{c.draftedStory.body}&rdquo;
+                </p>
+              )}
+              <div className="mt-3 text-[11.5px] font-mono text-[#6d46c6]">
+                — {c.draftedStory.attribution}
+              </div>
+            </div>
+
+            <div className="mt-5 flex flex-wrap items-center gap-2">
+              {editing ? (
+                <>
+                  <button
+                    data-testid="story-save-btn"
+                    onClick={saveEdit}
+                    disabled={busy}
+                    className="btn-primary h-10 !py-0 disabled:opacity-60"
+                  >
+                    <FileCheck className="w-4 h-4" strokeWidth={1.75} />
+                    {busy ? "Saving..." : "Save draft"}
+                  </button>
+                  <button
+                    data-testid="story-cancel-edit-btn"
+                    onClick={() => {
+                      setEditing(false);
+                      setDraftText(c.draftedStory.body);
+                    }}
+                    className="btn-secondary h-10 !py-0"
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    data-testid="story-edit-btn"
+                    onClick={() => {
+                      setDraftText(c.draftedStory.body);
+                      setEditing(true);
+                    }}
+                    className="btn-secondary h-10 !py-0"
+                  >
+                    <Edit3 className="w-4 h-4" strokeWidth={1.75} />
+                    Edit draft
+                  </button>
+                  <button
+                    data-testid="story-regenerate-btn"
+                    onClick={runAnalyze}
+                    disabled={busy}
+                    className="btn-secondary h-10 !py-0 disabled:opacity-60"
+                  >
+                    <RefreshCcw className="w-4 h-4" strokeWidth={1.75} />
+                    {busy ? "Working..." : "Regenerate"}
+                  </button>
+                  <button
+                    data-testid="story-copy-btn"
+                    onClick={() => {
+                      navigator.clipboard.writeText(c.draftedStory.body);
+                      toast.success("Copied to clipboard");
+                    }}
+                    className="btn-secondary h-10 !py-0"
+                  >
+                    <Copy className="w-4 h-4" strokeWidth={1.75} />
+                    Copy
+                  </button>
+
+                  {currentStoryStatus === "draft" && (
+                    <button
+                      data-testid="story-request-approval-btn"
+                      onClick={() => setComposerOpen(true)}
+                      className="ml-auto btn-primary h-10 !py-0"
+                    >
+                      <Send className="w-4 h-4" strokeWidth={1.75} />
+                      Send for customer approval
+                    </button>
+                  )}
+                  {currentStoryStatus === "awaiting_approval" && (
+                    <button
+                      data-testid="story-resend-btn"
+                      onClick={() => toast.info(`Reminder sent to ${c.person}`)}
+                      className="ml-auto btn-secondary h-10 !py-0"
+                    >
+                      <Clock className="w-4 h-4" strokeWidth={1.75} />
+                      Send reminder
+                    </button>
+                  )}
+                  {currentStoryStatus === "approved" && (
+                    <button
+                      data-testid="story-amplify-btn"
+                      onClick={() =>
+                        toast.success("Sent to Social Agent + Referral Agent")
+                      }
+                      className="ml-auto btn-primary h-10 !py-0"
+                    >
+                      <Zap className="w-4 h-4" strokeWidth={1.75} />
+                      Amplify testimonial
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-dashed border-[#d9d1ee] bg-[#faf9ff] p-8 text-center order-2">
+          <FileCheck
+            className="w-6 h-6 text-[#6d46c6] mx-auto"
+            strokeWidth={1.5}
+          />
+          <div className="mt-3 text-[14px] font-display font-semibold text-[#111827]">
+            No testimonial drafted yet
+          </div>
+          <p className="mt-1 text-[12.5px] text-[#4b5563] max-w-[420px] mx-auto">
+            Ask Uplaud to draft an authentic customer perspective from this
+            conversation. Nothing is published without customer approval.
+          </p>
+          <button
+            data-testid="story-draft-btn"
+            onClick={runAnalyze}
+            disabled={busy}
+            className="btn-primary mt-4 h-11 !py-0 mx-auto disabled:opacity-60"
+          >
+            <Sparkles className="w-4 h-4" strokeWidth={2} />
+            {busy ? "Drafting..." : "Draft customer testimonial"}
+          </button>
+        </div>
+      )}
+
+      {/* Approval email composer */}
+      {c.draftedStory && (
+        <ApprovalEmailComposer
+          open={composerOpen}
+          onClose={() => setComposerOpen(false)}
+          onSent={handleSent}
+          conversation={c}
+        />
+      )}
+    </>
+  );
+}
+
+function ApprovalTimeline({ story }) {
+  const steps = [
+    { key: "draft", label: "Draft", done: true },
+    {
+      key: "sent",
+      label: "Sent for approval",
+      done: !!story.approvalRequestedAt,
+    },
+    { key: "approved", label: "Approved", done: !!story.approvedAt },
+    { key: "amplified", label: "Amplified", done: story.status === "amplified" },
+  ];
+  return (
+    <div className="flex items-center gap-2">
+      {steps.map((s, i) => (
+        <div key={s.key} className="flex items-center flex-1">
+          <div className="flex items-center gap-2">
+            <div
+              className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-mono ${
+                s.done
+                  ? "bg-[#6d46c6] text-white"
+                  : "bg-[#eeeaf6] text-[#9ca3af]"
+              }`}
+            >
+              {s.done ? <CheckCircle2 className="w-3.5 h-3.5" strokeWidth={2} /> : i + 1}
+            </div>
+            <div
+              className={`text-[11.5px] whitespace-nowrap ${
+                s.done ? "text-[#111827] font-medium" : "text-[#9ca3af]"
+              }`}
+            >
+              {s.label}
+            </div>
+          </div>
+          {i < steps.length - 1 && (
+            <div
+              className={`flex-1 h-px mx-2 ${
+                s.done && steps[i + 1].done ? "bg-[#6d46c6]" : "bg-[#eeeaf6]"
+              }`}
+            />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function StatCell({ label, value, small }) {
+  return (
+    <div className="rounded-xl bg-[#faf9ff] border border-[#eeeaf6] p-3">
+      <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#9ca3af]">
+        {label}
+      </div>
+      <div
+        className={`mt-1 font-display font-semibold text-[#111827] leading-tight capitalize ${small ? "text-[13px]" : "text-[18px]"}`}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function ThemeCard({ theme: t }) {
+  return (
+    <div
+      data-testid={`theme-${t.id}`}
+      className="rounded-2xl border border-[#eeeaf6] bg-white p-6 hover:border-[#d9d1ee] transition-colors"
+    >
+      <div className="text-[10.5px] font-mono uppercase tracking-[0.18em] text-[#9ca3af]">
+        {t.category}
+      </div>
+      <div className="mt-3 font-display text-[20px] font-semibold leading-tight text-[#111827]">
+        {t.theme}
+      </div>
+
+      <div className="mt-4 flex items-baseline gap-3">
+        <div className="font-display text-[28px] font-semibold text-[#0f9b7c] leading-none">
+          {t.lift}
+        </div>
+        <div className="text-[11px] text-[#4b5563] leading-tight">
+          {t.liftLabel}
+        </div>
+      </div>
+
+      <div className="mt-5 rounded-xl bg-[#faf9ff] border border-[#eeeaf6] p-3">
+        <p className="text-[12.5px] leading-relaxed text-[#111827] italic">
+          &ldquo;{t.quote}&rdquo;
+        </p>
+        <div className="mt-1.5 text-[10.5px] font-mono text-[#6d46c6]">
+          — {t.quoteAttribution}
+        </div>
+      </div>
+
+      <div className="mt-4 text-[11px] font-mono text-[#9ca3af]">
+        {t.mentions} mentions · {t.conversations} conversations
+      </div>
+
+      <button
+        data-testid={`theme-action-${t.id}`}
+        className="mt-4 text-[12.5px] font-medium text-[#6d46c6] hover:underline flex items-center gap-1"
+      >
+        {t.action}
+        <ArrowRight className="w-3.5 h-3.5" strokeWidth={1.75} />
+      </button>
+    </div>
+  );
+}
+
+
+/* ────────── Approval Email Composer (right-slide panel) ────────── */
+
+function slugCompany(name) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function deriveEmail(person, company) {
+  const parts = person.toLowerCase().trim().split(/\s+/);
+  const first = parts[0] || "hello";
+  const last = parts.slice(1).join(".") || "team";
+  return `${first}.${last}@${slugCompany(company)}.com`;
+}
+
+function firstName(person) {
+  return person.split(" ")[0] || person;
+}
+
+function generateLinkedInDraft(c) {
+  const quoteLine = c.draftedStory.body.split("\n")[0].replace(/^["“]|["”]$/g, "");
+  return `I don't usually post about vendor tools, but this one earned it.
+
+${quoteLine}
+
+If you run finance ops and haven't looked at @PayRewards yet — it's genuinely one of the cleanest ROI stories I've seen in a while. Happy to intro anyone curious.
+
+#Finance #APAutomation #CFO`;
+}
+
+function generateEmailBody(c) {
+  const fn = firstName(c.person);
+  const testimonial = c.draftedStory.body;
+  return `Hi ${fn},
+
+Thanks again for the demo — genuinely enjoyed hearing how you're thinking about vendor spend and rewards at ${c.company}.
+
+Based on our conversation, we drafted a short testimonial that captures what you shared. Nothing gets published without your green light — a quick read + approve is all we need.
+
+TESTIMONIAL FOR YOUR APPROVAL
+"${testimonial}"
+— ${c.draftedStory.attribution}
+
+A couple of ways we'd love to say thanks:
+
+TIER 1 — Approve + refer
+Approve the testimonial and share PayRewards with at least one qualified peer in your network who could benefit → we'll credit your PayRewards account with $500 in rewards + waive next quarter's platform fee.
+
+TIER 2 — Post on LinkedIn tagging @PayRewards
+Post the testimonial (draft attached) on LinkedIn tagging PayRewards → additional $500 in rewards credit + a co-branded case study we'll publish with your team.
+
+The LinkedIn draft is attached so you can post in one click after any edits.
+
+Really appreciate you taking the time,
+${c.aeName}
+PayRewards`;
+}
+
+function ApprovalEmailComposer({ open, onClose, onSent, conversation: c }) {
+  const [to, setTo] = useState(deriveEmail(c.person, c.company));
+  const [cc, setCc] = useState(`${c.aeName.split(" ")[0].toLowerCase()}@payrewards.com`);
+  const [subject, setSubject] = useState(
+    `Thanks for the demo, ${firstName(c.person)} — a quick approval + a small thank-you`
+  );
+  const [body, setBody] = useState(generateEmailBody(c));
+  const [liDraft, setLiDraft] = useState(generateLinkedInDraft(c));
+  const [attachmentOpen, setAttachmentOpen] = useState(true);
+  const [sending, setSending] = useState(false);
+
+  // Reset composer content when the underlying conversation changes
+  useEffect(() => {
+    if (!open) return;
+    setTo(deriveEmail(c.person, c.company));
+    setCc(`${c.aeName.split(" ")[0].toLowerCase()}@payrewards.com`);
+    setSubject(
+      `Thanks for the demo, ${firstName(c.person)} — a quick approval + a small thank-you`
+    );
+    setBody(generateEmailBody(c));
+    setLiDraft(generateLinkedInDraft(c));
+    setSending(false);
+  }, [open, c.id]);
+
+  if (!open) return null;
+
+  const handleSend = () => {
+    setSending(true);
+    setTimeout(() => {
+      onSent();
+    }, 600);
+  };
+
+  const handleRegenerate = () => {
+    setBody(generateEmailBody(c));
+    toast.success("Email body regenerated");
+  };
+
+  return (
+    <div
+      data-testid="approval-email-composer"
+      className="fixed inset-0 z-[100] flex"
+      role="dialog"
+      aria-modal="true"
+    >
+      {/* Overlay */}
+      <button
+        data-testid="composer-overlay"
+        aria-label="Close composer"
+        onClick={onClose}
+        className="flex-1 bg-black/50 backdrop-blur-[2px] animate-in fade-in-0 duration-200"
+      />
+
+      {/* Panel */}
+      <div className="relative w-full sm:w-[760px] max-w-full h-full bg-white shadow-2xl border-l border-[#eeeaf6] flex flex-col animate-in slide-in-from-right duration-300">
+        {/* Header */}
+        <div className="px-6 h-16 border-b border-[#eeeaf6] flex items-center gap-3 shrink-0">
+          <div className="w-8 h-8 rounded-lg bg-[#f5f3ff] text-[#6d46c6] flex items-center justify-center">
+            <Send className="w-4 h-4" strokeWidth={1.75} />
+          </div>
+          <div className="min-w-0">
+            <div className="text-[10.5px] font-mono uppercase tracking-[0.18em] text-[#9ca3af]">
+              Approval request
+            </div>
+            <div className="text-[14px] font-display font-semibold text-[#111827] leading-tight truncate">
+              To {c.person} · {c.company}
+            </div>
+          </div>
+          <button
+            data-testid="composer-close-btn"
+            onClick={onClose}
+            className="ml-auto w-9 h-9 rounded-full hover:bg-[#faf9ff] flex items-center justify-center transition-colors"
+          >
+            <X className="w-4 h-4 text-[#4b5563]" strokeWidth={1.75} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto">
+          {/* Address fields */}
+          <div className="divide-y divide-[#f2eefa]">
+            <ComposerField
+              label="To"
+              testId="composer-to"
+              value={to}
+              onChange={setTo}
+            />
+            <ComposerField
+              label="Cc"
+              testId="composer-cc"
+              value={cc}
+              onChange={setCc}
+            />
+            <ComposerField
+              label="Subject"
+              testId="composer-subject"
+              value={subject}
+              onChange={setSubject}
+              bold
+            />
+          </div>
+
+          {/* Body textarea */}
+          <div className="px-6 py-5">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#9ca3af]">
+                Message
+              </div>
+              <button
+                data-testid="composer-regenerate-btn"
+                onClick={handleRegenerate}
+                className="text-[11.5px] text-[#6d46c6] hover:text-[#261c4d] flex items-center gap-1"
+              >
+                <RefreshCcw className="w-3 h-3" strokeWidth={1.75} />
+                Regenerate
+              </button>
+            </div>
+            <textarea
+              data-testid="composer-body"
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              className="w-full min-h-[380px] rounded-xl border border-[#eeeaf6] bg-white px-4 py-3 text-[13.5px] leading-relaxed text-[#111827] font-sans focus:outline-none focus:border-[#d9d1ee] focus:ring-2 focus:ring-[#6d46c6]/10 resize-y"
+              spellCheck={false}
+            />
+
+            {/* Reward tiers highlight */}
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <RewardTierCard
+                testId="tier-1"
+                icon={Gift}
+                tier="Tier 1"
+                title="Approve + refer 1 peer"
+                reward="$500 rewards credit + fee waiver"
+                accent="#6d46c6"
+                bg="#f5f3ff"
+              />
+              <RewardTierCard
+                testId="tier-2"
+                icon={Linkedin}
+                tier="Tier 2"
+                title="LinkedIn post tagging PayRewards"
+                reward="+$500 credit + co-branded case study"
+                accent="#0f9b7c"
+                bg="#ecfdf7"
+              />
+            </div>
+          </div>
+
+          {/* Attachment */}
+          <div className="px-6 pb-8">
+            <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#9ca3af] mb-3 flex items-center gap-2">
+              <Paperclip className="w-3 h-3" strokeWidth={2} />
+              1 attachment
+            </div>
+            <div
+              data-testid="composer-attachment"
+              className="rounded-xl border border-[#eeeaf6] bg-white overflow-hidden"
+            >
+              <button
+                onClick={() => setAttachmentOpen((o) => !o)}
+                data-testid="composer-attachment-toggle"
+                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#faf9ff] transition-colors text-left"
+              >
+                <div className="w-9 h-9 rounded-lg bg-[#0a66c2]/10 text-[#0a66c2] flex items-center justify-center shrink-0">
+                  <Linkedin className="w-4 h-4" strokeWidth={2} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] font-medium text-[#111827] truncate">
+                    LinkedIn post — {firstName(c.person)}-testimonial.txt
+                  </div>
+                  <div className="text-[11px] font-mono text-[#9ca3af]">
+                    Ready-to-post draft · 342 chars · tagged @PayRewards
+                  </div>
+                </div>
+                <span className="text-[11px] font-mono text-[#6d46c6]">
+                  {attachmentOpen ? "Hide" : "Preview"}
+                </span>
+              </button>
+              {attachmentOpen && (
+                <div className="border-t border-[#eeeaf6] p-4 bg-[#faf9ff]">
+                  <textarea
+                    data-testid="composer-linkedin-draft"
+                    value={liDraft}
+                    onChange={(e) => setLiDraft(e.target.value)}
+                    className="w-full min-h-[150px] rounded-lg border border-[#eeeaf6] bg-white px-3 py-2.5 text-[12.5px] leading-relaxed text-[#111827] focus:outline-none focus:border-[#d9d1ee] resize-y"
+                    spellCheck={false}
+                  />
+                  <div className="mt-2 flex items-center justify-between text-[11px] font-mono text-[#9ca3af]">
+                    <span>Customer edits inline before posting</span>
+                    <button
+                      data-testid="composer-copy-linkedin"
+                      onClick={() => {
+                        navigator.clipboard.writeText(liDraft);
+                        toast.success("LinkedIn draft copied");
+                      }}
+                      className="text-[#6d46c6] hover:text-[#261c4d] flex items-center gap-1"
+                    >
+                      <Copy className="w-3 h-3" strokeWidth={2} />
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 h-[76px] border-t border-[#eeeaf6] bg-white flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2 text-[11px] font-mono text-[#9ca3af]">
+            <Award className="w-3 h-3 text-[#0f9b7c]" strokeWidth={2} />
+            One-click approve link · expires in 7 days
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              data-testid="composer-cancel-btn"
+              onClick={onClose}
+              className="btn-secondary h-10 !py-0"
+            >
+              Cancel
+            </button>
+            <button
+              data-testid="composer-send-btn"
+              onClick={handleSend}
+              disabled={sending}
+              className="btn-primary h-10 !py-0 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <Send className="w-4 h-4" strokeWidth={1.75} />
+              {sending ? "Sending..." : "Send for approval"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ComposerField({ label, testId, value, onChange, bold }) {
+  return (
+    <div className="grid grid-cols-[64px_1fr] items-center gap-3 px-6 py-3">
+      <div className="text-[11px] font-mono uppercase tracking-[0.14em] text-[#9ca3af]">
+        {label}
+      </div>
+      <input
+        data-testid={testId}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`w-full bg-transparent text-[13.5px] text-[#111827] focus:outline-none ${
+          bold ? "font-semibold" : ""
+        }`}
+      />
+    </div>
+  );
+}
+
+function RewardTierCard({ testId, icon: Icon, tier, title, reward, accent, bg }) {
+  return (
+    <div
+      data-testid={testId}
+      className="rounded-xl border p-4"
+      style={{ borderColor: `${accent}30`, backgroundColor: bg }}
+    >
+      <div className="flex items-center gap-2">
+        <div
+          className="w-7 h-7 rounded-lg flex items-center justify-center"
+          style={{ backgroundColor: `${accent}22`, color: accent }}
+        >
+          <Icon className="w-3.5 h-3.5" strokeWidth={2} />
+        </div>
+        <span
+          className="text-[10px] font-mono uppercase tracking-[0.16em]"
+          style={{ color: accent }}
+        >
+          {tier}
+        </span>
+      </div>
+      <div className="mt-2 text-[12.5px] font-medium text-[#111827] leading-tight">
+        {title}
+      </div>
+      <div className="mt-1 text-[11.5px] text-[#4b5563] leading-snug">
+        {reward}
+      </div>
+    </div>
+  );
+}
+
