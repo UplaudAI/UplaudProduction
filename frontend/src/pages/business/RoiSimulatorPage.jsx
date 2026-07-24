@@ -32,14 +32,7 @@ function computeScenarios(paid, uplaud) {
   // Status quo
   const paidCustomersMo = paid.demosAttendedMo * (paid.demoToCustomer / 100);
   const sqNewCustomersYr = paidCustomersMo * 12;
-  const sqNewArr = sqNewCustomersYr * paid.acv;
   const sqBlendedCac = paid.paidCac;
-  const ltvBase =
-    (paid.acv * (paid.grossMargin / 100)) /
-    Math.max(0.01, 1 - paid.retention / 100);
-  const sqLtvCac = ltvBase / Math.max(1, sqBlendedCac);
-  const monthlyMarginPerCust = (paid.acv * (paid.grossMargin / 100)) / 12;
-  const sqPayback = sqBlendedCac / Math.max(1, monthlyMarginPerCust);
 
   // Uplaud lift
   const feedback = paid.demosAttendedMo * (uplaud.extractionRate / 100);
@@ -49,24 +42,22 @@ function computeScenarios(paid, uplaud) {
 
   const withCustomersMo = paidCustomersMo + uplaudCustomersMo;
   const withNewCustomersYr = withCustomersMo * 12;
-  const withNewArr = withNewCustomersYr * paid.acv;
   const withBlendedCac =
     withCustomersMo === 0
       ? sqBlendedCac
       : (paidCustomersMo * paid.paidCac +
           uplaudCustomersMo * uplaud.uplaudCac) /
         withCustomersMo;
-  const withLtvCac = ltvBase / Math.max(1, withBlendedCac);
-  const withPayback = withBlendedCac / Math.max(1, monthlyMarginPerCust);
+
+  const cacSavingsPerCustomer = Math.max(0, paid.paidCac - uplaud.uplaudCac);
+  const cacSavingsMo = uplaudCustomersMo * cacSavingsPerCustomer;
+  const cacSavingsYr = cacSavingsMo * 12;
 
   return {
     sq: {
       customersMo: paidCustomersMo,
       customersYr: sqNewCustomersYr,
-      arrYr: sqNewArr,
       blendedCac: sqBlendedCac,
-      ltvCac: sqLtvCac,
-      paybackMo: sqPayback,
     },
     up: {
       customersMo: withCustomersMo,
@@ -74,12 +65,10 @@ function computeScenarios(paid, uplaud) {
       warmIntros,
       testimonials,
       customersYr: withNewCustomersYr,
-      arrYr: withNewArr,
       blendedCac: withBlendedCac,
-      ltvCac: withLtvCac,
-      paybackMo: withPayback,
+      cacSavingsMo,
+      cacSavingsYr,
     },
-    ltvBase,
   };
 }
 
@@ -90,13 +79,11 @@ export default function RoiSimulatorPage() {
 
   const scenarios = useMemo(() => computeScenarios(paid, uplaud), [paid, uplaud]);
 
-  const arrDelta = scenarios.up.arrYr - scenarios.sq.arrYr;
   const custDelta = scenarios.up.customersYr - scenarios.sq.customersYr;
   const cacDeltaPct =
     ((scenarios.sq.blendedCac - scenarios.up.blendedCac) /
       Math.max(1, scenarios.sq.blendedCac)) *
     100;
-  const paybackDelta = scenarios.sq.paybackMo - scenarios.up.paybackMo;
 
   const handleReset = () => {
     setPaid(ROI_SIMULATOR_DEFAULTS.paid);
@@ -106,23 +93,15 @@ export default function RoiSimulatorPage() {
 
   const handleCopy = () => {
     const lines = [
-      "PayRewards × Uplaud — 12-month projection",
+      "PayRewards × Uplaud — 12-month CAC projection",
       "",
-      `• +${fmtNum(custDelta)} net-new customers / year (${fmtNum(
-        scenarios.up.uplaudCustomersMo * 12
-      )} sourced by Uplaud referral loop)`,
-      `• +${fmtCompactMoney(arrDelta)} ARR added / year (from ${fmtCompactMoney(
-        scenarios.sq.arrYr
-      )} → ${fmtCompactMoney(scenarios.up.arrYr)})`,
       `• Blended CAC drops ${fmtPct(cacDeltaPct, 1)} — ${fmtMoney(
         scenarios.sq.blendedCac
       )} → ${fmtMoney(scenarios.up.blendedCac)}`,
-      `• LTV/CAC improves ${scenarios.sq.ltvCac.toFixed(
-        1
-      )}× → ${scenarios.up.ltvCac.toFixed(1)}×`,
-      `• Payback shortens ${scenarios.sq.paybackMo.toFixed(
-        1
-      )} mo → ${scenarios.up.paybackMo.toFixed(1)} mo`,
+      `• +${fmtNum(custDelta)} net-new customers / year (${fmtNum(
+        scenarios.up.uplaudCustomersMo * 12
+      )} sourced by Uplaud referral loop, at $${fmtNum(uplaud.uplaudCac)} CAC vs $${fmtNum(paid.paidCac)} paid)`,
+      `• ${fmtCompactMoney(scenarios.up.cacSavingsYr)} in CAC savings / year from routing volume through the referral loop instead of paid demos`,
     ].join("\n");
     navigator.clipboard.writeText(lines);
     toast.success("Boardroom summary copied to clipboard");
@@ -132,8 +111,20 @@ export default function RoiSimulatorPage() {
     <div data-testid="roi-simulator-page" className="space-y-14">
       <PageHero
         eyebrow="Business Impact · 12-month projection"
-        question="What does Uplaud add to PayRewards' P&L this year?"
+        question="How much does Uplaud cut PayRewards' blended CAC?"
         subhead="Plug in your real Meta / Google numbers on the left. Every metric below recomputes live — ready for the board deck."
+        northStar={{
+          label: "Blended CAC · with Uplaud",
+          value: fmtMoney(scenarios.up.blendedCac),
+          delta: `-${fmtPct(cacDeltaPct, 1)} vs ${fmtMoney(scenarios.sq.blendedCac)} paid-only`,
+          attribution:
+            "Uplaud sourced customers cost a fraction of paid CAC, pulling the blended number down without adding ad spend.",
+          stats: [
+            { label: "Customers / mo", value: fmtNum(scenarios.up.customersMo) },
+            { label: "Uplaud-sourced / mo", value: fmtNum(scenarios.up.uplaudCustomersMo) },
+            { label: "CAC savings / yr", value: fmtCompactMoney(scenarios.up.cacSavingsYr) },
+          ],
+        }}
         smartAction={{
           eyebrow: "How to read this",
           headline:
@@ -256,22 +247,6 @@ export default function RoiSimulatorPage() {
           <DeltaSummary
             deltas={[
               {
-                id: "customers",
-                label: "Net-new customers / year",
-                sq: `${fmtNum(scenarios.sq.customersYr)}`,
-                up: `${fmtNum(scenarios.up.customersYr)}`,
-                delta: `+${fmtNum(custDelta)}`,
-                positive: true,
-              },
-              {
-                id: "arr",
-                label: "New ARR added / year",
-                sq: fmtCompactMoney(scenarios.sq.arrYr),
-                up: fmtCompactMoney(scenarios.up.arrYr),
-                delta: `+${fmtCompactMoney(arrDelta)}`,
-                positive: true,
-              },
-              {
                 id: "cac",
                 label: "Blended CAC",
                 sq: fmtMoney(scenarios.sq.blendedCac),
@@ -281,28 +256,26 @@ export default function RoiSimulatorPage() {
                 inverse: true,
               },
               {
-                id: "ltvcac",
-                label: "LTV / CAC",
-                sq: `${scenarios.sq.ltvCac.toFixed(1)}×`,
-                up: `${scenarios.up.ltvCac.toFixed(1)}×`,
-                delta: `+${(scenarios.up.ltvCac - scenarios.sq.ltvCac).toFixed(1)}×`,
+                id: "customers",
+                label: "Net-new customers / year",
+                sq: `${fmtNum(scenarios.sq.customersYr)}`,
+                up: `${fmtNum(scenarios.up.customersYr)}`,
+                delta: `+${fmtNum(custDelta)}`,
                 positive: true,
               },
               {
-                id: "payback",
-                label: "Payback (months)",
-                sq: `${scenarios.sq.paybackMo.toFixed(1)}`,
-                up: `${scenarios.up.paybackMo.toFixed(1)}`,
-                delta: `-${paybackDelta.toFixed(1)} mo`,
+                id: "savings",
+                label: "CAC savings / year",
+                sq: fmtMoney(0),
+                up: fmtCompactMoney(scenarios.up.cacSavingsYr),
+                delta: `+${fmtCompactMoney(scenarios.up.cacSavingsYr)}`,
                 positive: true,
-                inverse: true,
               },
             ]}
           />
 
           {/* Boardroom summary */}
           <BoardroomSummary
-            arrDelta={arrDelta}
             custDelta={custDelta}
             cacDeltaPct={cacDeltaPct}
             sq={scenarios.sq}
@@ -429,29 +402,19 @@ function ScenarioCard({ testId, variant, eyebrow, title, subtitle, scenario, ext
 
       <div className="mt-5 space-y-3">
         <MetricRow
+          label="Blended CAC"
+          value={fmtMoney(scenario.blendedCac)}
+          variant={variant}
+          emphasise
+        />
+        <MetricRow
           label="New customers / mo"
           value={fmtNum(scenario.customersMo)}
           variant={variant}
         />
         <MetricRow
-          label="New ARR / year"
-          value={fmtCompactMoney(scenario.arrYr)}
-          variant={variant}
-          emphasise
-        />
-        <MetricRow
-          label="Blended CAC"
-          value={fmtMoney(scenario.blendedCac)}
-          variant={variant}
-        />
-        <MetricRow
-          label="LTV / CAC"
-          value={`${scenario.ltvCac.toFixed(1)}×`}
-          variant={variant}
-        />
-        <MetricRow
-          label="Payback"
-          value={`${scenario.paybackMo.toFixed(1)} mo`}
+          label="New customers / year"
+          value={fmtNum(scenario.customersYr)}
           variant={variant}
         />
       </div>
@@ -539,7 +502,7 @@ function DeltaSummary({ deltas }) {
 }
 
 /* ────────── boardroom summary ────────── */
-function BoardroomSummary({ arrDelta, custDelta, cacDeltaPct, sq, up, onCopy }) {
+function BoardroomSummary({ custDelta, cacDeltaPct, sq, up, onCopy }) {
   return (
     <section
       data-testid="roi-boardroom-summary"
@@ -555,31 +518,28 @@ function BoardroomSummary({ arrDelta, custDelta, cacDeltaPct, sq, up, onCopy }) 
           Ready for slide 3 of the growth-review deck
         </div>
         <h3 className="mt-3 font-display text-[22px] font-semibold leading-snug">
-          Layering Uplaud on PayRewards' current ad spend generates{" "}
-          <span className="text-[#5eead4]">
-            +{fmtCompactMoney(arrDelta)} ARR
-          </span>{" "}
-          and <span className="text-[#5eead4]">+{fmtNum(custDelta)} customers</span>{" "}
-          in year one — at a{" "}
-          <span className="text-[#5eead4]">{fmtPct(cacDeltaPct, 1)} lower</span>{" "}
-          blended CAC.
+          Layering Uplaud on PayRewards' current ad spend cuts blended CAC{" "}
+          <span className="text-[#5eead4]">{fmtPct(cacDeltaPct, 1)}</span>{" "}
+          — from {fmtMoney(sq.blendedCac)} to{" "}
+          <span className="text-[#5eead4]">{fmtMoney(up.blendedCac)}</span> — while adding{" "}
+          <span className="text-[#5eead4]">+{fmtNum(custDelta)} customers</span> in year one.
         </h3>
 
         <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <SummaryStat
-            label="ARR added / yr"
-            value={`+${fmtCompactMoney(arrDelta)}`}
-            sub={`${fmtCompactMoney(sq.arrYr)} → ${fmtCompactMoney(up.arrYr)}`}
-          />
           <SummaryStat
             label="Blended CAC"
             value={fmtMoney(up.blendedCac)}
             sub={`down ${fmtPct(cacDeltaPct, 1)} from ${fmtMoney(sq.blendedCac)}`}
           />
           <SummaryStat
-            label="LTV / CAC"
-            value={`${up.ltvCac.toFixed(1)}×`}
-            sub={`from ${sq.ltvCac.toFixed(1)}× status quo`}
+            label="Net-new customers / yr"
+            value={`+${fmtNum(custDelta)}`}
+            sub={`${fmtNum(sq.customersYr)} → ${fmtNum(up.customersYr)}`}
+          />
+          <SummaryStat
+            label="CAC savings / yr"
+            value={fmtCompactMoney(up.cacSavingsYr)}
+            sub="vs sending that same volume through paid"
           />
         </div>
 

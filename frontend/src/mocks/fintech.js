@@ -1808,9 +1808,6 @@ export const ROI_SIMULATOR_DEFAULTS = {
     demosAttendedMo: 641,
     demoToCustomer: 3.3,        // %
     paidCac: 1204,              // $
-    acv: 18400,                 // $
-    grossMargin: 68,            // %
-    retention: 88,              // %
   },
   uplaud: {
     extractionRate: 60,         // % of demos activated → feedback captured
@@ -1843,27 +1840,6 @@ export const ROI_INPUT_LABELS = {
       hint: "Blended cost per paid-acquired customer",
       step: 25,
       prefix: "$",
-    },
-    {
-      key: "acv",
-      label: "Annual contract value",
-      hint: "ACV of a PayRewards customer",
-      step: 500,
-      prefix: "$",
-    },
-    {
-      key: "grossMargin",
-      label: "Gross margin",
-      hint: "Used in LTV & payback",
-      step: 1,
-      suffix: "%",
-    },
-    {
-      key: "retention",
-      label: "Annual retention",
-      hint: "Used in LTV. 88% ≈ 12% annual churn",
-      step: 1,
-      suffix: "%",
     },
   ],
   uplaud: [

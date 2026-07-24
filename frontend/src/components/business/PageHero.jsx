@@ -202,6 +202,24 @@ function NorthStarBlock({ data }) {
           {data.attribution}
         </p>
       )}
+      {data.stats?.length > 0 && (
+        <div className="mt-6 flex flex-wrap gap-3" data-testid="page-hero-northstar-stats">
+          {data.stats.map((s, i) => (
+            <div
+              key={i}
+              data-testid={`page-hero-northstar-stat-${i}`}
+              className="rounded-xl border border-[#eeeaf6] bg-[#faf9ff] px-4 py-2.5 min-w-[130px]"
+            >
+              <div className="text-[10px] font-mono uppercase tracking-[0.16em] text-[#9ca3af]">
+                {s.label}
+              </div>
+              <div className="mt-1 font-display font-semibold text-[18px] text-[#111827] leading-none">
+                {s.value}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
