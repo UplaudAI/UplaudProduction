@@ -20,11 +20,14 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   (error) => {
-    if (error.response?.status === 401 && typeof window !== "undefined") {
+    const isLoginCall = error.config?.url?.includes("/auth/login");
+    if (error.response?.status === 401 && typeof window !== "undefined" && !isLoginCall) {
       clearAuth();
       if (window.location.pathname !== "/business") {
         toast.error("Your session expired — please sign in again.");
-        window.location.href = "/business";
+        setTimeout(() => {
+          window.location.href = "/business";
+        }, 1500);
       }
     }
     return Promise.reject(error);

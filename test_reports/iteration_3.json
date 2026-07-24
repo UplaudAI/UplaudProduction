@@ -1,0 +1,43 @@
+{
+  "summary": "Narrow re-verification of the 401 interceptor toast-visibility fix in frontend/src/lib/api.js. All 3 requested tests PASS. Toast 'Your session expired — please sign in again.' is now visibly rendered before redirect (observed at +739ms after triggering 401, well within the 1500ms window). Wrong-password login still shows inline error only with no redirect. Full login+upload flow works end-to-end.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "tests_executed": [
+    {
+      "name": "TEST 1 - Corrupt token triggers visible toast + redirect",
+      "steps": "Login as dcameron@payrewards.com -> navigate to /business/import -> corrupt localStorage 'uplaud_business_auth_v1' token to 'invalid.jwt.token' via page.evaluate -> navigate to /business/referrals (triggers protected /api/warm-leads which returns 401)",
+      "observed": "Backend returned 401 on /api/warm-leads. Sonner toast with text 'Your session expired — please sign in again.' appeared in DOM at +739ms (visible on screenshot bottom-right). After 1.5s browser hard-redirected to /business login page. localStorage.uplaud_business_auth_v1 was cleared.",
+      "result": "PASS"
+    },
+    {
+      "name": "TEST 2 - Wrong password shows inline error only (regression)",
+      "steps": "On /business login form, submit WRONG_PASSWORD_123 with correct email",
+      "observed": "Form stayed on /business. No 'session expired' toast fired. No redirect loop. isLoginCall exclusion in interceptor works correctly (401 from /api/auth/login is silently rejected so the login form's own inline handler shows the invalid-credentials error).",
+      "result": "PASS"
+    },
+    {
+      "name": "TEST 3 - Normal login + upload works (regression)",
+      "steps": "Login with correct creds -> auto-redirect to /business/import -> upload /tmp/uptest/transcript.txt via file input",
+      "observed": "POST /api/auth/login 200. POST /api/sources 200. POST /api/sources/{id}/analyze 200. UI displays 'Transcript analyzed — signals extracted.' with green checkmark. Testimonial drafted for review.",
+      "result": "PASS"
+    }
+  ],
+  "test_report_links": ["/app/frontend/src/lib/api.js"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Interceptor logic is clean: isLoginCall exclusion via error.config?.url?.includes('/auth/login') correctly short-circuits before clearAuth/toast/redirect. The 1500ms setTimeout gives Sonner enough time to mount (observed render at ~739ms). Reasonable balance between UX visibility and not delaying redirect too long.",
+    "Minor note (not blocking): the interceptor also guards `window.location.pathname !== '/business'` before showing toast/redirect — good, prevents redirect loops if a 401 fires while already on the login page."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100% (3/3 targeted tests)"},
+  "test_credentials": "dcameron@payrewards.com / P@yRew@rds123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Toast-visibility fix from iteration_2 is fully resolved. The 1500ms setTimeout before window.location.href='/business' allows Sonner toast to render (verified visible at +739ms). Backend token-expiry logic (test_auth_token_expiry.py) was not re-run per request scope — 7/7 was passing in iteration_2.",
+  "rca of the issue": "Prior issue: toast.error() followed immediately by window.location.href = '/business' caused a hard navigation that unmounted Sonner before it could paint the toast, so users saw a silent redirect. Fix: wrap the redirect in setTimeout(..., 1500) so Sonner has time to mount and render the toast. Verified rendered in DOM at ~739ms in test."
+}
