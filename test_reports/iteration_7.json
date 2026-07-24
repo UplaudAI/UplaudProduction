@@ -1,0 +1,20 @@
+{
+  "summary": "Retest after Airtable PAT fix. Login, Warm Pipeline page with 6 seeded leads, and lead detail drawer all working. No 404s or console errors detected this iteration.",
+  "tested_scope": ["frontend", "backend", "auth", "integration"],
+  "passed": [
+    "POST /api/auth/login returns 200 with JWT for dcameron@payrewards.com",
+    "GET /api/warm-leads returns 200 with 6 leads (Marcelo Lebre, Pujun Bhatnagar, Uppaji Kothapalli, Vinay Chandrasekaran, Jason Post, Sandeep Pyapalli) for business_name=PayRewards",
+    "Login via /business route redirects to /business/import successfully",
+    "/business/referrals renders Warm Pipeline heading 'How many warm introductions did PayRewards customers deliver?' with 'Warm introductions delivered: 6' stat",
+    "All 6 seeded lead names visible in Active warm leads table",
+    "Clicking a lead (Marcelo Lebre) opens the detail drawer showing referrer (Deepthi Rao), company (remote / human resources / 1001-5000 / portugal), PDL enrichment (skills, interests, education, previous company unbabel, Twitter)",
+    "'Intelligent Action' card renders (Vinay Chandrasekaran ready for LinkedIn InMail outreach)",
+    "No 4xx/5xx network responses observed during navigation",
+    "No console errors during navigation"
+  ],
+  "failed": [],
+  "action_items": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "retest_needed": false,
+  "full_testing_deferred": true
+}
