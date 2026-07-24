@@ -1,89 +1,1161 @@
-from fastapi import FastAPI, APIRouter
 from dotenv import load_dotenv
-from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
-import os
-import logging
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List
-import uuid
-from datetime import datetime, timezone
-
 
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+load_dotenv(ROOT_DIR / ".env")
 
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
+import os
+import io
+import re
+import json
+import uuid
+import asyncio
+import logging
+import bcrypt
+import jwt
+from datetime import datetime, timezone, timedelta
+from typing import List, Optional
+
+from fastapi import FastAPI, APIRouter, Request, HTTPException, Depends, UploadFile, File
+from starlette.middleware.cors import CORSMiddleware
+from motor.motor_asyncio import AsyncIOMotorClient
+from pydantic import BaseModel, EmailStr, Field
+
+from docx import Document as DocxDocument
+from pypdf import PdfReader
+from openai import OpenAI
+
+import airtable_client
+
+# ---------------------------------------------------------------------------
+# Config / DB
+# ---------------------------------------------------------------------------
+mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+db = client[os.environ["DB_NAME"]]
 
-# Create the main app without a prefix
-app = FastAPI()
+JWT_SECRET = os.environ.get("JWT_SECRET", "uplaud-demo-secret")
+JWT_ALGORITHM = "HS256"
+ACCESS_TOKEN_HOURS = 12
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-4o")
 
-# Create a router with the /api prefix
+# Official OpenAI SDK client (user-provided key). Created once and reused.
+openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logger = logging.getLogger("uplaud")
+
+app = FastAPI(title="Uplaud Growth Engine API")
 api_router = APIRouter(prefix="/api")
 
 
-# Define Models
-class StatusCheck(BaseModel):
-    model_config = ConfigDict(extra="ignore")  # Ignore MongoDB's _id field
-    
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+# ---------------------------------------------------------------------------
+# Models
+# ---------------------------------------------------------------------------
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
 
-class StatusCheckCreate(BaseModel):
-    client_name: str
 
-# Add your routes to the router instead of directly to app
+class UserOut(BaseModel):
+    id: str
+    email: str
+    name: str
+    role: str
+    company: str
+
+
+class LoginResponse(BaseModel):
+    token: str
+    user: UserOut
+
+
+class Insights(BaseModel):
+    company_name: str = ""
+    speaker_name: str = ""
+    speaker_role: str = ""
+    ae_name: str = ""
+    sentiment_label: str = "Positive"
+    signal_score: int = 0
+    call_type: str = "Demo"
+    summary: str = ""
+    motivations: List[str] = []
+    pain_points: List[str] = []
+    buying_signals: List[str] = []
+    objections: List[str] = []
+    customer_language: List[str] = []
+    product_feedback: List[str] = []
+    faqs: List[str] = []
+
+
+class SourceOut(BaseModel):
+    id: str
+    filename: str
+    file_type: str
+    client_name: str
+    conversation_code: str
+    source_name: str
+    duration_min: int
+    word_count: int
+    status: str
+    created_at: str
+    insights: Optional[Insights] = None
+    testimonial_draft: Optional[str] = None
+    testimonial_is_verbatim: bool = True
+    share_id: str = ""
+    testimonial_status: str = "draft"
+    approved_at: Optional[str] = None
+    approval_requested_at: Optional[str] = None
+
+
+class PublicTestimonial(BaseModel):
+    share_id: str
+    company_name: str
+    brand: str = "PayRewards"
+    speaker_name: str
+    speaker_role: str
+    testimonial: str
+    status: str
+    approved_at: Optional[str] = None
+
+
+class PublicUpdate(BaseModel):
+    testimonial_draft: str
+
+
+class TestimonialUpdate(BaseModel):
+    testimonial_draft: str
+
+
+class EmailDraft(BaseModel):
+    to: str
+    subject: str
+    body: str
+    attachment_name: str
+
+
+class EventLogRequest(BaseModel):
+    event: str
+    page: str = ""
+    share_id: str = ""
+    details: str = ""
+
+
+# ---------------------------------------------------------------------------
+# Auth helpers
+# ---------------------------------------------------------------------------
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def verify_password(plain: str, hashed: str) -> bool:
+    return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+
+
+def create_access_token(user_id: str, email: str) -> str:
+    payload = {
+        "sub": user_id,
+        "email": email,
+        "type": "access",
+        "exp": datetime.now(timezone.utc) + timedelta(hours=ACCESS_TOKEN_HOURS),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+async def get_current_user(request: Request) -> dict:
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else None
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
+
+
+def user_to_out(user: dict) -> UserOut:
+    return UserOut(
+        id=user["id"],
+        email=user["email"],
+        name=user["name"],
+        role=user["role"],
+        company=user["company"],
+    )
+
+
+# ---------------------------------------------------------------------------
+# File parsing
+# ---------------------------------------------------------------------------
+def extract_text(filename: str, content: bytes) -> str:
+    ext = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
+    if ext == "txt":
+        return content.decode("utf-8", errors="ignore")
+    if ext in ("doc", "docx"):
+        doc = DocxDocument(io.BytesIO(content))
+        return "\n".join(p.text for p in doc.paragraphs)
+    if ext == "pdf":
+        reader = PdfReader(io.BytesIO(content))
+        return "\n".join((page.extract_text() or "") for page in reader.pages)
+    raise HTTPException(status_code=400, detail="Unsupported file type. Use .txt, .docx or .pdf")
+
+
+# ---------------------------------------------------------------------------
+# LLM  (OpenAI official SDK, user-provided key)
+# ---------------------------------------------------------------------------
+INSIGHTS_SYSTEM = (
+    "You are an expert B2B customer-insights analyst for Uplaud, a customer-led growth platform. "
+    "You analyze sales/demo call transcripts and extract structured growth signals. "
+    "Your single most important rule: any customer testimonial you produce must be a cohesive, first-person "
+    "testimonial grounded strictly in what the customer actually said and felt — you may add light connective "
+    "phrasing so it reads naturally, but you must never invent facts, numbers, features, or opinions the "
+    "customer did not express. You always respond with a single valid JSON object and nothing else."
+)
+
+
+def build_insights_prompt(transcript: str, client_name: str, variation: int = 0, avoid: str = "") -> str:
+    variation_note = ""
+    if variation > 0:
+        avoid_block = f"\nAlready-used testimonial text to AVOID repeating (pick DIFFERENT verbatim spans):\n\"\"\"{avoid}\"\"\"\n" if avoid else ""
+        variation_note = (
+            f"\n\n*** REGENERATION PASS #{variation}. *** Produce a MEANINGFULLY DIFFERENT result from any "
+            f"previous version. For testimonial_fragments, deliberately choose DIFFERENT verbatim spans than "
+            f"before. Re-synthesize every signal list from a fresh angle and surface additional or less-obvious "
+            f"points you may have skipped before. Do NOT simply reword the previous selection.{avoid_block}"
+        )
+    return f"""Analyze the following client sales/demo call transcript thoroughly. The uploaded file is named after "{client_name}".
+
+Be THOROUGH and specific. Genuinely mine the transcript — surface concrete details, numbers, timelines, names, workflows and the customer's ACTUAL sentiment (positive, mixed or negative). Do not be lazy or generic; short/empty lists make this useless.
+
+Return ONLY a JSON object with EXACTLY these keys:
+{{
+  "company_name": "the customer/company name mentioned (not the seller). Fall back to a clean version of the file name if unknown",
+  "speaker_name": "full name of the primary customer speaker (the buyer), if mentioned",
+  "speaker_role": "the customer speaker's job title/role, if mentioned",
+  "ae_name": "name of the seller / account executive, if mentioned",
+  "sentiment_label": "one of: Positive, Neutral, Negative — the customer's genuine overall sentiment",
+  "signal_score": 0,
+  "call_type": "one of: Demo, Discovery, Onboarding, Support, Renewal",
+  "summary": "3-4 sentences capturing the real arc of the conversation AND the genuine sentiment, including any hesitation or nuance",
+  "motivations": ["what is driving the customer / why they're looking — 3-6 specific items when supported"],
+  "pain_points": ["specific pains, frustrations, costs or problems they described — 3-6 items when supported, be concrete"],
+  "buying_signals": ["statements/questions showing intent, urgency or fit — 3-6 items when supported"],
+  "objections": ["concerns, risks, blockers or hesitations they raised — include even mild ones"],
+  "customer_language": ["4-8 short VERBATIM quotes in the customer's own words that are quotable/telling (positive OR critical)"],
+  "product_feedback": ["product feedback, feature requests, praise or criticism — 3-6 items when supported"],
+  "faqs": ["explicit questions the customer asked"],
+  "testimonial": "a polished, cohesive, FIRST-PERSON customer testimonial (3-6 flowing sentences) capturing what THIS customer actually said and their genuine sentiment"
+}}
+
+CRITICAL RULES for "testimonial" (the customer's testimonial, in their own voice):
+- Write 3-6 sentences in the FIRST PERSON as the customer. It must read cohesively and naturally — like a real quote you'd feature on a website — NOT a list of disjointed fragments, and NEVER use " … " to stitch pieces together.
+- Ground it strictly in what THIS customer actually said and felt. You MAY add light connective phrasing and a short lead-in or closing sentence for context so it flows well, but you must NOT invent facts, numbers, features, company names, or opinions the customer did not express.
+- Convey the customer's GENUINE emotion and sentiment — enthusiastic if they were positive, honest and balanced if the experience was mixed or critical. Do not fake positivity, but make the feeling come through.
+- Weave in their real, memorable phrases and word choices inside full, well-formed sentences.
+
+Other rules:
+- signal_score: integer 0-100 for overall opportunity strength (sentiment + intent + fit).
+- customer_language items are verbatim customer quotes (no added quotation marks in the string).
+- Every list item must be genuinely supported by the transcript. Keep each item to one concrete line.{variation_note}
+
+Transcript:
+\"\"\"
+{transcript[:16000]}
+\"\"\"
+"""
+
+
+def _parse_json(text: str) -> dict:
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.split("```", 2)[1]
+        if text.startswith("json"):
+            text = text[4:]
+    start, end = text.find("{"), text.rfind("}")
+    if start != -1 and end != -1:
+        text = text[start : end + 1]
+    return json.loads(text)
+
+
+def _call_openai(system: str, user: str, temperature: float = 0.2) -> str:
+    resp = openai_client.chat.completions.create(
+        model=LLM_MODEL,
+        response_format={"type": "json_object"},
+        temperature=temperature,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+    )
+    return resp.choices[0].message.content or ""
+
+
+async def generate_insights(transcript: str, client_name: str, variation: int = 0, avoid: str = "") -> dict:
+    if not openai_client:
+        raise HTTPException(status_code=503, detail="OPENAI_API_KEY not configured on the server.")
+    temperature = 0.25 if variation == 0 else 0.7
+    try:
+        text = await asyncio.to_thread(
+            _call_openai, INSIGHTS_SYSTEM, build_insights_prompt(transcript, client_name, variation, avoid), temperature
+        )
+    except Exception as e:  # noqa
+        logger.error("OpenAI call failed: %s", e)
+        raise HTTPException(status_code=502, detail="The language model request failed. Please try again.")
+    try:
+        return _parse_json(text)
+    except Exception as e:
+        logger.error("Failed to parse LLM JSON: %s | raw: %s", e, text[:500])
+        raise HTTPException(status_code=502, detail="Could not parse insights from the model.")
+
+
+# ---------------------------------------------------------------------------
+# Referral Agent — research a warm lead's public web presence, then draft a
+# personalized email + LinkedIn InMail using the referrer's real testimonial.
+# ---------------------------------------------------------------------------
+RESEARCH_MODEL = os.environ.get("RESEARCH_MODEL", "gpt-4.1")
+
+OUTREACH_SYSTEM = (
+    "You are a senior referral/growth outreach specialist. You write warm, confident, non-salesy "
+    "outreach to a warm lead who was personally referred by someone who recently experienced the "
+    "referring company (usually via a product demo, not necessarily as a paying customer — never "
+    "assume paying-customer status unless the testimonial explicitly says so). You always ground "
+    "every claim strictly in the facts provided — you never invent job titles, company facts, "
+    "names, news, or customer status. If personalization facts are thin, keep the message shorter "
+    "and more general rather than fabricating detail. You respond with a single valid JSON object "
+    "and nothing else."
+)
+
+
+def _call_openai_web_search(prompt: str) -> str:
+    resp = openai_client.responses.create(
+        model=RESEARCH_MODEL,
+        tools=[{"type": "web_search"}],
+        input=prompt,
+    )
+    return getattr(resp, "output_text", "") or ""
+
+
+def _clean_research_line(line: str) -> str:
+    line = re.sub(r"\[([^\]]+)\]\((?:https?://)?[^)]+\)", "", line)  # strip markdown links
+    line = re.sub(r"\(\s*\)", "", line)  # leftover empty parens
+    line = re.sub(r"\s{2,}", " ", line).strip()
+    return line.lstrip("-•").strip()
+
+
+async def research_lead(lead: dict) -> list:
+    """Best-effort public web research on the lead and their company, returned as a list
+    of clean, plain-text bullet strings. Never raises — falls back to [] so a research
+    failure never blocks drafting."""
+    if not openai_client:
+        return []
+    name = lead.get("name") or "this person"
+    job_title = lead.get("job_title") or ""
+    company = lead.get("company_name") or lead.get("receiver_company") or ""
+    industry = lead.get("industry") or ""
+    location = ", ".join([p for p in [lead.get("city"), lead.get("state"), lead.get("country")] if p])
+    prompt = (
+        f"Research the public professional web presence of {name}"
+        f"{f', {job_title}' if job_title else ''}{f' at {company}' if company else ''}.\n"
+        f"{f'Industry: {industry}. ' if industry else ''}{f'Location: {location}. ' if location else ''}\n"
+        "Look for: recent public LinkedIn posts or professional activity (only if genuinely publicly "
+        "indexed), the company's website/highlights, and any recent company news (funding, launches, press).\n"
+        "Return 3-5 short, concrete bullet points of ONLY genuinely verifiable findings, one per line, each "
+        "starting with '- '. Skip a bullet entirely rather than guessing or inventing. If you find nothing "
+        "reliable, return a single line saying so. Write plain prose sentences only — no links, no markdown, "
+        "no citation markers, no Sources section."
+    )
+    try:
+        text = await asyncio.to_thread(_call_openai_web_search, prompt)
+        lines = [_clean_research_line(l) for l in (text or "").split("\n") if l.strip()]
+        return [l for l in lines if l]
+    except Exception as e:  # noqa
+        logger.warning("Lead web research failed: %s", e)
+        return []
+
+
+def _infer_preferred_channel(lead: dict, research_bullets: list) -> str:
+    """Deterministically pick the outreach channel most likely to land: LinkedIn InMail
+    when the lead has a LinkedIn profile AND the research surfaced genuinely recent
+    activity/posts there, else email (falling back to LinkedIn if no email is known)."""
+    has_linkedin = bool(lead.get("linkedin"))
+    has_email = bool(lead.get("work_email"))
+    activity = re.compile(r"(?i)\b(post(?:ed|s)?|shared|activity|wrote)\b")
+    recency = re.compile(r"(?i)\b(day|days|week|weeks|month|months)\s+ago\b|\brecently\b")
+    is_linkedin_active = has_linkedin and any(
+        "linkedin" in b.lower() and activity.search(b) and recency.search(b) for b in research_bullets
+    )
+    if is_linkedin_active:
+        return "Send LinkedIn InMail"
+    if has_email:
+        return "Send Email"
+    return "Send LinkedIn InMail" if has_linkedin else "Send Email"
+
+
+def build_outreach_prompt(
+    lead: dict, referrer_testimonial: str, research_bullets: list, business_name: str, preferred_channel: str
+) -> str:
+    name = lead.get("name") or "there"
+    job_title = lead.get("job_title") or ""
+    company = lead.get("company_name") or lead.get("receiver_company") or ""
+    referrer = lead.get("referrer_name") or "a mutual contact"
+    who = name + (f" ({job_title}" + (f" at {company}" if company else "") + ")" if job_title or company else "")
+    research_text = "\n".join(f"- {b}" for b in research_bullets) if research_bullets else "No reliable public findings available."
+
+    return f"""A warm lead named {who} was just referred to {business_name} by {referrer}.
+
+{referrer} recently experienced {business_name} — most likely through a product demo. Do NOT describe {referrer} as a "customer" or someone "using" the product unless their testimonial below explicitly says they already are; by default describe them as someone who "took a demo of {business_name}" or "recently saw {business_name} in action". {referrer} was impressed enough to specifically think {name} would find real value in {business_name} — that is the entire reason for this outreach, and the email must say so plainly and warmly (e.g. "{referrer} thought this could be genuinely useful for you").
+
+{referrer}'s actual testimonial (quote or closely paraphrase their real words in the email — do not invent anything beyond this):
+\"\"\"{referrer_testimonial or "No testimonial text available."}\"\"\"
+
+Public web research findings about {name} / {company} (use ONLY these for personalization; if none are reliable, keep the email shorter and more general rather than inventing anything):
+{research_text}
+
+The system has already determined the single best outreach channel for this lead is: {preferred_channel}. Your next_action_cta MUST be exactly "{preferred_channel}", and next_action_label must reflect that channel choice.
+
+Write a first-touch outreach package with a genuinely compelling hook — this must earn a demo booking, not just "explore synergies." Return ONLY a JSON object with exactly these keys:
+{{
+  "research_headline": "one punchy sentence (under 100 characters) capturing the single most compelling, concrete, REAL finding from the research above — no links, no markdown, no fluff. If nothing concrete was found, summarize what IS genuinely known about {name}/{company} in one sentence instead.",
+  "email_subject": "short, specific, non-clickbait email subject line",
+  "email_body": "a warm, confident, concise email (5-8 sentences) that: (1) opens by naming {referrer} and explaining, in your own words, that {referrer} recently experienced {business_name} (via demo unless the testimonial says otherwise) and specifically thought of {name}, (2) weaves in a short quote or close paraphrase of {referrer}'s real testimonial words, (3) includes ONE genuine, specific personalization drawn from the research findings to build a strong hook — omit this if no real findings exist, (4) makes a clear, confident case for why a demo is worth their time, (5) ends with a direct call-to-action to book a demo (not a vague 'quick call'). Sign off as 'The {business_name} team'.",
+  "linkedin_message": "a shorter, casual LinkedIn InMail version (2-4 sentences, under 500 characters) with the same grounding rules and the same demo-booking CTA.",
+  "next_action_label": "a short imperative sentence describing the single best next action for a sales rep to take on this lead, referencing a real, specific detail when available and matching the {preferred_channel} channel",
+  "next_action_cta": "{preferred_channel}"
+}}
+Every sentence must be grounded in the facts given above. Never invent a job title, company fact, product, quote, or customer status that isn't in the provided testimonial or research findings."""
+
+
+async def draft_outreach(lead: dict, referrer_testimonial: str, research_bullets: list, business_name: str, preferred_channel: str) -> dict:
+    if not openai_client:
+        raise HTTPException(status_code=503, detail="OPENAI_API_KEY not configured on the server.")
+    try:
+        text = await asyncio.to_thread(
+            _call_openai,
+            OUTREACH_SYSTEM,
+            build_outreach_prompt(lead, referrer_testimonial, research_bullets, business_name, preferred_channel),
+            0.4,
+        )
+    except Exception as e:  # noqa
+        logger.error("Outreach draft call failed: %s", e)
+        raise HTTPException(status_code=502, detail="The language model request failed. Please try again.")
+    try:
+        return _parse_json(text)
+    except Exception as e:
+        logger.error("Failed to parse outreach JSON: %s | raw: %s", e, text[:500])
+        raise HTTPException(status_code=502, detail="Could not parse the drafted outreach.")
+
+
+# ---------------------------------------------------------------------------
+# Verbatim testimonial builder
+# ---------------------------------------------------------------------------
+def _norm(s: str) -> str:
+    """Normalize for verbatim substring matching: lowercase, unify quotes, collapse whitespace."""
+    s = s or ""
+    s = s.replace("\u2019", "'").replace("\u2018", "'").replace("\u201c", '"').replace("\u201d", '"')
+    s = s.replace("\u2013", "-").replace("\u2014", "-")
+    s = re.sub(r"\s+", " ", s)
+    return s.strip().lower()
+
+
+def _clean_fragment(f: str) -> str:
+    return (f or "").strip().strip('"').strip("'").strip("\u201c\u201d\u2018\u2019").strip()
+
+
+def build_verbatim_testimonial(fragments, transcript: str, customer_language) -> str:
+    """Stitch together ONLY spans that appear verbatim in the transcript.
+
+    Guarantees the returned testimonial is composed exclusively of the customer's
+    actual words. Fragments that are not exact substrings of the transcript are
+    discarded. If none survive, falls back to the single best verbatim quote from
+    customer_language (edge case: return the best short verbatim quote available).
+    """
+    norm_t = _norm(transcript)
+    kept, seen = [], set()
+
+    for f in (fragments or []):
+        if not isinstance(f, str):
+            continue
+        clean = _clean_fragment(f)
+        fn = _norm(clean)
+        if len(fn) < 12:  # too short to be a meaningful span
+            continue
+        if fn in norm_t:  # verbatim guarantee
+            if fn not in seen:
+                seen.add(fn)
+                kept.append(clean)
+
+    if not kept:
+        # Fallback (edge case a): best available verbatim quote from customer_language
+        verbatim_quotes = [q for q in (customer_language or []) if isinstance(q, str) and _norm(_clean_fragment(q)) in norm_t]
+        pool = verbatim_quotes if verbatim_quotes else [q for q in (customer_language or []) if isinstance(q, str)]
+        pool = sorted(pool, key=lambda q: len(q or ""), reverse=True)
+        if pool:
+            kept = [_clean_fragment(pool[0])]
+
+    joined = " \u2026 ".join([k for k in kept if k]).strip()
+    if joined:
+        joined = joined[0].upper() + joined[1:]
+        if joined[-1] not in ".!?\u2026\"'":
+            joined += "."
+    return joined
+
+
+# ---------------------------------------------------------------------------
+# Routes: auth
+# ---------------------------------------------------------------------------
 @api_router.get("/")
 async def root():
-    return {"message": "Hello World"}
+    return {"message": "Uplaud Growth Engine API"}
 
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.model_dump()
-    status_obj = StatusCheck(**status_dict)
-    
-    # Convert to dict and serialize datetime to ISO string for MongoDB
-    doc = status_obj.model_dump()
-    doc['timestamp'] = doc['timestamp'].isoformat()
-    
-    _ = await db.status_checks.insert_one(doc)
-    return status_obj
 
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    # Exclude MongoDB's _id field from the query results
-    status_checks = await db.status_checks.find({}, {"_id": 0}).to_list(1000)
-    
-    # Convert ISO string timestamps back to datetime objects
-    for check in status_checks:
-        if isinstance(check['timestamp'], str):
-            check['timestamp'] = datetime.fromisoformat(check['timestamp'])
-    
-    return status_checks
+@api_router.post("/auth/login", response_model=LoginResponse)
+async def login(body: LoginRequest):
+    email = body.email.lower().strip()
+    user = await db.users.find_one({"email": email})
+    if not user or not verify_password(body.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    token = create_access_token(user["id"], user["email"])
+    return LoginResponse(token=token, user=user_to_out(user))
 
-# Include the router in the main app
+
+@api_router.get("/auth/me", response_model=UserOut)
+async def me(current=Depends(get_current_user)):
+    return user_to_out(current)
+
+
+# ---------------------------------------------------------------------------
+# Routes: sources
+# ---------------------------------------------------------------------------
+def source_to_out(doc: dict) -> SourceOut:
+    return SourceOut(
+        id=doc["id"],
+        filename=doc["filename"],
+        file_type=doc["file_type"],
+        client_name=doc["client_name"],
+        conversation_code=doc.get("conversation_code", "CV_001"),
+        source_name=doc.get("source_name", "Upload"),
+        duration_min=doc.get("duration_min", 0),
+        word_count=doc["word_count"],
+        status=doc["status"],
+        created_at=doc["created_at"],
+        insights=doc.get("insights"),
+        testimonial_draft=doc.get("testimonial_draft"),
+        testimonial_is_verbatim=doc.get("testimonial_is_verbatim", True),
+        share_id=doc.get("share_id", ""),
+        testimonial_status=doc.get("testimonial_status", "draft"),
+        approved_at=doc.get("approved_at"),
+        approval_requested_at=doc.get("approval_requested_at"),
+    )
+
+
+@api_router.post("/sources", response_model=SourceOut)
+async def upload_source(file: UploadFile = File(...), current=Depends(get_current_user)):
+    content = await file.read()
+    text = extract_text(file.filename, content)
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="Could not extract any text from the file.")
+    client_name = file.filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ").title()
+    word_count = len(text.split())
+    seq = await db.sources.count_documents({"owner": current["id"]}) + 1
+    doc = {
+        "id": str(uuid.uuid4()),
+        "owner": current["id"],
+        "filename": file.filename,
+        "file_type": file.filename.rsplit(".", 1)[-1].lower(),
+        "client_name": client_name,
+        "brand": current.get("company", "PayRewards"),
+        "conversation_code": f"CV_{seq:03d}",
+        "source_name": "Upload",
+        "duration_min": max(1, round(word_count / 140)),
+        "transcript": text,
+        "word_count": word_count,
+        "status": "uploaded",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "insights": None,
+        "testimonial_draft": None,
+        "testimonial_is_verbatim": True,
+        "share_id": uuid.uuid4().hex[:12],
+        "testimonial_status": "draft",
+        "approved_at": None,
+        "approval_requested_at": None,
+    }
+    await db.sources.insert_one(doc)
+    return source_to_out(doc)
+
+
+@api_router.get("/sources", response_model=List[SourceOut])
+async def list_sources(current=Depends(get_current_user)):
+    docs = await db.sources.find({"owner": current["id"]}, {"_id": 0, "transcript": 0}).sort("created_at", -1).to_list(200)
+    return [source_to_out(d) for d in docs]
+
+
+@api_router.get("/sources/{source_id}", response_model=SourceOut)
+async def get_source(source_id: str, current=Depends(get_current_user)):
+    doc = await db.sources.find_one({"id": source_id, "owner": current["id"]}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Source not found")
+    return source_to_out(doc)
+
+
+@api_router.post("/sources/{source_id}/analyze", response_model=SourceOut)
+async def analyze_source(source_id: str, regenerate: bool = False, current=Depends(get_current_user)):
+    doc = await db.sources.find_one({"id": source_id, "owner": current["id"]})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Source not found")
+    count = doc.get("analyze_count", 0)
+    is_regen = regenerate or count > 0
+    variation = count if is_regen else 0
+    avoid = (doc.get("testimonial_draft") or "") if is_regen else ""
+    result = await generate_insights(doc["transcript"], doc["client_name"], variation=variation, avoid=avoid)
+    crafted = (result.pop("testimonial", "") or "").strip()
+    # Only keep keys the Insights model knows about, convert None to empty string for string fields
+    clean_result = {}
+    for k, v in result.items():
+        if k in Insights.model_fields:
+            # Convert None to appropriate default for string fields
+            field_type = Insights.model_fields[k].annotation
+            if v is None and (field_type is str or str(field_type) == "<class 'str'>"):
+                clean_result[k] = ""
+            else:
+                clean_result[k] = v
+    insights = Insights(**clean_result)
+    testimonial = crafted or (
+        " ".join(insights.customer_language[:3]).strip() if insights.customer_language else insights.summary
+    )
+    is_verbatim = False
+    await db.sources.update_one(
+        {"id": source_id},
+        {"$set": {
+            "insights": insights.model_dump(),
+            "testimonial_draft": testimonial,
+            "testimonial_is_verbatim": is_verbatim,
+            "status": "analyzed",
+            "analyze_count": count + 1,
+        }},
+    )
+    doc.update({
+        "insights": insights.model_dump(),
+        "testimonial_draft": testimonial,
+        "testimonial_is_verbatim": is_verbatim,
+        "status": "analyzed",
+    })
+    return source_to_out(doc)
+
+
+@api_router.put("/sources/{source_id}/testimonial", response_model=SourceOut)
+async def update_testimonial(source_id: str, body: TestimonialUpdate, current=Depends(get_current_user)):
+    doc = await db.sources.find_one({"id": source_id, "owner": current["id"]})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Source not found")
+    await db.sources.update_one({"id": source_id}, {"$set": {"testimonial_draft": body.testimonial_draft}})
+    doc["testimonial_draft"] = body.testimonial_draft
+    return source_to_out(doc)
+
+
+@api_router.get("/sources/{source_id}/email-draft", response_model=EmailDraft)
+async def email_draft(source_id: str, current=Depends(get_current_user)):
+    doc = await db.sources.find_one({"id": source_id, "owner": current["id"]}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Source not found")
+    client_name = doc["client_name"]
+    ins = doc.get("insights") or {}
+    company = ins.get("company_name") or client_name
+    testimonial = doc.get("testimonial_draft") or ""
+    speaker = ins.get("speaker_name") or ""
+    first = speaker.split(" ")[0] if speaker else company.split(" ")[0]
+    subject = f"A quick thank you, {first} — and one small favor"
+    body = (
+        f"Hi {first},\n\n"
+        f"Thank you again for the great conversation — it was fantastic to hear how things are going on your side. "
+        f"A few of the things you shared really stood out to us:\n\n"
+        f"\u201c{testimonial}\u201d\n\n"
+        f"With your permission, we'd love to share this as a short testimonial. "
+        f"I've attached a summary of our conversation for your reference. "
+        f"Feel free to tweak the wording so it feels right to you — just reply to this email with your go-ahead.\n\n"
+        f"Warm regards,\n{current['name']}\n{current['company']}"
+    )
+    return EmailDraft(
+        to=doc.get("client_email", ""),
+        subject=subject,
+        body=body,
+        attachment_name=f"{client_name} - Conversation Summary.pdf",
+    )
+
+
+def _public_payload(doc: dict) -> PublicTestimonial:
+    ins = doc.get("insights") or {}
+    return PublicTestimonial(
+        share_id=doc["share_id"],
+        company_name=ins.get("company_name") or doc.get("client_name", ""),
+        brand=doc.get("brand") or "PayRewards",
+        speaker_name=ins.get("speaker_name") or "",
+        speaker_role=ins.get("speaker_role") or "",
+        testimonial=doc.get("testimonial_draft") or "",
+        status=doc.get("testimonial_status") or "draft",
+        approved_at=doc.get("approved_at"),
+    )
+
+
+@api_router.get("/public/testimonial/{share_id}", response_model=PublicTestimonial)
+async def public_get_testimonial(share_id: str):
+    doc = await db.sources.find_one({"share_id": share_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Testimonial not found")
+    return _public_payload(doc)
+
+
+@api_router.put("/public/testimonial/{share_id}", response_model=PublicTestimonial)
+async def public_update_testimonial(share_id: str, body: PublicUpdate):
+    doc = await db.sources.find_one({"share_id": share_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Testimonial not found")
+    if doc.get("testimonial_status") == "approved":
+        raise HTTPException(status_code=400, detail="This testimonial is already approved and locked.")
+    await db.sources.update_one({"share_id": share_id}, {"$set": {"testimonial_draft": body.testimonial_draft}})
+    doc["testimonial_draft"] = body.testimonial_draft
+    return _public_payload(doc)
+
+
+@api_router.post("/public/testimonial/{share_id}/approve", response_model=PublicTestimonial)
+async def public_approve_testimonial(share_id: str, request: Request):
+    doc = await db.sources.find_one({"share_id": share_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Testimonial not found")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.sources.update_one(
+        {"share_id": share_id},
+        {"$set": {"testimonial_status": "approved", "approved_at": now}},
+    )
+    doc["testimonial_status"] = "approved"
+    doc["approved_at"] = now
+
+    # Sync the approved testimonial to Airtable (User + Uplaud tables)
+    owner = await db.users.find_one({"id": doc.get("owner")}, {"_id": 0})
+    owner_email = (owner or {}).get("email", "")
+    business_name = await airtable_client.get_business_name_by_email_domain(owner_email) or doc.get("brand") or "PayRewards"
+    ins = doc.get("insights") or {}
+    speaker_name = ins.get("speaker_name") or doc.get("client_name", "")
+    reviewer_id = await airtable_client.find_or_create_user(name=speaker_name, email=doc.get("client_email") or None)
+    share_link = f"{str(request.base_url).rstrip('/')}/t/{share_id}"
+    await airtable_client.create_uplaud_record(
+        business_name=business_name,
+        testimonial=doc.get("testimonial_draft") or "",
+        reviewer_record_id=reviewer_id,
+        share_link=share_link,
+        date_added=now[:10],
+    )
+    return _public_payload(doc)
+
+
+@api_router.post("/sources/{source_id}/send-approval")
+async def send_approval(source_id: str, current=Depends(get_current_user)):
+    doc = await db.sources.find_one({"id": source_id, "owner": current["id"]})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Source not found")
+    now = datetime.now(timezone.utc).isoformat()
+    share_id = doc.get("share_id") or uuid.uuid4().hex[:12]
+    new_status = "sent" if doc.get("testimonial_status") != "approved" else "approved"
+    await db.sources.update_one(
+        {"id": source_id},
+        {"$set": {"testimonial_status": new_status, "approval_requested_at": now, "share_id": share_id}},
+    )
+    return {"share_id": share_id, "public_path": f"/t/{share_id}"}
+
+
+# ---------------------------------------------------------------------------
+# Channel-intelligent social copy (LinkedIn vs Instagram vs X)
+# ---------------------------------------------------------------------------
+class SocialGenerateRequest(BaseModel):
+    testimonial: str
+    attribution: str = ""
+    company: str = "PayRewards"
+    pov: str = "company"  # "customer" (genuine peer share) | "company" (brand marketing)
+    channels: List[str] = ["linkedin", "instagram", "x"]
+
+
+CHANNEL_LIMITS = {"linkedin": 170, "instagram": 150, "x": 120}
+
+SOCIAL_SYSTEM_COMPANY = (
+    "You are a senior B2B social media strategist and copywriter for PayRewards (the COMPANY). "
+    "You turn an approved customer testimonial into polished, on-brand posts published from the "
+    "PayRewards company account — someone on the marketing team amplifying a customer's words. "
+    "You understand that LinkedIn, Instagram and X each need a different voice, hook, length and "
+    "hashtag style, and you never reuse the same caption across channels. "
+    "You respond with a single valid JSON object and nothing else."
+)
+
+SOCIAL_SYSTEM_CUSTOMER = (
+    "You are ghost-writing authentic, personal social posts on behalf of a REAL PERSON — a "
+    "customer / demo participant — to share with THEIR OWN professional network. The posts must "
+    "sound like a genuine individual casually sharing a useful experience in case it helps someone "
+    "in their network. They must NOT sound like an advertisement, must NOT sound like they were "
+    "written by a company's marketing team, and must NOT contain sales CTAs, slogans, hype, or "
+    "star ratings. Humble, specific, first-person, human. "
+    "You respond with a single valid JSON object and nothing else."
+)
+
+
+def build_social_prompt(pov: str, testimonial: str, attribution: str, company: str, channels) -> str:
+    person = (attribution or "the customer").split(",")[0].strip()
+    header = f"""A customer of {company} shared these approved, verbatim words:
+\"\"\"{testimonial}\"\"\"
+Person: {attribution or "a " + company + " customer"}.
+
+Write platform-native posts for: {", ".join(channels)}.
+Return ONLY JSON shaped exactly like:
+{{
+  "linkedin": {{ "eyebrow": "", "headline": "", "caption": "", "hashtags": [], "cta": "" }},
+  "instagram": {{ "eyebrow": "", "headline": "", "caption": "", "hashtags": [], "cta": "" }},
+  "x": {{ "eyebrow": "", "headline": "", "caption": "", "hashtags": [], "cta": "" }}
+}}
+(Only include the channels requested. "hashtags" WITHOUT the # symbol.)
+
+FAITHFULNESS (critical): Every "caption" and "headline" MUST be directly grounded in and consistent with the SPECIFIC points and genuine sentiment in the testimonial above. Only paraphrase or lightly expand what the customer ACTUALLY said. NEVER invent new claims, situations, intentions or timelines that are not in the testimonial (for example: do NOT write that they are "considering it for future projects", "finalizing internal plans", or anything the testimonial does not state). If the testimonial is positive and present-tense, keep the post positive and present-tense; if it contains a nuance you may reflect it honestly. The post should feel like the same person who gave the testimonial, talking about the same things.
+"""
+
+    if pov == "customer":
+        rules = f"""VOICE: FIRST PERSON as {person}, posting to their OWN network (not the company).
+Make it a genuine, low-key share — "sharing in case it's useful to anyone in my network." It is fine
+to name {company} as part of the story, but it must NOT read like a promotion.
+
+HARD RULES:
+- NO sales CTAs (no "link in bio", "DM us", "check them out", "book a demo"). "cta" MUST be "".
+- NO star ratings, NO marketing hype, NO slogans, NO "we're proud", NO company voice.
+- "eyebrow" MUST be "" (empty) for every channel.
+- "headline": a short, personal takeaway in {person}'s own voice (<= 42 chars). Understated. May be a plain observation.
+- Keep hashtags minimal and natural.
+
+CHANNEL VOICE (make them clearly different):
+- linkedin: reflective, professional peer voice. caption = 2-3 short first-person paragraphs, a real insight. 0-2 subtle hashtags.
+- instagram: casual and personal. caption = short warm lines, 0-2 emojis max. 0-3 low-key hashtags.
+- x: one genuine quick thought. caption <= 230 characters. 0-1 hashtag.
+
+The customer's quote is rendered separately on the image; do not repeat it verbatim inside the caption block."""
+    else:
+        rules = f"""VOICE: PayRewards brand / marketing team amplifying a customer's words. Polished and credible.
+
+Field rules:
+- "eyebrow": 1-3 word ALL-CAPS kicker (e.g. "CUSTOMER STORY", "REAL RESULTS", "PROOF").
+- "headline": a punchy on-image hook framing the quote, brand voice.
+- "cta": a short call to action fitting the channel.
+
+CHANNEL VOICE (make them clearly different):
+- linkedin: credible, insight-led, professional. headline <= 60 chars. caption = 2-3 short paragraphs from the PayRewards team, at most 1 emoji. 3 focused B2B hashtags. cta like "See how it works".
+- instagram: warm, energetic, human. headline <= 38 chars. caption = short lines + line breaks + 2-4 tasteful emojis. 6-8 hashtags. cta like "Link in bio".
+- x: concise and witty. headline <= 30 chars. caption <= 240 characters total. 1-2 hashtags.
+
+The customer's quote is rendered separately on the image; the caption is your original complementary copy."""
+
+    return header + "\n" + rules
+
+
+def _verbatim_excerpt(testimonial: str, limit: int) -> str:
+    t = (testimonial or "").strip().strip('"').strip("\u201c\u201d").strip()
+    if len(t) <= limit:
+        return t
+    cut = t[:limit]
+    for sep in [". ", "! ", "? ", " \u2026 ", "\u2026 "]:
+        idx = cut.rfind(sep)
+        if idx > limit * 0.5:
+            return cut[: idx + 1].strip()
+    sp = cut.rfind(" ")
+    if sp > 0:
+        cut = cut[:sp]
+    return cut.strip().rstrip(",;:") + "\u2026"
+
+
+def _fallback_channel(ch: str, company: str, pov: str, person: str) -> dict:
+    if pov == "customer":
+        base = {
+            "linkedin": {"eyebrow": "", "headline": "A genuinely useful find", "caption": f"Sharing in case it's helpful to anyone in my network — {company} has quietly made a real difference in how we work. Happy to compare notes if it's relevant to you.", "hashtags": [], "cta": ""},
+            "instagram": {"eyebrow": "", "headline": "Had to share this", "caption": f"Not something I'd normally post, but {company} genuinely surprised me \U0001f642 sharing in case it helps someone.", "hashtags": [], "cta": ""},
+            "x": {"eyebrow": "", "headline": "Worth a mention", "caption": f"Sharing in case it helps someone in my network — {company} has been genuinely useful.", "hashtags": [], "cta": ""},
+        }
+        return base.get(ch, base["linkedin"])
+    base = {
+        "linkedin": {"eyebrow": "CUSTOMER STORY", "headline": "Real results, in our customer's words", "caption": f"Nothing beats hearing it straight from the people who use {company} every day.", "hashtags": ["CustomerSuccess", "Fintech", "PayRewards"], "cta": "See how it works"},
+        "instagram": {"eyebrow": "REAL TALK", "headline": "Straight from a happy customer \u2728", "caption": "When your customers say it better than we ever could \U0001f49c", "hashtags": ["customerlove", "fintech", "rewards", "payrewards", "realresults", "smallbusiness"], "cta": "Link in bio"},
+        "x": {"eyebrow": "PROOF", "headline": "In their own words", "caption": "Our customers say it best. \U0001f447", "hashtags": ["fintech", "PayRewards"], "cta": ""},
+    }
+    return base.get(ch, base["linkedin"])
+
+
+@api_router.post("/social/generate")
+async def social_generate(body: SocialGenerateRequest):
+    testimonial = (body.testimonial or "").strip()
+    pov = "customer" if body.pov == "customer" else "company"
+    person = (body.attribution or "the customer").split(",")[0].strip()
+    channels = [c for c in (body.channels or []) if c in CHANNEL_LIMITS] or ["linkedin", "instagram", "x"]
+    if not testimonial:
+        raise HTTPException(status_code=400, detail="testimonial is required")
+
+    out = {}
+    if openai_client:
+        system = SOCIAL_SYSTEM_CUSTOMER if pov == "customer" else SOCIAL_SYSTEM_COMPANY
+        try:
+            raw = await asyncio.to_thread(_call_openai, system, build_social_prompt(pov, testimonial, body.attribution, body.company, channels))
+            out = _parse_json(raw)
+        except Exception as e:  # noqa
+            logger.error("social generate failed: %s", e)
+            out = {}
+
+    result = {}
+    for ch in channels:
+        gen = out.get(ch) if isinstance(out, dict) else None
+        if not isinstance(gen, dict):
+            gen = _fallback_channel(ch, body.company, pov, person)
+        gen["quote"] = _verbatim_excerpt(testimonial, CHANNEL_LIMITS[ch])
+        tags = gen.get("hashtags") or []
+        gen["hashtags"] = [str(t).lstrip("#").strip() for t in tags if str(t).strip()]
+        for k in ("eyebrow", "headline", "caption", "cta"):
+            gen[k] = str(gen.get(k) or "").strip()
+        if pov == "customer":
+            gen["eyebrow"] = ""
+            gen["cta"] = ""
+        # Always tag the business LinkedIn page in the LinkedIn post.
+        if ch == "linkedin":
+            handle = "@" + re.sub(r"\s+", "", body.company or "PayRewards")
+            if handle.lower() not in (gen.get("caption") or "").lower():
+                gen["caption"] = (gen.get("caption", "").rstrip() + f"\n\n{handle}").strip()
+        result[ch] = gen
+
+    return {"pov": pov, "channels": result}
+
+
+# ---------------------------------------------------------------------------
+# Referrals — customer refers friends who might find the product useful
+# ---------------------------------------------------------------------------
+class ReferralItem(BaseModel):
+    name: str = ""
+    contact: str = ""
+    company: str = ""
+
+
+class ReferralSubmit(BaseModel):
+    referrals: List[ReferralItem] = []
+
+
+class NextAction(BaseModel):
+    label: str = ""
+    cta: str = "Send Email"
+
+
+class AgentPlanOut(BaseModel):
+    lead_id: str
+    status: str = "pending"
+    research_headline: str = ""
+    research_summary: List[str] = []
+    email_subject: str = ""
+    email_body: str = ""
+    linkedin_message: str = ""
+    next_action: NextAction = NextAction()
+    generated_at: str = ""
+
+
+@api_router.post("/public/testimonial/{share_id}/referrals")
+async def submit_referrals(share_id: str, body: ReferralSubmit):
+    doc = await db.sources.find_one({"share_id": share_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Testimonial not found")
+    clean = [
+        {
+            "name": (r.name or "").strip(),
+            "contact": (r.contact or "").strip(),
+            "company": (r.company or "").strip(),
+        }
+        for r in (body.referrals or [])
+        if (r.name or "").strip() and (r.contact or "").strip()
+    ]
+    if not clean:
+        raise HTTPException(status_code=400, detail="Please add at least one friend with a name and a way to reach them.")
+    if any(not r["company"] for r in clean):
+        raise HTTPException(status_code=400, detail="Please add a company name for each friend.")
+    ins = doc.get("insights") or {}
+    referrer_name = ins.get("speaker_name") or ""
+    rec = {
+        "id": str(uuid.uuid4()),
+        "share_id": share_id,
+        "source_id": doc["id"],
+        "owner": doc.get("owner"),
+        "brand": doc.get("brand") or "PayRewards",
+        "referrer_name": referrer_name,
+        "referrer_company": ins.get("company_name") or doc.get("client_name", ""),
+        "referrals": clean,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.referrals.insert_one(rec)
+
+    # Each referred friend becomes a Circles entry (Initiator = referrer, Receiver = referee),
+    # plus a User record for the referee enriched via People Data Labs.
+    owner = await db.users.find_one({"id": doc.get("owner")}, {"_id": 0})
+    owner_email = (owner or {}).get("email", "")
+    business_name = await airtable_client.get_business_name_by_email_domain(owner_email) or doc.get("brand") or "PayRewards"
+    today = datetime.now(timezone.utc).date().isoformat()
+    for r in clean:
+        parsed = airtable_client.parse_contact(r["contact"])
+        name_parts = r["name"].split(" ", 1)
+        first_name = name_parts[0]
+        last_name = name_parts[1] if len(name_parts) > 1 else ""
+        pdl = await airtable_client.enrich_person_pdl(first_name, last_name, r["company"])
+        extra_fields, city, state, country = {}, None, None, None
+        pdl_data = (pdl or {}).get("data") or {}
+
+        def _s(v):
+            return v if isinstance(v, str) and v else ""
+
+        if pdl_data and isinstance(pdl.get("likelihood"), (int, float)) and pdl.get("likelihood") < 6:
+            # Below PDL's recommended confidence threshold (scale is 1-10) — treat as no reliable match
+            pdl_data = {}
+        if pdl_data:
+            extra_fields = {
+                "Job_Title": _s(pdl_data.get("job_title")),
+                "Company_Name": _s(pdl_data.get("job_company_name")) or r["company"],
+                "Industry": _s(pdl_data.get("job_company_industry")),
+                "Company_Size": _s(pdl_data.get("job_company_size")),
+                "PDL_Likelihood": pdl.get("likelihood") if isinstance(pdl.get("likelihood"), (int, float)) else None,
+                "Enriched_At": datetime.now(timezone.utc).isoformat(),
+                **airtable_client.summarize_pdl_extra(pdl_data),
+            }
+            city = _s(pdl_data.get("location_locality")) or None
+            state = _s(pdl_data.get("location_region")) or None
+            country = _s(pdl_data.get("location_country")) or None
+        user_record_id = await airtable_client.find_or_create_user(
+            name=r["name"],
+            email=parsed.get("email"),
+            phone=parsed.get("phone"),
+            linkedin=parsed.get("linkedin") or _s(pdl_data.get("linkedin_url")) or None,
+            city=city,
+            state=state,
+            country=country,
+            extra_fields=extra_fields,
+        )
+        await airtable_client.create_circle_record(
+            initiator=referrer_name,
+            receiver=r["name"],
+            business_name=business_name,
+            phone=parsed.get("phone") or "",
+            referred_date=today,
+            receiver_company=r["company"],
+            receiver_user_id=user_record_id,
+            referrer_testimonial=doc.get("testimonial_draft") or "",
+        )
+    return {"count": len(clean)}
+
+
+@api_router.post("/events/log")
+async def log_event_endpoint(body: EventLogRequest):
+    await airtable_client.log_event(event=body.event, page=body.page, share_id=body.share_id, details=body.details)
+    return {"ok": True}
+
+
+@api_router.get("/warm-leads")
+async def get_warm_leads(current=Depends(get_current_user)):
+    business_name = (
+        await airtable_client.get_business_name_by_email_domain(current["email"])
+        or current["company"]
+    )
+    leads = await airtable_client.list_circles_by_business(business_name)
+    lead_ids = [l["id"] for l in leads]
+    plans = await db.agent_plans.find({"lead_id": {"$in": lead_ids}}, {"_id": 0}).to_list(len(lead_ids) or 1)
+    plan_map = {p["lead_id"]: p for p in plans}
+    for l in leads:
+        l["agent_plan"] = plan_map.get(l["id"])
+    return {"business_name": business_name, "leads": leads}
+
+
+@api_router.post("/warm-leads/{lead_id}/agent-run", response_model=AgentPlanOut)
+async def run_referral_agent(lead_id: str, force: bool = False, current=Depends(get_current_user)):
+    business_name = (
+        await airtable_client.get_business_name_by_email_domain(current["email"])
+        or current["company"]
+    )
+    lead = await airtable_client.get_circle_lead(business_name, lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    existing = await db.agent_plans.find_one({"lead_id": lead_id}, {"_id": 0})
+    if existing and not force:
+        return AgentPlanOut(**existing)
+
+    if not openai_client:
+        raise HTTPException(status_code=503, detail="OPENAI_API_KEY not configured on the server.")
+
+    research_bullets = await research_lead(lead)
+    preferred_channel = _infer_preferred_channel(lead, research_bullets)
+    draft = await draft_outreach(lead, lead.get("referrer_testimonial", ""), research_bullets, business_name, preferred_channel)
+
+    plan = {
+        "lead_id": lead_id,
+        "status": "pending",
+        "research_headline": (draft.get("research_headline") or "").strip(),
+        "research_summary": research_bullets,
+        "email_subject": (draft.get("email_subject") or "").strip(),
+        "email_body": (draft.get("email_body") or "").strip(),
+        "linkedin_message": (draft.get("linkedin_message") or "").strip(),
+        "next_action": {
+            "label": (draft.get("next_action_label") or "Send a personalized intro").strip(),
+            "cta": preferred_channel,
+        },
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.agent_plans.update_one({"lead_id": lead_id}, {"$set": plan}, upsert=True)
+    return AgentPlanOut(**plan)
+
+
+@api_router.post("/warm-leads/{lead_id}/agent-plan/{action}", response_model=AgentPlanOut)
+async def update_agent_plan_status(lead_id: str, action: str, current=Depends(get_current_user)):
+    if action not in ("approve", "skip"):
+        raise HTTPException(status_code=404, detail="Not found")
+    existing = await db.agent_plans.find_one({"lead_id": lead_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="No agent plan found for this lead yet.")
+    new_status = "approved" if action == "approve" else "skipped"
+    await db.agent_plans.update_one({"lead_id": lead_id}, {"$set": {"status": new_status}})
+    existing["status"] = new_status
+    return AgentPlanOut(**existing)
+
+
 app.include_router(api_router)
 
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+
+@app.on_event("startup")
+async def startup():
+    await db.users.create_index("email", unique=True)
+    await db.sources.create_index("owner")
+    await db.agent_plans.create_index("lead_id", unique=True)
+    admin_email = os.environ["ADMIN_EMAIL"].lower().strip()
+    admin_password = os.environ["ADMIN_PASSWORD"]
+    existing = await db.users.find_one({"email": admin_email})
+    if not existing:
+        await db.users.insert_one({
+            "id": str(uuid.uuid4()),
+            "email": admin_email,
+            "password_hash": hash_password(admin_password),
+            "name": "David Cameron",
+            "role": "Head of Marketing",
+            "company": "PayRewards",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        logger.info("Seeded demo user %s", admin_email)
+    elif not verify_password(admin_password, existing["password_hash"]):
+        await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_password)}})
+        logger.info("Updated demo user password for %s", admin_email)
+
 
 @app.on_event("shutdown")
-async def shutdown_db_client():
+async def shutdown():
     client.close()

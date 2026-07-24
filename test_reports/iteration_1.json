@@ -1,0 +1,46 @@
+{
+  "summary": "Full progress audit of Uplaud Growth Engine after fresh GitHub restore. 15/15 backend API tests pass (auth, sources CRUD, OpenAI insight extraction, public testimonial, Airtable warm-leads). All 10 dashboard pages load without console/network errors and show meaningful UI. Referral Agent (agent-run w/ OpenAI web_search + PDL research) verified working end-to-end against real Airtable base — returned research headline, summary, email + LinkedIn drafts for lead rec3O9OUfjkln38Bo. Blog backend endpoints (/api/blog, /api/admin/blog) are NOT implemented — /blog page loads with empty state.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/blog, /api/admin/blog, /api/admin/upload", "issue": "Referenced by frontend BlogListPage/BlogPostPage/AdminBlogPage but not implemented in backend/server.py — returns 404. Blog list page gracefully falls back to empty state, but admin blog editor + individual post pages will 404."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Blog", "issue": "GET /api/blog?limit=50 returns 404; /blog renders empty state (646 chars). /blog/:slug and /admin/blog will fail once user tries to load a post or admin panel", "affected_selectors": ["BlogListPage", "AdminBlogPage"]}
+    ],
+    "design_issues": []
+  },
+  "verified_working_end_to_end": [
+    "POST /api/auth/login (200) and JWT protection (401 without token)",
+    "POST /api/sources (multipart upload, text extraction, share_id generation)",
+    "POST /api/sources/{id}/analyze — real OpenAI gpt-4o call returns structured Insights (summary, motivations, pain_points, buying_signals, etc.)",
+    "GET /api/warm-leads — real Airtable base (appFUJWWTaoJ3YiWt) returns leads with PDL fields; business_name=PayRewards",
+    "POST /api/warm-leads/{lead_id}/agent-run — OpenAI responses.create with web_search tool (RESEARCH_MODEL=gpt-4.1) generates research_headline, research_summary, email_subject, email_body, linkedin_message. Verified live against lead rec3O9OUfjkln38Bo (Kintsugi / Pujun Bhatnagar).",
+    "GET /api/public/testimonial/{share_id} + 404 for bad id",
+    "All 10 dashboard routes (/business/insights, roi-simulator, referrals, conversations, interactions, reviews, social, reddit, import, settings) render with no console errors and 0 network 4xx/5xx",
+    "Landing page /, business login /business, invalid share /t/xxxxx (graceful 'invalid or expired' message)"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_uplaud_api.py",
+    "/app/test_reports/pytest/uplaud_api.xml"
+  ],
+  "action_items": [
+    "Implement blog CRUD backend endpoints (/api/blog GET list, GET by slug, POST, PUT, DELETE; /api/admin/blog list; /api/admin/upload) OR remove blog frontend routes if not part of MVP scope.",
+    "Note: MongoDB is fresh so sources/insights start empty — that is expected. Users need to upload transcripts to populate the pipeline. Airtable has ~1 pre-seeded lead already visible in Warm Pipeline."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 1162 lines — approaching split threshold. Consider extracting routers by domain (auth, sources, warm-leads, public, testimonial, social) into separate files under /app/backend/routers/.",
+    "Blog frontend pages exist but backend routes are missing — dead code path unless intentionally deferred.",
+    "OPENAI_API_KEY is optional at startup but /warm-leads agent-run raises 503 if missing — good graceful degradation."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (15/15 pass, blog endpoints treated as expected-missing)", "frontend": "100% of implemented pages load cleanly; blog admin/detail pages will 404 on API"},
+  "test_credentials": "dcameron@payrewards.com / P@yRew@rds123 (seeded on startup from backend/.env)",
+  "seed_data_creation": "Uploaded 1 test source (TEST_acme_call.txt) via POST /api/sources during pytest run; analyzed with real OpenAI. Airtable base already has 1 warm lead (Pujun Bhatnagar / Kintsugi) referred by Deepthi Rao. Agent plan generated + persisted in mongo db.agent_plans for lead rec3O9OUfjkln38Bo.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "App is in strong shape post-restore. Only known gap is blog backend endpoints. All key AI flows (insight extraction, referral agent research + drafting with real web_search) verified against live OpenAI + Airtable + PDL. If main agent adds blog endpoints, retest /api/blog and /admin/blog UI."
+}
