@@ -33,6 +33,21 @@ available code so the user can see how much progress has been made.
 - Only gap found: Blog feature (`/api/blog`, `/api/admin/blog`, `/api/admin/upload`) has
   frontend pages (BlogListPage/BlogPostPage/AdminBlogPage) but no backend routes — 404s
   gracefully to an empty list; post detail/admin editor would break if used.
+- Social Agent (Growth Amplification page) rewired to real AI generation: composer + live
+  LinkedIn/Instagram/X previews now call `POST /api/social/generate` (OpenAI, PayRewards brand
+  voice) instead of the old local mock generator; added a `tone` param (professional/punchy/
+  founder-testimonial/data-forward/warm) threaded through the prompt. "Generate draft" pushes
+  real AI copy into the Post queue.
+- Growth Amplification now sources testimonials from the real Airtable `Uplaud` table, filtered
+  by the logged-in business (`business_name` match via `current["company"]` /
+  email-domain lookup), excluding low-sentiment (`NBA_Sentiment`) rows and de-duping — new
+  `GET /api/testimonials` endpoint + `airtable_client.list_uplaud_by_business()`. Verified live
+  against the real PayRewards data (5 real testimonials incl. Jamie Rivera, Deepthi Rao).
+- Real LinkedIn/X publishing (OAuth + posting API) explicitly deferred at user's request —
+  "Connect accounts"/"Schedule"/"Publish now" remain simulated (toast-only). Playbooks already
+  gathered (LinkedIn OAuth2 + UGC/Posts API needs Client ID/Secret + org page admin approval for
+  company posting; X needs OAuth2 app + paid Basic tier for tweet.write) — ready to implement
+  once user provides developer app credentials.
 
 ## Core requirements (static)
 - Convert customer testimonials/reviews/calls into referral, social, and reputation growth
@@ -49,12 +64,15 @@ available code so the user can see how much progress has been made.
 ## Prioritized backlog / remaining work
 - P1: Implement blog backend endpoints (`/api/blog` list/detail, `/api/admin/blog` CRUD,
   `/api/admin/upload`) or explicitly deprioritize/remove the blog frontend routes.
+- P1 (deferred by user): Real LinkedIn/X publishing — needs user-provided developer app
+  credentials (LinkedIn Client ID/Secret + page admin approval; X OAuth2 app on a paid tier).
 - P2: `airtable_client.list_circles_by_business()` uses `pageSize=100` with no pagination.
 - P2: `submit_referrals()` enriches referrals serially per friend — fine for small batches.
 - P2: Referral Agent auto-triggers up to 5 concurrent OpenAI calls on page load.
 - P2: Consider splitting `server.py` (1160+ lines) into routers by domain.
 
 ## Next tasks
-- Ask user which pages/features they want prioritized next (Social Agent, Reddit Agent,
-  Conversations, Reviews appear present but need feature-depth verification against real data).
+- Verify/build out Reddit Agent, Conversations, Reviews pages against real data (deferred,
+  not yet requested).
+- Revisit LinkedIn/X publishing once user is ready with developer credentials.
 - Decide on blog feature fate (build backend vs remove).
