@@ -1066,6 +1066,16 @@ async def log_event_endpoint(body: EventLogRequest):
     return {"ok": True}
 
 
+@api_router.get("/testimonials")
+async def get_testimonials(current=Depends(get_current_user)):
+    business_name = (
+        await airtable_client.get_business_name_by_email_domain(current["email"])
+        or current["company"]
+    )
+    return await airtable_client.list_uplaud_by_business(business_name)
+
+
+
 @api_router.get("/warm-leads")
 async def get_warm_leads(current=Depends(get_current_user)):
     business_name = (

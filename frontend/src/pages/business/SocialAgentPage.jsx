@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import PageHero from "@/components/business/PageHero";
 import { toast } from "sonner";
-import { SOCIAL_POSTS, REVIEWS, PAGE_OUTCOMES, SMART_NBA, SIGNAL_THEMES } from "@/mocks/fintech";
+import { SOCIAL_POSTS, PAGE_OUTCOMES, SMART_NBA, SIGNAL_THEMES } from "@/mocks/fintech";
 import SocialAssetStudio from "@/components/business/SocialAssets";
 import api, { formatApiError } from "@/lib/api";
 
@@ -33,7 +33,9 @@ const STATUS_META = {
 };
 
 export default function SocialAgentPage() {
-  const [selectedReviewId, setSelectedReviewId] = useState("rv_001");
+  const [testimonials, setTestimonials] = useState([]);
+  const [loadingTestimonials, setLoadingTestimonials] = useState(true);
+  const [selectedReviewId, setSelectedReviewId] = useState("");
   const [platform, setPlatform] = useState("linkedin");
   const [tone, setTone] = useState("professional");
   const [drafts, setDrafts] = useState(SOCIAL_POSTS);
@@ -41,7 +43,26 @@ export default function SocialAgentPage() {
   const [channelContent, setChannelContent] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
-  const review = REVIEWS.find((r) => r.id === selectedReviewId);
+  const review = testimonials.find((r) => r.id === selectedReviewId);
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .get("/testimonials")
+      .then((res) => {
+        if (!alive) return;
+        const list = res.data || [];
+        setTestimonials(list);
+        if (list.length > 0) setSelectedReviewId(list[0].id);
+      })
+      .catch(() => {
+        if (alive) toast.error("Couldn't load testimonials from Uplaud");
+      })
+      .finally(() => alive && setLoadingTestimonials(false));
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!review) return;
@@ -50,7 +71,7 @@ export default function SocialAgentPage() {
     api
       .post("/social/generate", {
         testimonial: review.body,
-        attribution: `${review.customer}${review.role ? ", " + review.role : review.location ? ", " + review.location : ""}`,
+        attribution: review.customer,
         company: "PayRewards",
         pov: "company",
         channels: ["linkedin", "instagram", "x"],
@@ -73,10 +94,9 @@ export default function SocialAgentPage() {
     if (!review) return;
     setGenerating(true);
     try {
-      const attribution = `${review.customer}${review.role ? ", " + review.role : review.location ? ", " + review.location : ""}`;
       const { data } = await api.post("/social/generate", {
         testimonial: review.body,
-        attribution,
+        attribution: review.customer,
         company: "PayRewards",
         pov: "company",
         channels: [platform],
@@ -154,19 +174,34 @@ export default function SocialAgentPage() {
           <div className="space-y-4">
             <div>
               <label className="text-[11px] font-mono uppercase tracking-[0.14em] text-[#4b5563]">
-                Source review
+                Source testimonial (from Uplaud · PayRewards)
               </label>
-              <select
-                data-testid="social-review-select"
-                value={selectedReviewId}
-                onChange={(e) => setSelectedReviewId(e.target.value)}
-                className="mt-2 w-full h-11 px-4 rounded-xl border border-[#eeeaf6] bg-white text-[13px] focus:outline-none focus:border-[#d9d1ee]"
-              >
-                {REVIEWS.filter((r) => r.rating >= 4).map((r) => {
-                  const label = r.customer + " · " + r.title;
-                  return <option key={r.id} value={r.id} label={label}>{label}</option>;
-                })}
-              </select>
+              {loadingTestimonials ? (
+                <div className="mt-2 h-11 rounded-xl border border-[#eeeaf6] bg-[#faf9ff] animate-pulse" />
+              ) : testimonials.length === 0 ? (
+                <div
+                  data-testid="social-no-testimonials"
+                  className="mt-2 rounded-xl border border-[#eeeaf6] bg-[#faf9ff] p-4 text-[12.5px] text-[#9ca3af]"
+                >
+                  No approved testimonials yet for PayRewards in Uplaud — import & approve a customer source first.
+                </div>
+              ) : (
+                <select
+                  data-testid="social-review-select"
+                  value={selectedReviewId}
+                  onChange={(e) => setSelectedReviewId(e.target.value)}
+                  className="mt-2 w-full h-11 px-4 rounded-xl border border-[#eeeaf6] bg-white text-[13px] focus:outline-none focus:border-[#d9d1ee]"
+                >
+                  {testimonials.map((r) => {
+                    const label = `${r.customer} · ${trimLabel(r.body, 60)}`;
+                    return (
+                      <option key={r.id} value={r.id} label={label}>
+                        {label}
+                      </option>
+                    );
+                  })}
+                </select>
+              )}
             </div>
 
             {/* Selected review preview */}
@@ -175,14 +210,13 @@ export default function SocialAgentPage() {
                 data-testid="social-review-preview"
                 className="rounded-xl bg-[#faf9ff] border border-[#eeeaf6] p-4"
               >
-                <div className="text-[12.5px] font-medium text-[#111827] leading-tight">
-                  {review.title}
-                </div>
-                <p className="text-[12.5px] text-[#4b5563] mt-1.5 leading-relaxed">
+                <p className="text-[12.5px] text-[#4b5563] leading-relaxed">
                   &ldquo;{review.body}&rdquo;
                 </p>
                 <div className="mt-2 text-[10.5px] font-mono text-[#9ca3af]">
-                  {review.customer} · {review.rating}★ · {review.source}
+                  {review.customer} · {review.rating ? `${review.rating}★ · ` : ""}
+                  {review.source}
+                  {review.sentiment && ` · ${review.sentiment} sentiment`}
                 </div>
               </div>
             )}
@@ -245,7 +279,7 @@ export default function SocialAgentPage() {
             <button
               data-testid="social-generate-btn"
               onClick={generate}
-              disabled={generating}
+              disabled={generating || !review}
               className="btn-primary w-full justify-center h-12"
             >
               {generating ? (
@@ -272,9 +306,9 @@ export default function SocialAgentPage() {
             Live previews · LinkedIn · Instagram · X
             {previewLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-[#6d46c6]" />}
           </div>
-          <LinkedInPreview review={review} content={channelContent?.linkedin} loading={previewLoading} />
-          <InstagramPreview review={review} content={channelContent?.instagram} loading={previewLoading} />
-          <XPreview review={review} content={channelContent?.x} loading={previewLoading} />
+          <LinkedInPreview content={channelContent?.linkedin} loading={previewLoading} />
+          <InstagramPreview content={channelContent?.instagram} loading={previewLoading} />
+          <XPreview content={channelContent?.x} loading={previewLoading} />
         </div>
       </div>
 
@@ -283,7 +317,7 @@ export default function SocialAgentPage() {
         <div className="pt-2">
           <SocialAssetStudio
             quote={review.body}
-            attribution={`${review.customer}${review.role ? ", " + review.role : review.location ? ", " + review.location : ""}`}
+            attribution={review.customer}
             company="PayRewards"
             pov="company"
             heading="Branded visual assets"
@@ -355,7 +389,7 @@ export default function SocialAgentPage() {
         </div>
         <div className="divide-y divide-[#f2eefa]">
           {drafts.map((d) => (
-            <PostRow key={d.id} data={d} review={REVIEWS.find((r) => r.id === d.reviewId)} />
+            <PostRow key={d.id} data={d} review={testimonials.find((r) => r.id === d.reviewId)} />
           ))}
         </div>
       </div>
@@ -407,6 +441,12 @@ function PostRow({ data, review }) {
       </span>
     </div>
   );
+}
+
+function trimLabel(str, n) {
+  const s = (str || "").trim();
+  if (s.length <= n) return s;
+  return s.slice(0, n).trim() + "…";
 }
 
 function copyChannelCaption(content, label) {

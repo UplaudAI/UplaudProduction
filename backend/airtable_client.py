@@ -394,6 +394,45 @@ async def list_circles_by_business(business_name: str) -> list:
     return out
 
 
+def _uplaud_to_testimonial(rec: dict) -> dict:
+    f = rec.get("fields", {})
+    creators = f.get("Name_Creator") or []
+    return {
+        "id": rec.get("id"),
+        "customer": (creators[0] if creators else "").strip() or "Uplaud customer",
+        "body": (f.get("Uplaud") or "").strip(),
+        "rating": f.get("Uplaud Score"),
+        "source": f.get("Review_Source") or "Uplaud",
+        "sentiment": (f.get("NBA_Sentiment") or "").lower(),
+        "date_added": f.get("Date_Added") or rec.get("createdTime", "")[:10],
+    }
+
+
+async def list_uplaud_by_business(business_name: str) -> list:
+    """Return approved-worthy Uplaud testimonials for the given business (excludes negative sentiment), for social amplification."""
+    if not business_name:
+        return []
+    try:
+        formula = f'{{business_name}}="{_escape(business_name)}"'
+        data = await _get(TABLE_UPLAUD, {"filterByFormula": formula, "pageSize": 100})
+    except Exception as e:
+        logger.warning("Airtable uplaud list failed: %s", e)
+        return []
+    seen = set()
+    out = []
+    for rec in data.get("records", []):
+        t = _uplaud_to_testimonial(rec)
+        if not t["body"] or t["sentiment"] == "low":
+            continue
+        dedupe_key = (t["customer"], t["body"])
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        out.append(t)
+    out.sort(key=lambda t: t["date_added"], reverse=True)
+    return out
+
+
 async def log_event(event: str, page: str = "", share_id: str = "", details: str = "", user_email: str = "") -> None:
     fields = {
         "Event": event,
