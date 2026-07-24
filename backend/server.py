@@ -777,6 +777,7 @@ class SocialGenerateRequest(BaseModel):
     company: str = "PayRewards"
     pov: str = "company"  # "customer" (genuine peer share) | "company" (brand marketing)
     channels: List[str] = ["linkedin", "instagram", "x"]
+    tone: str = "professional"
 
 
 CHANNEL_LIMITS = {"linkedin": 170, "instagram": 150, "x": 120}
@@ -801,7 +802,16 @@ SOCIAL_SYSTEM_CUSTOMER = (
 )
 
 
-def build_social_prompt(pov: str, testimonial: str, attribution: str, company: str, channels) -> str:
+TONE_GUIDE = {
+    "professional": "Polished, credible, business-appropriate. Confident but not showy.",
+    "punchy": "Short, bold, high-energy sentences. Strong hooks. Built to stop the scroll.",
+    "founder-testimonial": "Reads like a founder personally vouching for the result — earnest, specific, a little vulnerable about the problem it solved.",
+    "data-forward": "Leads with the concrete number/result from the testimonial. Precise, ROI-minded, low on adjectives.",
+    "warm": "Friendly, human, grateful. Community feel, not corporate.",
+}
+
+
+def build_social_prompt(pov: str, testimonial: str, attribution: str, company: str, channels, tone: str = "professional") -> str:
     person = (attribution or "the customer").split(",")[0].strip()
     header = f"""A customer of {company} shared these approved, verbatim words:
 \"\"\"{testimonial}\"\"\"
@@ -819,8 +829,10 @@ Return ONLY JSON shaped exactly like:
 FAITHFULNESS (critical): Every "caption" and "headline" MUST be directly grounded in and consistent with the SPECIFIC points and genuine sentiment in the testimonial above. Only paraphrase or lightly expand what the customer ACTUALLY said. NEVER invent new claims, situations, intentions or timelines that are not in the testimonial (for example: do NOT write that they are "considering it for future projects", "finalizing internal plans", or anything the testimonial does not state). If the testimonial is positive and present-tense, keep the post positive and present-tense; if it contains a nuance you may reflect it honestly. The post should feel like the same person who gave the testimonial, talking about the same things.
 """
 
+    tone_line = f"\nOVERALL TONE for every channel: \"{tone}\" — {TONE_GUIDE.get(tone, TONE_GUIDE['professional'])}\n"
+
     if pov == "customer":
-        rules = f"""VOICE: FIRST PERSON as {person}, posting to their OWN network (not the company).
+        rules = tone_line + f"""VOICE: FIRST PERSON as {person}, posting to their OWN network (not the company).
 Make it a genuine, low-key share — "sharing in case it's useful to anyone in my network." It is fine
 to name {company} as part of the story, but it must NOT read like a promotion.
 
@@ -838,7 +850,7 @@ CHANNEL VOICE (make them clearly different):
 
 The customer's quote is rendered separately on the image; do not repeat it verbatim inside the caption block."""
     else:
-        rules = f"""VOICE: PayRewards brand / marketing team amplifying a customer's words. Polished and credible.
+        rules = tone_line + f"""VOICE: PayRewards brand / marketing team amplifying a customer's words. Polished and credible.
 
 Field rules:
 - "eyebrow": 1-3 word ALL-CAPS kicker (e.g. "CUSTOMER STORY", "REAL RESULTS", "PROOF").
@@ -899,7 +911,7 @@ async def social_generate(body: SocialGenerateRequest):
     if openai_client:
         system = SOCIAL_SYSTEM_CUSTOMER if pov == "customer" else SOCIAL_SYSTEM_COMPANY
         try:
-            raw = await asyncio.to_thread(_call_openai, system, build_social_prompt(pov, testimonial, body.attribution, body.company, channels))
+            raw = await asyncio.to_thread(_call_openai, system, build_social_prompt(pov, testimonial, body.attribution, body.company, channels, body.tone))
             out = _parse_json(raw)
         except Exception as e:  # noqa
             logger.error("social generate failed: %s", e)

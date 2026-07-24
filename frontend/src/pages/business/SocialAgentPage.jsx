@@ -1,23 +1,22 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Sparkles,
   Linkedin,
   Twitter,
   Instagram,
-  Copy,
   RefreshCcw,
-  CalendarClock,
-  Send,
   CheckCircle2,
   Clock,
   Pencil,
   ArrowUpRight,
   Zap,
+  Loader2,
 } from "lucide-react";
 import PageHero from "@/components/business/PageHero";
 import { toast } from "sonner";
 import { SOCIAL_POSTS, REVIEWS, PAGE_OUTCOMES, SMART_NBA, SIGNAL_THEMES } from "@/mocks/fintech";
 import SocialAssetStudio from "@/components/business/SocialAssets";
+import api, { formatApiError } from "@/lib/api";
 
 const PLATFORMS = [
   { id: "linkedin", label: "LinkedIn", icon: Linkedin, color: "#0a66c2" },
@@ -39,15 +38,53 @@ export default function SocialAgentPage() {
   const [tone, setTone] = useState("professional");
   const [drafts, setDrafts] = useState(SOCIAL_POSTS);
   const [generating, setGenerating] = useState(false);
-  const [preview, setPreview] = useState(null);
+  const [channelContent, setChannelContent] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const review = REVIEWS.find((r) => r.id === selectedReviewId);
 
-  const generate = () => {
+  useEffect(() => {
+    if (!review) return;
+    let alive = true;
+    setPreviewLoading(true);
+    api
+      .post("/social/generate", {
+        testimonial: review.body,
+        attribution: `${review.customer}${review.role ? ", " + review.role : review.location ? ", " + review.location : ""}`,
+        company: "PayRewards",
+        pov: "company",
+        channels: ["linkedin", "instagram", "x"],
+        tone,
+      })
+      .then((res) => {
+        if (alive) setChannelContent(res.data?.channels || null);
+      })
+      .catch(() => {
+        if (alive) setChannelContent(null);
+      })
+      .finally(() => alive && setPreviewLoading(false));
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedReviewId, tone]);
+
+  const generate = async () => {
+    if (!review) return;
     setGenerating(true);
-    setPreview(null);
-    setTimeout(() => {
-      const body = draftFor(review, platform, tone);
+    try {
+      const attribution = `${review.customer}${review.role ? ", " + review.role : review.location ? ", " + review.location : ""}`;
+      const { data } = await api.post("/social/generate", {
+        testimonial: review.body,
+        attribution,
+        company: "PayRewards",
+        pov: "company",
+        channels: [platform],
+        tone,
+      });
+      const gen = data?.channels?.[platform];
+      if (!gen) throw new Error("No content returned");
+      const caption = [gen.eyebrow ? `${gen.eyebrow}\n` : "", gen.headline ? `${gen.headline}\n\n` : "", gen.caption].join("");
       const newPost = {
         id: `sp_${Date.now()}`,
         reviewId: review.id,
@@ -55,15 +92,19 @@ export default function SocialAgentPage() {
         tone,
         status: "draft",
         scheduled: null,
-        body,
-        hashtags: ["#feeonly", "#trustengine"],
+        body: caption,
+        cta: gen.cta || "",
+        hashtags: (gen.hashtags || []).map((h) => `#${h}`),
         predictedReach: `${(8 + Math.random() * 30).toFixed(1)}k`,
         predictedEngagement: `${(2 + Math.random() * 4).toFixed(1)}%`,
       };
       setDrafts([newPost, ...drafts]);
-      setPreview(newPost);
+      toast.success(`${PLATFORMS.find((p) => p.id === platform).label} draft generated — PayRewards voice`);
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail) || "Couldn't generate that draft — try again");
+    } finally {
       setGenerating(false);
-    }, 900);
+    }
   };
 
   return (
@@ -227,12 +268,13 @@ export default function SocialAgentPage() {
 
         {/* Preview / Predicted metrics — all three platforms side-by-side */}
         <div className="lg:col-span-2 space-y-4">
-          <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#4b5563]">
+          <div className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.18em] text-[#4b5563]">
             Live previews · LinkedIn · Instagram · X
+            {previewLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-[#6d46c6]" />}
           </div>
-          <LinkedInPreview review={review} body={draftFor(review, "linkedin", tone)} />
-          <InstagramPreview review={review} />
-          <XPreview review={review} body={draftFor(review, "x", tone)} />
+          <LinkedInPreview review={review} content={channelContent?.linkedin} loading={previewLoading} />
+          <InstagramPreview review={review} content={channelContent?.instagram} loading={previewLoading} />
+          <XPreview review={review} content={channelContent?.x} loading={previewLoading} />
         </div>
       </div>
 
@@ -321,106 +363,6 @@ export default function SocialAgentPage() {
   );
 }
 
-function PostPreview({ data, review }) {
-  if (!data) return null;
-  const platform = PLATFORMS.find((p) => p.id === data.platform);
-  const Icon = platform.icon;
-
-  return (
-    <div
-      data-testid="social-preview-card"
-      className="rounded-2xl border border-[#eeeaf6] bg-white overflow-hidden shadow-[0_10px_40px_-30px_rgba(38,28,77,0.35)]"
-    >
-      <div className="px-4 py-3 border-b border-[#eeeaf6] flex items-center gap-2">
-        <div
-          className="w-8 h-8 rounded-full flex items-center justify-center"
-          style={{ backgroundColor: `${platform.color}18` }}
-        >
-          <Icon
-            className="w-4 h-4"
-            strokeWidth={1.75}
-            style={{ color: platform.color }}
-          />
-        </div>
-        <div>
-          <div className="text-[12.5px] font-semibold text-[#111827] leading-tight">
-            Westgate Wealth
-          </div>
-          <div className="text-[10.5px] font-mono text-[#9ca3af]">
-            westgate.finance · {platform.label}
-          </div>
-        </div>
-        <span className="ml-auto text-[10px] font-mono text-[#6d46c6]">
-          drafted by uplaud
-        </span>
-      </div>
-
-      <div className="p-4">
-        <p className="text-[13px] leading-relaxed text-[#111827] whitespace-pre-line">
-          {data.body}
-        </p>
-        {data.hashtags?.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {data.hashtags.map((h) => (
-              <span
-                key={h}
-                className="text-[11px] font-mono text-[#6d46c6]"
-              >
-                {h}
-              </span>
-            ))}
-          </div>
-        )}
-        {review && (
-          <div className="mt-4 rounded-lg bg-[#faf9ff] border border-[#eeeaf6] p-3">
-            <div className="text-[10.5px] font-mono text-[#9ca3af]">
-              Sourced from
-            </div>
-            <div className="text-[12px] font-medium text-[#111827] mt-0.5">
-              {review.customer} · {review.rating}★
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="px-4 py-3 bg-[#faf9ff] border-t border-[#eeeaf6] flex items-center gap-4 text-[11px] font-mono text-[#4b5563]">
-        <span>
-          Reach <b className="text-[#111827]">{data.predictedReach}</b>
-        </span>
-        <span>
-          Eng <b className="text-[#111827]">{data.predictedEngagement}</b>
-        </span>
-        <button
-          data-testid="preview-copy-btn"
-          className="ml-auto text-[#6d46c6] hover:underline flex items-center gap-1"
-          onClick={() => toast.success("Copied to clipboard")}
-        >
-          <Copy className="w-3.5 h-3.5" strokeWidth={1.75} /> Copy
-        </button>
-      </div>
-
-      <div className="p-4 border-t border-[#eeeaf6] flex gap-2">
-        <button
-          data-testid="preview-schedule-btn"
-          onClick={() => toast.success("Scheduled for Feb 14, 9:00 AM")}
-          className="btn-secondary flex-1 justify-center h-10"
-        >
-          <CalendarClock className="w-4 h-4" strokeWidth={1.75} />
-          Schedule
-        </button>
-        <button
-          data-testid="preview-publish-btn"
-          onClick={() => toast.success("Published to " + platform.label)}
-          className="btn-primary flex-1 justify-center h-10"
-        >
-          <Send className="w-4 h-4" strokeWidth={1.75} />
-          Publish now
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function PostRow({ data, review }) {
   const platform = PLATFORMS.find((p) => p.id === data.platform);
   const status = STATUS_META[data.status];
@@ -467,24 +409,20 @@ function PostRow({ data, review }) {
   );
 }
 
-function draftFor(review, platform, tone) {
-  if (!review) return "";
-  const attrib = `${review.customer.split(" ")[0]} ${review.customer.split(" ")[1]?.[0] || ""}.`;
-  if (platform === "linkedin")
-    return `"${trim(review.body, 90)}"\n\n— ${attrib}, ${review.location}\n\nAt Westgate, we don't sell products. We rebuild plans.\n\nWant to see what fee-only really looks like? →`;
-  if (platform === "x")
-    return `"${trim(review.body, 140)}"\n\n— ${attrib}\n\nFee-only. Flat rate. Zero product pushing.`;
-  return `${attrib}'s testimonial ↓\n\n"${trim(review.body, 110)}"\n\nWhat a real plan looks like. Link in bio.`;
+function copyChannelCaption(content, label) {
+  if (!content) return;
+  const tags = (content.hashtags || []).join(" ");
+  const text = [content.eyebrow, content.headline, content.caption, tags, content.cta]
+    .filter(Boolean)
+    .join("\n\n");
+  navigator.clipboard
+    .writeText(text)
+    .then(() => toast.success(`Copied ${label} draft`))
+    .catch(() => toast.info("Copy not available"));
 }
-
-function trim(str, n) {
-  if (str.length <= n) return str;
-  return str.slice(0, n).trim() + "…";
-}
-
 
 /* ─────────────── LinkedIn preview ─────────────── */
-function LinkedInPreview({ review, body }) {
+function LinkedInPreview({ content, loading }) {
   return (
     <div
       data-testid="preview-linkedin"
@@ -507,16 +445,47 @@ function LinkedInPreview({ review, body }) {
         </span>
       </div>
       <div className="p-4">
-        <p className="text-[13px] leading-relaxed text-[#111827] whitespace-pre-line">
-          {body}
-        </p>
+        {loading || !content ? (
+          <div className="space-y-2 animate-pulse">
+            <div className="h-3 w-2/3 rounded bg-[#f2eefa]" />
+            <div className="h-3 w-full rounded bg-[#f2eefa]" />
+            <div className="h-3 w-5/6 rounded bg-[#f2eefa]" />
+          </div>
+        ) : (
+          <>
+            {content.eyebrow && (
+              <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-[#6d46c6] mb-2">
+                {content.eyebrow}
+              </div>
+            )}
+            {content.headline && (
+              <div className="font-display text-[15px] font-semibold text-[#111827] mb-1.5 leading-snug">
+                {content.headline}
+              </div>
+            )}
+            <p className="text-[13px] leading-relaxed text-[#111827] whitespace-pre-line">
+              {content.caption}
+            </p>
+            {content.hashtags?.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {content.hashtags.map((h) => (
+                  <span key={h} className="text-[11px] font-mono text-[#6d46c6]">
+                    #{h}
+                  </span>
+                ))}
+              </div>
+            )}
+          </>
+        )}
       </div>
       <div className="px-4 py-3 bg-[#faf9ff] border-t border-[#eeeaf6] flex items-center gap-4 text-[11px] font-mono text-[#4b5563]">
         <span>Reach <b className="text-[#111827]">18.4k</b></span>
         <span>Eng <b className="text-[#111827]">4.6%</b></span>
+        {content?.cta && <span className="text-[#6d46c6]">CTA: {content.cta}</span>}
         <button
+          data-testid="preview-linkedin-copy"
           className="ml-auto text-[#6d46c6] hover:underline"
-          onClick={() => toast.success("Copied LinkedIn draft")}
+          onClick={() => copyChannelCaption(content, "LinkedIn")}
         >
           Copy
         </button>
@@ -526,8 +495,7 @@ function LinkedInPreview({ review, body }) {
 }
 
 /* ─────────────── Instagram preview ─────────────── */
-function InstagramPreview({ review }) {
-  const first = review?.customer?.split(" ")[0] || "James";
+function InstagramPreview({ content, loading }) {
   return (
     <div
       data-testid="preview-instagram"
@@ -548,7 +516,7 @@ function InstagramPreview({ review }) {
             payrewards
           </div>
           <div className="text-[10.5px] font-mono text-[#9ca3af]">
-            Instagram · Reel
+            Instagram · Post
           </div>
         </div>
         <span className="ml-auto text-[10px] font-mono text-[#6d46c6]">
@@ -559,38 +527,53 @@ function InstagramPreview({ review }) {
       <div
         className="relative aspect-[4/5] flex flex-col justify-between p-5"
         style={{
-          background:
-            "linear-gradient(135deg, #261c4d 0%, #6d46c6 55%, #5eead4 130%)",
+          background: "linear-gradient(135deg, #261c4d 0%, #6d46c6 55%, #5eead4 130%)",
         }}
       >
-        <div className="text-[10px] font-mono text-white/70 uppercase tracking-[0.22em]">
-          Customer, unscripted
-        </div>
-        <div className="space-y-2">
-          <div className="font-display text-white text-[22px] leading-[1.15] font-semibold">
-            &ldquo;It's the rare AP tool that actually pays for itself.&rdquo;
+        {loading || !content ? (
+          <div className="flex-1 flex items-center justify-center">
+            <Loader2 className="w-5 h-5 text-white/70 animate-spin" />
           </div>
-          <div className="text-[12px] font-mono text-[#5eead4]">
-            — {first}, {review?.role || "VP Finance"}
-          </div>
-        </div>
-        <div className="flex items-center justify-between text-white/80">
-          <div className="text-[11px] font-mono">
-            $18.4k/yr in Amex points → recouped in month one
-          </div>
-          <div className="w-8 h-8 rounded-full bg-white/15 border border-white/30 flex items-center justify-center text-white text-[11px] font-semibold">
-            P
-          </div>
-        </div>
+        ) : (
+          <>
+            <div className="text-[10px] font-mono text-white/70 uppercase tracking-[0.22em]">
+              {content.headline || "Customer story"}
+            </div>
+            <div className="space-y-2">
+              <div className="font-display text-white text-[20px] leading-[1.18] font-semibold">
+                &ldquo;{content.quote}&rdquo;
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+      <div className="p-4">
+        {!loading && content && (
+          <>
+            <p className="text-[13px] leading-relaxed text-[#111827] whitespace-pre-line">
+              {content.caption}
+            </p>
+            {content.hashtags?.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {content.hashtags.map((h) => (
+                  <span key={h} className="text-[11px] font-mono text-[#6d46c6]">
+                    #{h}
+                  </span>
+                ))}
+              </div>
+            )}
+          </>
+        )}
       </div>
       <div className="px-4 py-3 bg-[#faf9ff] border-t border-[#eeeaf6] flex items-center gap-4 text-[11px] font-mono text-[#4b5563]">
         <span>Est. reach <b className="text-[#111827]">22.8k</b></span>
         <span>Eng <b className="text-[#111827]">5.9%</b></span>
         <button
+          data-testid="preview-instagram-copy"
           className="ml-auto text-[#6d46c6] hover:underline"
-          onClick={() => toast.success("Instagram Reel scheduled")}
+          onClick={() => copyChannelCaption(content, "Instagram")}
         >
-          Schedule
+          Copy
         </button>
       </div>
     </div>
@@ -598,7 +581,7 @@ function InstagramPreview({ review }) {
 }
 
 /* ─────────────── X (Twitter) preview ─────────────── */
-function XPreview({ review, body }) {
+function XPreview({ content, loading }) {
   return (
     <div
       data-testid="preview-x"
@@ -624,19 +607,40 @@ function XPreview({ review, body }) {
         </span>
       </div>
       <div className="p-4">
-        <p className="text-[14px] leading-[1.4] text-[#111827] whitespace-pre-line">
-          {body}
-        </p>
-        <div className="mt-3 text-[11px] font-mono text-[#9ca3af]">
-          9:00 AM · Feb 14, 2026
-        </div>
+        {loading || !content ? (
+          <div className="space-y-2 animate-pulse">
+            <div className="h-3 w-full rounded bg-[#f2eefa]" />
+            <div className="h-3 w-3/4 rounded bg-[#f2eefa]" />
+          </div>
+        ) : (
+          <>
+            {content.headline && (
+              <div className="font-display text-[14px] font-semibold text-[#111827] mb-1">
+                {content.headline}
+              </div>
+            )}
+            <p className="text-[14px] leading-[1.4] text-[#111827] whitespace-pre-line">
+              {content.caption}
+            </p>
+            {content.hashtags?.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {content.hashtags.map((h) => (
+                  <span key={h} className="text-[12px] font-mono text-[#1d9bf0]">
+                    #{h}
+                  </span>
+                ))}
+              </div>
+            )}
+          </>
+        )}
       </div>
       <div className="px-4 py-3 bg-[#faf9ff] border-t border-[#eeeaf6] flex items-center gap-4 text-[11px] font-mono text-[#4b5563]">
         <span>Impr <b className="text-[#111827]">42.1k</b></span>
         <span>Eng <b className="text-[#111827]">3.1%</b></span>
         <button
+          data-testid="preview-x-copy"
           className="ml-auto text-[#6d46c6] hover:underline"
-          onClick={() => toast.success("Copied X draft")}
+          onClick={() => copyChannelCaption(content, "X")}
         >
           Copy
         </button>
