@@ -76,3 +76,29 @@ available code so the user can see how much progress has been made.
   not yet requested).
 - Revisit LinkedIn/X publishing once user is ready with developer credentials.
 - Decide on blog feature fate (build backend vs remove).
+
+## What's been implemented (2026-07-24, cont'd)
+- Growth Signals (`/business/conversations`): Intelligent Action + hero metric now computed
+  live from real conversation/insight data (`useMemo` in ConversationsPage.jsx) instead of
+  static mocks; CTA jumps to the actual highest-signal conversation with a status-aware action
+  label (Draft/Send/View approval/Amplify).
+- New Airtable table `Growth_Signals` (created via Metadata API, base appFUJWWTaoJ3YiWt) stores
+  every AI-extracted insight (motivations, pain points, buying signals, objections, customer
+  language, product feedback, FAQs, sentiment, signal score) per source, keyed by Source_Id
+  (idempotent upsert). Written on `POST /api/sources/{id}/analyze` and status-synced to
+  "approved" on public testimonial approval.
+- Growth Amplification (`/business/social`): hero metric + Intelligent Action now driven by real
+  `GET /api/testimonials` data (count of approved testimonials, top testimonial surfaced) with a
+  graceful zero-state; "Themes ready to move acquisition" and "Post queue" sections removed
+  entirely (dead code PostRow/STATUS_META cleaned up); "Generate draft" now copies AI output to
+  clipboard directly (no more fake queue).
+- Instagram/LinkedIn/X post preview + branded visual asset cards (SocialAssets.jsx) restyled to
+  PayRewards' real blue brand (#3066C9 palette, sourced from payrewards.com) with the real
+  PayRewards logo lockup (generated asset `/payrewards-logo-lockup.png`); fixed an Instagram
+  card layout bug where the quote collapsed into a large empty gap (now vertically centered).
+- PageHero (`components/business/PageHero.jsx`) NorthStarBlock redesigned as a bordered white
+  card matching the Intelligent Action panel's height 1:1 (`items-stretch` grid) — fixes the
+  ROI Simulator's (and all other pages using northStar) misaligned/whitespace-heavy hero.
+- Verified via testing_agent (100% pass, 9/9 frontend checks + 2/2 new backend Airtable tests):
+  Airtable Growth_Signals persistence, live hero data on both pages, removed sections confirmed
+  gone, visual fixes rendering correctly, no regressions in prior flows.

@@ -492,7 +492,7 @@ function InstagramPreview({ content, loading }) {
         ) : (
           <>
             <div className="flex items-center justify-between">
-              <img src="/payrewards-logo-lockup.png" alt="PayRewards" className="h-6 w-auto" />
+              <img src="/payrewards-logo-lockup.png" alt="PayRewards" className="h-8 w-auto" />
               {content.eyebrow && (
                 <span className="text-[9.5px] font-mono text-white/70 uppercase tracking-[0.22em]">
                   {content.eyebrow}

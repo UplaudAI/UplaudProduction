@@ -59,7 +59,7 @@ function PayRewardsMark({ scale = 1 }) {
       src="/payrewards-logo-lockup.png"
       alt="PayRewards"
       crossOrigin="anonymous"
-      style={{ height: 30 * scale, width: "auto", display: "block" }}
+      style={{ height: 36 * scale, width: "auto", display: "block" }}
     />
   );
 }
