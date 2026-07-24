@@ -36,7 +36,7 @@ db = client[os.environ["DB_NAME"]]
 
 JWT_SECRET = os.environ.get("JWT_SECRET", "uplaud-demo-secret")
 JWT_ALGORITHM = "HS256"
-ACCESS_TOKEN_HOURS = 12
+ACCESS_TOKEN_HOURS = 168
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-4o")
 

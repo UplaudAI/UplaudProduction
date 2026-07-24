@@ -1,0 +1,45 @@
+{
+  "summary": "Verified the JWT expired-token bug fix. Backend: ACCESS_TOKEN_HOURS is now 168h (7 days) — created dedicated pytest suite test_auth_token_expiry.py, 7/7 pass (login returns ~168h expiry, valid token access, invalid token 401, crafted-expired token 401 with 'expired' detail, no-token 401, wrong-password 401 from login, real transcript upload success). Frontend: end-to-end verified — (1) fresh login + /business/import .txt upload analyzes successfully with no 'token expired' toast; (2) corrupting localStorage token then navigating to /business/referrals triggers the axios 401 interceptor: user is redirected to /business AND localStorage auth is cleared AND re-login works normally; (3) entering a wrong password on /business shows the inline 'Invalid email or password' error and does NOT redirect-loop or fire the session-expired toast — the interceptor correctly no-ops when already on /business. One MINOR UX issue: the 'Your session expired — please sign in again.' Sonner toast is not visible to the end user because the interceptor calls window.location.href immediately after toast.error(), which triggers a hard page reload that unmounts Sonner before it can render. Redirect + auth-clear still work correctly, so recovery UX is functional; only the informational toast is lost.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "401 session-expired UX",
+        "issue": "Toast 'Your session expired — please sign in again.' never becomes visible to the user because window.location.href = '/business' fires synchronously right after toast.error() in frontend/src/lib/api.js (line ~26-27). The hard reload tears down the Sonner container before it paints. Redirect + clearAuth() still work, so functional recovery is fine; only the informational toast is lost. Suggested fix: either (a) use react-router navigate('/business') so Sonner survives, or (b) wrap redirect in setTimeout(()=>{ window.location.href='/business' }, 1200) so the toast has time to render, or (c) stash a flag in sessionStorage and re-emit the toast on the login page mount.",
+        "affected_selectors": ["frontend/src/lib/api.js response interceptor"]
+      }
+    ],
+    "design_issues": []
+  },
+  "verified_working_end_to_end": [
+    "Login → /business/import → upload .txt transcript → POST /api/sources + POST /api/sources/{id}/analyze → success state visible (no 'Token expired' toast, no auth failure)",
+    "Corrupted JWT in localStorage → navigate to protected route → axios 401 interceptor fires → clearAuth() + redirect to /business",
+    "Post-redirect: localStorage.uplaud_business_auth_v1 is null, login page rendered, re-login with demo creds lands on /business/insights",
+    "Wrong password on /business login form → inline login-error 'Invalid email or password', still on /business, NO redirect loop, NO session-expired toast (interceptor correctly skips when already on /business)",
+    "Backend JWT: freshly issued tokens have exp ≈ now+168h; expired token → 401 'Token expired'; invalid token → 401 'Invalid token'"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_auth_token_expiry.py",
+    "/app/test_reports/pytest/token_expiry.xml"
+  ],
+  "action_items": [
+    "MINOR (optional): Make the 'session expired' toast actually visible. Simplest fix in frontend/src/lib/api.js: replace `toast.error(...); window.location.href = '/business';` with `toast.error(...); setTimeout(() => { window.location.href = '/business'; }, 1500);` — or use react-router-dom's navigate via a small helper to preserve the toast."
+  ],
+  "critical_code_review_comments": [
+    "frontend/src/lib/api.js interceptor uses window.location.href for redirect — kills the toast it just fired. Prefer react-router navigation or a deferred redirect.",
+    "The interceptor treats ALL 401s as 'session expired', including the login endpoint's 401 for wrong password. This is safely masked here only because pathname === '/business' short-circuits the redirect + toast, but the response is still rejected — so BusinessLoginPage's own catch block is what surfaces the inline error. This is fine as-is but brittle: if login ever moves off /business the behaviour would silently break. Consider excluding /api/auth/login from the interceptor explicitly."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_auth_token_expiry.py (new)"
+  ],
+  "success_rate": {"backend": "100% (7/7 pass)", "frontend": "6/7 assertions pass — only the session-expired toast visibility fails (minor UX)"},
+  "test_credentials": "dcameron@payrewards.com / P@yRew@rds123",
+  "seed_data_creation": "Uploaded 1 test source (uplaud_test.txt) via UI on /business/import — analyzed successfully with real OpenAI.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Bug fix verified functionally. The only remaining gap is a cosmetic one: user is silently redirected to login on 401 without seeing the toast. If main agent addresses that, retest by corrupting localStorage token + navigating and confirming the toast appears for >1s before/after the redirect."
+}
