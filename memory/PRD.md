@@ -77,6 +77,18 @@ available code so the user can see how much progress has been made.
 - Revisit LinkedIn/X publishing once user is ready with developer credentials.
 - Decide on blog feature fate (build backend vs remove).
 
+## What's been implemented (2026-07-24, cont'd #2)
+- Referral Agent outreach drafts (email + LinkedIn InMail, `build_outreach_prompt` in
+  server.py): now explicitly frame the referrer as "your contact {referrer}" on first mention
+  (referee often won't recall the referrer's name), and when the referrer's testimonial is
+  substantive (≥40 chars) the email body MUST include a real quoted excerpt in quotation marks
+  rather than a loose paraphrase. Verified via curl — confirmed both behaviors in a fresh
+  regenerated draft.
+- Warm Pipeline table (ReferralAgentPage.jsx) redesigned: column order now Lead → Recent
+  Activity → Signals → Stage → Referred On → Referred By (status/dates/referrer moved to the
+  right end); Recent Activity and Signals columns widened (no more cutoff text); Referred On
+  is a narrow two-line date/time column; lead's role/company line is now uppercase.
+
 ## What's been implemented (2026-07-24, cont'd)
 - Growth Signals (`/business/conversations`): Intelligent Action + hero metric now computed
   live from real conversation/insight data (`useMemo` in ConversationsPage.jsx) instead of

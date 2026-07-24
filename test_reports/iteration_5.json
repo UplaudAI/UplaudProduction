@@ -1,0 +1,31 @@
+{
+  "summary": "Verified both quality fixes on the Warm Pipeline page (/business/referrals). BACKEND: Regenerated fresh outreach drafts (force=true) for the 3 leads with strong referrer testimonials (Jason Post, Marcelo Lebre, Pujun Bhatnagar). All 3 drafts (a) explicitly say 'your contact Deepthi Rao' in the email_body, (b) contain a real quoted excerpt whose words verifiably match a 4+ consecutive-word run from the actual referrer_testimonial (not a generic paraphrase), and (c) the linkedin_message also opens by naming the referrer as 'your contact Deepthi Rao'. FRONTEND: Column order on warm-leads-table is exactly Lead / Recent activity / Signals / Stage / Referred on / Referred by. Role/company subtitle under each lead's name has computed textTransform='uppercase' (renders as e.g. 'PRESIDENT AT POST HOSPITALITY GROUP', 'FOUNDER & CHIEF EXECUTIVE OFFICER AT LAYERPATH'). Referred-on cell is narrow (~96px) with two stacked lines ('Jul 24' + time). +N more toggle on Signals expands cleanly (verified rows with +8/+10/+11 more). Row click opens warm-lead-drawer with full enrichment + Referral Agent panel. Intelligent Action panel at top shows real computed data (Vinay Chandrasekaran, 12 signals, Send LinkedIn InMail). No console errors.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "tests_executed": [
+    {"name": "Backend · outreach draft has 'your contact <Referrer>' in email_body + linkedin_message (3 leads)", "result": "PASS", "detail": "Jason Post, Marcelo Lebre, Pujun Bhatnagar — all pass; force=true regeneration."},
+    {"name": "Backend · email_body contains a real quoted excerpt with 4+ consecutive-word overlap vs testimonial (3 leads)", "result": "PASS"},
+    {"name": "Frontend · warm-leads-table column order", "result": "PASS", "detail": "['Lead','Recent activity','Signals','Stage','Referred on','Referred by']"},
+    {"name": "Frontend · role/company subtitle uppercase", "result": "PASS", "detail": "Computed textTransform='uppercase' on all 6 rows."},
+    {"name": "Frontend · Referred on column narrow with two-line stacked date/time", "result": "PASS", "detail": "cell width 96.3px, spans=['Jul 24','6:40 PM']."},
+    {"name": "Frontend · Signals +N more expand", "result": "PASS", "detail": "Clicked '+8 more' on Jason Post row — cell text length grew from truncated to 431 chars."},
+    {"name": "Frontend · Row click opens drawer", "result": "PASS", "detail": "warm-lead-drawer + agent action buttons render."},
+    {"name": "Frontend · Intelligent Action panel shows live data", "result": "PASS", "detail": "Vinay Chandrasekaran, 12 signals, Send LinkedIn InMail."},
+    {"name": "Frontend · smaller viewport (1280) sanity check", "result": "PASS", "detail": "Table remains readable, no obvious cutoffs."}
+  ],
+  "test_report_links": ["/app/backend/tests/test_referral_outreach.py", "/app/test_reports/pytest/referral_outreach.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "build_outreach_prompt() cleanly conditionalizes the 'strong testimonial' requirement via is_strong_testimonial (>=40 chars) — good threshold; forces a real quoted excerpt only when the source is substantive enough to quote.",
+    "The 'your contact {referrer}' instruction is repeated in the system prompt for both email_body and linkedin_message — verified LLM consistently obeys across 3 different leads with force=true.",
+    "ReferralAgentPage.jsx: table columns use fixed thead widths (min-w-[220px]/[280px]/[260px], w-[92px]) — good for stable layout; SignalsCell max-w bumped to 280/320 as claimed. formatDateShort splits into date+time spans cleanly.",
+    "No search/filter input exists on this page. Not a bug per current design, but review request mentions 'filters/search' — worth confirming with product whether that was intended for a future round."
+  ],
+  "updated_files": ["/app/backend/tests/test_referral_outreach.py"],
+  "success_rate": {"backend": "100% (4/4 pytest cases)", "frontend": "100% (9/9 targeted checks)"},
+  "test_credentials": "dcameron@payrewards.com / P@yRew@rds123",
+  "seed_data_creation": "None — tests only regenerate agent plans for existing warm leads via force=true.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Warm Pipeline page (/business/referrals) has 6 seeded warm leads referred by Deepthi Rao. 3 have referrer_testimonial >= 40 chars (Marcelo Lebre, Pujun Bhatnagar, Jason Post) — these are the ones that trigger the strong-quote requirement in build_outreach_prompt(). Use POST /api/warm-leads/{id}/agent-run?force=true to regenerate a plan (without force=true it returns cached). Frontend table columns are fixed via Tailwind min-w-* and w-[92px]; role/company subtitle uses 'uppercase tracking-[0.02em]' class (not a data-testid — query by .uppercase or CSS textTransform)."
+}

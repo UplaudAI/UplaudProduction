@@ -77,6 +77,15 @@ function formatDateTime(iso) {
   });
 }
 
+function formatDateShort(iso) {
+  if (!iso) return { date: "", time: "" };
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return { date: iso, time: "" };
+  const date = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return { date, time };
+}
+
 function circleToLead(c) {
   const agentPlan = parseAgentPlan(c.agent_plan);
   return {
@@ -275,12 +284,12 @@ export default function ReferralAgentPage() {
             <table data-testid="warm-leads-table" className="w-full text-[13px]">
               <thead className="bg-[#faf9ff] border-b border-[#eeeaf6]">
                 <tr className="text-left text-[11px] font-mono uppercase tracking-[0.14em] text-[#4b5563]">
-                  <th className="py-3 px-5">Lead</th>
-                  <th className="py-3 px-5">Referred by</th>
-                  <th className="py-3 px-5">Referred on</th>
+                  <th className="py-3 px-5 min-w-[220px]">Lead</th>
+                  <th className="py-3 px-5 min-w-[280px]">Recent activity</th>
+                  <th className="py-3 px-5 min-w-[260px]">Signals</th>
                   <th className="py-3 px-5">Stage</th>
-                  <th className="py-3 px-5">Recent activity</th>
-                  <th className="py-3 px-5">Signals</th>
+                  <th className="py-3 px-5 w-[92px]">Referred on</th>
+                  <th className="py-3 px-5">Referred by</th>
                 </tr>
               </thead>
               <tbody>
@@ -305,7 +314,7 @@ export default function ReferralAgentPage() {
                     onClick={() => setSelectedId(l.id)}
                     className="border-b border-[#f2eefa] hover:bg-[#faf9ff] cursor-pointer transition-colors"
                   >
-                    <td className="py-4 px-5">
+                    <td className="py-4 px-5 align-top">
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-full bg-[#f5f3ff] text-[#6d46c6] flex items-center justify-center text-[11px] font-semibold shrink-0">
                           {l.name.split(" ").map((n) => n[0]).join("")}
@@ -315,7 +324,7 @@ export default function ReferralAgentPage() {
                             {l.name}
                           </div>
                           {(l.role || l.company) && (
-                            <div className="text-[11.5px] text-[#6b7280] mt-0.5 truncate">
+                            <div className="text-[11px] uppercase tracking-[0.02em] text-[#6b7280] mt-0.5 truncate">
                               {l.role}
                               {l.role && l.company ? " at " : ""}
                               <span className="font-semibold text-[#374151]">{l.company}</span>
@@ -324,32 +333,10 @@ export default function ReferralAgentPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="py-4 px-5">
-                      <div className="text-[12.5px] text-[#111827]">
-                        {l.referrer.name}
-                      </div>
-                      {l.referrer.company && (
-                        <div className="text-[10.5px] font-mono text-[#9ca3af] mt-0.5">
-                          {l.referrer.company}
-                        </div>
-                      )}
-                    </td>
-                    <td className="py-4 px-5">
-                      <span className="text-[11.5px] font-mono text-[#4b5563] whitespace-nowrap">
-                        {formatDateTime(l.createdAt) || "—"}
-                      </span>
-                    </td>
-                    <td className="py-4 px-5">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium border ${STAGE_STYLES[(WARM_LEAD_STAGES[l.stage] || WARM_LEAD_STAGES.new).tone]}`}
-                      >
-                        {(WARM_LEAD_STAGES[l.stage] || WARM_LEAD_STAGES.new).label}
-                      </span>
-                    </td>
-                    <td className="py-4 px-5 max-w-[220px]">
+                    <td className="py-4 px-5 align-top">
                       {l.agentPlan?.researchHeadline ? (
                         <span
-                          className="text-[12px] text-[#374151] leading-snug line-clamp-2"
+                          className="text-[12.5px] text-[#374151] leading-snug block"
                           title={l.agentPlan.researchHeadline}
                         >
                           {l.agentPlan.researchHeadline}
@@ -360,8 +347,33 @@ export default function ReferralAgentPage() {
                         </span>
                       )}
                     </td>
-                    <td className="py-4 px-5">
+                    <td className="py-4 px-5 align-top">
                       <SignalsCell signals={l.signals} leadId={l.id} />
+                    </td>
+                    <td className="py-4 px-5 align-top">
+                      <span
+                        className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium border whitespace-nowrap ${STAGE_STYLES[(WARM_LEAD_STAGES[l.stage] || WARM_LEAD_STAGES.new).tone]}`}
+                      >
+                        {(WARM_LEAD_STAGES[l.stage] || WARM_LEAD_STAGES.new).label}
+                      </span>
+                    </td>
+                    <td className="py-4 px-5 align-top w-[92px]">
+                      <span className="text-[11px] font-mono text-[#4b5563] leading-snug block whitespace-nowrap">
+                        {formatDateShort(l.createdAt).date || "—"}
+                      </span>
+                      <span className="text-[10px] font-mono text-[#9ca3af] leading-snug block whitespace-nowrap">
+                        {formatDateShort(l.createdAt).time}
+                      </span>
+                    </td>
+                    <td className="py-4 px-5 align-top">
+                      <div className="text-[12.5px] text-[#111827]">
+                        {l.referrer.name}
+                      </div>
+                      {l.referrer.company && (
+                        <div className="text-[10.5px] font-mono text-[#9ca3af] mt-0.5">
+                          {l.referrer.company}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -515,7 +527,7 @@ function SignalsCell({ signals, leadId }) {
     <div data-testid={`signals-cell-${leadId}`} onClick={(e) => e.stopPropagation()}>
       <div className="flex items-center gap-2">
         <span
-          className="text-[11px] text-[#4b5563] truncate max-w-[200px]"
+          className="text-[11.5px] text-[#4b5563] truncate max-w-[280px]"
           title={`${first.label}: ${first.value}`}
         >
           <span className="text-[#9ca3af]">{first.label}:</span> {first.value}
@@ -537,7 +549,7 @@ function SignalsCell({ signals, leadId }) {
       {expanded && (
         <div
           data-testid={`signals-expanded-${leadId}`}
-          className="mt-2 space-y-1 max-w-[260px] bg-[#faf9ff] border border-[#eeeaf6] rounded-lg p-2.5"
+          className="mt-2 space-y-1 max-w-[320px] bg-[#faf9ff] border border-[#eeeaf6] rounded-lg p-2.5"
         >
           {rest.map((s, i) => (
             <div key={i} className="flex gap-1.5 text-[11px] leading-snug">

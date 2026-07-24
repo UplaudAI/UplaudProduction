@@ -407,12 +407,18 @@ def build_outreach_prompt(
     who = name + (f" ({job_title}" + (f" at {company}" if company else "") + ")" if job_title or company else "")
     research_text = "\n".join(f"- {b}" for b in research_bullets) if research_bullets else "No reliable public findings available."
 
+    is_strong_testimonial = bool(referrer_testimonial) and len(referrer_testimonial.strip()) >= 40
+
     return f"""A warm lead named {who} was just referred to {business_name} by {referrer}.
 
 {referrer} recently experienced {business_name} — most likely through a product demo. Do NOT describe {referrer} as a "customer" or someone "using" the product unless their testimonial below explicitly says they already are; by default describe them as someone who "took a demo of {business_name}" or "recently saw {business_name} in action". {referrer} was impressed enough to specifically think {name} would find real value in {business_name} — that is the entire reason for this outreach, and the email must say so plainly and warmly (e.g. "{referrer} thought this could be genuinely useful for you").
 
+IMPORTANT — {name} may not immediately remember who {referrer} is. Every draft (email and LinkedIn) MUST explicitly frame {referrer} as "your contact {referrer}" (or equivalent unambiguous phrasing like "your contact, {referrer}") the first time {referrer} is mentioned, so {name} instantly places them.
+
 {referrer}'s actual testimonial (quote or closely paraphrase their real words in the email — do not invent anything beyond this):
 \"\"\"{referrer_testimonial or "No testimonial text available."}\"\"\"
+
+{"This testimonial is substantive and worth showcasing directly — the email body MUST include a short, genuine excerpt of it wrapped in actual quotation marks, in " + referrer + "'s own words (verbatim or a very close, faithful paraphrase), not just a loose summary folded into your own sentence." if is_strong_testimonial else "This testimonial is thin or unavailable — keep any reference to it brief and general rather than inventing a quote."}
 
 Public web research findings about {name} / {company} (use ONLY these for personalization; if none are reliable, keep the email shorter and more general rather than inventing anything):
 {research_text}
@@ -423,8 +429,8 @@ Write a first-touch outreach package with a genuinely compelling hook — this m
 {{
   "research_headline": "one punchy sentence (under 100 characters) capturing the single most compelling, concrete, REAL finding from the research above — no links, no markdown, no fluff. If nothing concrete was found, summarize what IS genuinely known about {name}/{company} in one sentence instead.",
   "email_subject": "short, specific, non-clickbait email subject line",
-  "email_body": "a warm, confident, concise email (5-8 sentences) that: (1) opens by naming {referrer} and explaining, in your own words, that {referrer} recently experienced {business_name} (via demo unless the testimonial says otherwise) and specifically thought of {name}, (2) weaves in a short quote or close paraphrase of {referrer}'s real testimonial words, (3) includes ONE genuine, specific personalization drawn from the research findings to build a strong hook — omit this if no real findings exist, (4) makes a clear, confident case for why a demo is worth their time, (5) ends with a direct call-to-action to book a demo (not a vague 'quick call'). Sign off as 'The {business_name} team'.",
-  "linkedin_message": "a shorter, casual LinkedIn InMail version (2-4 sentences, under 500 characters) with the same grounding rules and the same demo-booking CTA.",
+  "email_body": "a warm, confident, concise email (5-8 sentences) that: (1) opens by naming {referrer} explicitly as 'your contact {referrer}' and explaining, in your own words, that {referrer} recently experienced {business_name} (via demo unless the testimonial says otherwise) and specifically thought of {name}, (2) {"includes a short direct quote from " + referrer + "'s real testimonial in quotation marks" if is_strong_testimonial else "briefly references " + referrer + "'s experience"}, (3) includes ONE genuine, specific personalization drawn from the research findings to build a strong hook — omit this if no real findings exist, (4) makes a clear, confident case for why a demo is worth their time, (5) ends with a direct call-to-action to book a demo (not a vague 'quick call'). Sign off as 'The {business_name} team'.",
+  "linkedin_message": "a shorter, casual LinkedIn InMail version (2-4 sentences, under 500 characters) that still opens by naming {referrer} as 'your contact {referrer}', with the same grounding rules and the same demo-booking CTA.",
   "next_action_label": "a short imperative sentence describing the single best next action for a sales rep to take on this lead, referencing a real, specific detail when available and matching the {preferred_channel} channel",
   "next_action_cta": "{preferred_channel}"
 }}
