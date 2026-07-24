@@ -433,6 +433,45 @@ async def list_uplaud_by_business(business_name: str) -> list:
     return out
 
 
+TABLE_GROWTH_SIGNALS = "Growth_Signals"
+
+
+async def upsert_growth_signal(source_id: str, business_name: str, insights: dict, testimonial_status: str) -> None:
+    """Persist AI-extracted growth signals for a conversation to Airtable (create or update by Source_Id)."""
+    if not _enabled():
+        return
+    fields = {
+        "Name": f"{insights.get('company_name') or business_name} · {insights.get('call_type') or 'Demo'}",
+        "Source_Id": source_id,
+        "Business_Name": business_name,
+        "Person": insights.get("speaker_name", ""),
+        "Role": insights.get("speaker_role", ""),
+        "Company": insights.get("company_name", ""),
+        "Sentiment": insights.get("sentiment_label", ""),
+        "Signal_Score": insights.get("signal_score", 0),
+        "Call_Type": insights.get("call_type", ""),
+        "Motivations": "\n".join(insights.get("motivations", [])),
+        "Pain_Points": "\n".join(insights.get("pain_points", [])),
+        "Buying_Signals": "\n".join(insights.get("buying_signals", [])),
+        "Objections": "\n".join(insights.get("objections", [])),
+        "Customer_Language": "\n".join(insights.get("customer_language", [])),
+        "Product_Feedback": "\n".join(insights.get("product_feedback", [])),
+        "FAQs": "\n".join(insights.get("faqs", [])),
+        "Testimonial_Status": testimonial_status,
+        "Created_At": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        formula = f'{{Source_Id}}="{_escape(source_id)}"'
+        existing = await _get(TABLE_GROWTH_SIGNALS, {"filterByFormula": formula, "pageSize": 1})
+        records = existing.get("records", [])
+        if records:
+            await _update(TABLE_GROWTH_SIGNALS, records[0]["id"], fields)
+        else:
+            await _create(TABLE_GROWTH_SIGNALS, fields)
+    except Exception as e:
+        logger.warning("Airtable growth-signal upsert failed: %s", e)
+
+
 async def log_event(event: str, page: str = "", share_id: str = "", details: str = "", user_email: str = "") -> None:
     fields = {
         "Event": event,

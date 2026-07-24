@@ -1,20 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   Sparkles,
   Linkedin,
   Twitter,
   Instagram,
   RefreshCcw,
-  CheckCircle2,
-  Clock,
-  Pencil,
   ArrowUpRight,
-  Zap,
   Loader2,
+  Copy,
 } from "lucide-react";
 import PageHero from "@/components/business/PageHero";
 import { toast } from "sonner";
-import { SOCIAL_POSTS, PAGE_OUTCOMES, SMART_NBA, SIGNAL_THEMES } from "@/mocks/fintech";
 import SocialAssetStudio from "@/components/business/SocialAssets";
 import api, { formatApiError } from "@/lib/api";
 
@@ -26,19 +22,12 @@ const PLATFORMS = [
 
 const TONES = ["professional", "punchy", "founder-testimonial", "data-forward", "warm"];
 
-const STATUS_META = {
-  draft: { label: "Draft", color: "text-[#6d46c6]", bg: "bg-[#f5f3ff]", icon: Pencil },
-  scheduled: { label: "Scheduled", color: "text-[#a16207]", bg: "bg-[#fef9c3]", icon: Clock },
-  published: { label: "Published", color: "text-[#0f9b7c]", bg: "bg-[#ecfdf7]", icon: CheckCircle2 },
-};
-
 export default function SocialAgentPage() {
   const [testimonials, setTestimonials] = useState([]);
   const [loadingTestimonials, setLoadingTestimonials] = useState(true);
   const [selectedReviewId, setSelectedReviewId] = useState("");
   const [platform, setPlatform] = useState("linkedin");
   const [tone, setTone] = useState("professional");
-  const [drafts, setDrafts] = useState(SOCIAL_POSTS);
   const [generating, setGenerating] = useState(false);
   const [channelContent, setChannelContent] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -104,22 +93,12 @@ export default function SocialAgentPage() {
       });
       const gen = data?.channels?.[platform];
       if (!gen) throw new Error("No content returned");
-      const caption = [gen.eyebrow ? `${gen.eyebrow}\n` : "", gen.headline ? `${gen.headline}\n\n` : "", gen.caption].join("");
-      const newPost = {
-        id: `sp_${Date.now()}`,
-        reviewId: review.id,
-        platform,
-        tone,
-        status: "draft",
-        scheduled: null,
-        body: caption,
-        cta: gen.cta || "",
-        hashtags: (gen.hashtags || []).map((h) => `#${h}`),
-        predictedReach: `${(8 + Math.random() * 30).toFixed(1)}k`,
-        predictedEngagement: `${(2 + Math.random() * 4).toFixed(1)}%`,
-      };
-      setDrafts([newPost, ...drafts]);
-      toast.success(`${PLATFORMS.find((p) => p.id === platform).label} draft generated — PayRewards voice`);
+      const tags = (gen.hashtags || []).map((h) => `#${h}`).join(" ");
+      const text = [gen.eyebrow, gen.headline, gen.caption, tags, gen.cta].filter(Boolean).join("\n\n");
+      await navigator.clipboard.writeText(text);
+      toast.success(`${PLATFORMS.find((p) => p.id === platform).label} draft copied — ready to paste`, {
+        description: "PayRewards voice, grounded in this testimonial.",
+      });
     } catch (err) {
       toast.error(formatApiError(err.response?.data?.detail) || "Couldn't generate that draft — try again");
     } finally {
@@ -127,18 +106,66 @@ export default function SocialAgentPage() {
     }
   };
 
+  const northStar = useMemo(() => {
+    if (testimonials.length === 0) {
+      return {
+        label: "Approved testimonials ready to amplify",
+        value: "0",
+        delta: "Approve a testimonial in Growth Signals to unlock amplification",
+        attribution:
+          "Every post here is drafted in PayRewards' brand voice and grounded in a real, approved customer testimonial — nothing goes out until you connect an account.",
+      };
+    }
+    return {
+      label: "Approved testimonials ready to amplify",
+      value: `${testimonials.length}`,
+      delta: "across LinkedIn, Instagram and X",
+      attribution:
+        "Sourced live from your Uplaud testimonials — draft channel-native posts below, then connect an account to publish.",
+    };
+  }, [testimonials]);
+
+  const smartAction = useMemo(() => {
+    if (testimonials.length === 0) {
+      return {
+        eyebrow: "Intelligent action",
+        headline: "No approved testimonials yet",
+        reasoning: [],
+        outcome: "Approve a testimonial in Growth Signals to unlock a personalized amplification plan here.",
+        cta: "Go to Growth Signals",
+      };
+    }
+    const top = testimonials[0];
+    return {
+      eyebrow: "Intelligent action",
+      headline: `${top.customer}'s testimonial is ready to amplify`,
+      reasoning: [
+        { label: "Source", value: top.source || "Uplaud" },
+        top.sentiment ? { label: "Sentiment", value: top.sentiment } : null,
+        top.date_added ? { label: "Captured", value: top.date_added } : null,
+      ].filter(Boolean),
+      outcome: "Draft channel-native posts for LinkedIn, Instagram and X in PayRewards' voice below.",
+      cta: "Generate drafts for this testimonial",
+    };
+  }, [testimonials]);
+
+  const handleIntelligentAction = () => {
+    if (testimonials.length === 0) {
+      toast.info("Head to Growth Signals to approve a testimonial first");
+      return;
+    }
+    setSelectedReviewId(testimonials[0].id);
+    toast.success("Loaded top testimonial into the composer");
+  };
+
   return (
     <div data-testid="social-agent-page" className="space-y-10">
       <PageHero
-        eyebrow={PAGE_OUTCOMES.social.eyebrow}
-        question={PAGE_OUTCOMES.social.question}
-        northStar={PAGE_OUTCOMES.social.northStar}
-        smartAction={SMART_NBA.social}
-        onAction={() =>
-          toast.success("Marcus B.'s testimonial amplified", {
-            description: "Scheduled for LinkedIn 9am + X 11am ET.",
-          })
-        }
+        eyebrow="Growth Amplification · PayRewards"
+        question="Which testimonial should you amplify next?"
+        northStar={northStar}
+        smartAction={smartAction}
+        onAction={handleIntelligentAction}
       />
 
       {/* Section header */}
@@ -292,8 +319,8 @@ export default function SocialAgentPage() {
                 </>
               ) : (
                 <>
-                  <Zap className="w-4 h-4" strokeWidth={2} />
-                  Generate draft
+                  <Copy className="w-4 h-4" strokeWidth={2} />
+                  Generate & copy draft
                 </>
               )}
             </button>
@@ -327,118 +354,6 @@ export default function SocialAgentPage() {
           />
         </div>
       )}
-
-      {/* Themes ready to move acquisition — moved here from Growth Signals */}
-      <section data-testid="signal-themes" className="space-y-4 pt-4">
-        <div className="flex items-baseline gap-3">
-          <h2 className="font-display text-[20px] font-semibold tracking-tight text-[#111827]">
-            Themes ready to move acquisition
-          </h2>
-          <span className="text-[12px] text-[#9ca3af]">
-            Buyer language · ready to become ads and posts
-          </span>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {SIGNAL_THEMES.map((t) => (
-            <div
-              key={t.id}
-              data-testid={`theme-${t.id}`}
-              className="rounded-2xl border border-[#eeeaf6] bg-white p-5 hover:border-[#d9d1ee] transition-colors"
-            >
-              <div className="text-[10.5px] font-mono uppercase tracking-[0.18em] text-[#9ca3af]">
-                {t.category}
-              </div>
-              <div className="mt-2 font-display text-[18px] font-semibold leading-tight text-[#111827]">
-                {t.theme}
-              </div>
-              <div className="mt-3 flex items-baseline gap-2">
-                <div className="font-display text-[24px] font-semibold text-[#0f9b7c] leading-none">
-                  {t.lift}
-                </div>
-                <div className="text-[11px] text-[#4b5563]">{t.liftLabel}</div>
-              </div>
-              <div className="mt-3 rounded-lg bg-[#faf9ff] border border-[#eeeaf6] p-2.5">
-                <p className="text-[12px] leading-relaxed text-[#111827] italic">
-                  &ldquo;{t.quote}&rdquo;
-                </p>
-                <div className="mt-1 text-[10.5px] font-mono text-[#6d46c6]">
-                  — {t.quoteAttribution}
-                </div>
-              </div>
-              <button
-                data-testid={`theme-action-${t.id}`}
-                onClick={() => toast.success(`Queued: ${t.action}`)}
-                className="mt-3 text-[11.5px] font-medium text-[#6d46c6] hover:underline"
-              >
-                {t.action} →
-              </button>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Queue */}
-      <div className="rounded-2xl border border-[#eeeaf6] bg-white overflow-hidden">
-        <div className="px-6 py-4 border-b border-[#eeeaf6] flex items-center justify-between">
-          <div className="text-[14px] font-display font-semibold text-[#111827]">
-            Post queue
-          </div>
-          <div className="text-[11.5px] font-mono text-[#9ca3af]">
-            {drafts.length} posts
-          </div>
-        </div>
-        <div className="divide-y divide-[#f2eefa]">
-          {drafts.map((d) => (
-            <PostRow key={d.id} data={d} review={testimonials.find((r) => r.id === d.reviewId)} />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PostRow({ data, review }) {
-  const platform = PLATFORMS.find((p) => p.id === data.platform);
-  const status = STATUS_META[data.status];
-  const Icon = platform.icon;
-  const StatusIcon = status.icon;
-
-  return (
-    <div
-      data-testid={`post-row-${data.id}`}
-      className="px-6 py-4 flex items-center gap-4 hover:bg-[#faf9ff] transition-colors"
-    >
-      <div
-        className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
-        style={{ backgroundColor: `${platform.color}18` }}
-      >
-        <Icon
-          className="w-4 h-4"
-          strokeWidth={1.75}
-          style={{ color: platform.color }}
-        />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="text-[13px] text-[#111827] line-clamp-1">
-          {data.body.split("\n")[0]}
-        </div>
-        <div className="text-[11px] font-mono text-[#9ca3af] mt-0.5">
-          {review?.customer || "—"} · {data.tone} ·{" "}
-          {data.scheduled
-            ? new Date(data.scheduled).toLocaleDateString()
-            : "unscheduled"}
-        </div>
-      </div>
-      <div className="hidden md:flex items-center gap-4 text-[11px] font-mono text-[#4b5563]">
-        <span>reach {data.predictedReach}</span>
-        <span>eng {data.predictedEngagement}</span>
-      </div>
-      <span
-        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium ${status.bg} ${status.color}`}
-      >
-        <StatusIcon className="w-3 h-3" strokeWidth={2} />
-        {status.label}
-      </span>
     </div>
   );
 }
@@ -565,9 +480,9 @@ function InstagramPreview({ content, loading }) {
       </div>
       {/* Visual card */}
       <div
-        className="relative aspect-[4/5] flex flex-col justify-between p-5"
+        className="relative aspect-[4/5] flex flex-col p-6"
         style={{
-          background: "linear-gradient(135deg, #261c4d 0%, #6d46c6 55%, #5eead4 130%)",
+          background: "linear-gradient(150deg, #0E2354 0%, #1F49A8 55%, #3066C9 100%)",
         }}
       >
         {loading || !content ? (
@@ -576,14 +491,24 @@ function InstagramPreview({ content, loading }) {
           </div>
         ) : (
           <>
-            <div className="text-[10px] font-mono text-white/70 uppercase tracking-[0.22em]">
-              {content.headline || "Customer story"}
+            <div className="flex items-center justify-between">
+              <img src="/payrewards-logo-lockup.png" alt="PayRewards" className="h-6 w-auto" />
+              {content.eyebrow && (
+                <span className="text-[9.5px] font-mono text-white/70 uppercase tracking-[0.22em]">
+                  {content.eyebrow}
+                </span>
+              )}
             </div>
-            <div className="space-y-2">
-              <div className="font-display text-white text-[20px] leading-[1.18] font-semibold">
+            <div className="flex-1 flex items-center py-4">
+              <div className="font-display text-white text-[21px] leading-[1.22] font-semibold">
                 &ldquo;{content.quote}&rdquo;
               </div>
             </div>
+            {content.headline && (
+              <div className="text-[11px] font-mono text-white/60 uppercase tracking-[0.1em]">
+                {content.headline}
+              </div>
+            )}
           </>
         )}
       </div>

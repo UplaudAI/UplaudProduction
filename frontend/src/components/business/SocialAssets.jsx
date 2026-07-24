@@ -32,11 +32,11 @@ import { logEvent } from "@/lib/analytics";
    Backend /api/social/generate writes the platform-native copy for each channel.
 ============================================================================ */
 
-const PURPLE = "#6d46c6";
-const PURPLE_MID = "#6214a8";
-const PURPLE_DEEP = "#261c4d";
-const PURPLE_INK = "#1a1136";
-const MINT = "#5eead4";
+const PURPLE = "#3066C9";
+const PURPLE_MID = "#1F49A8";
+const PURPLE_DEEP = "#0E2354";
+const PURPLE_INK = "#081833";
+const MINT = "#8FB3F5";
 const DISPLAY = '"Bricolage Grotesque", "Inter", ui-sans-serif, system-ui, sans-serif';
 const MONO = '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace';
 
@@ -54,12 +54,13 @@ function initials(attr) {
 }
 
 function PayRewardsMark({ scale = 1 }) {
-  const s = scale;
   return (
-    <div className="inline-flex items-center" style={{ gap: 8 * s, fontFamily: DISPLAY, fontWeight: 700 }}>
-      <span style={{ width: 30 * s, height: 30 * s, borderRadius: 9 * s, background: `linear-gradient(135deg, ${MINT}, #9bf5e4)`, color: PURPLE_DEEP, fontSize: 16 * s, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>P</span>
-      <span style={{ color: "#fff", fontSize: 18.5 * s, letterSpacing: "-0.02em" }}>Pay<span style={{ color: MINT }}>Rewards</span></span>
-    </div>
+    <img
+      src="/payrewards-logo-lockup.png"
+      alt="PayRewards"
+      crossOrigin="anonymous"
+      style={{ height: 30 * scale, width: "auto", display: "block" }}
+    />
   );
 }
 function PoweredByUplaud({ scale = 1 }) {
@@ -77,7 +78,7 @@ function Stars({ scale = 1 }) {
 }
 function Eyebrow({ text, scale = 1 }) {
   if (!text) return null;
-  return (<span style={{ fontFamily: MONO, fontSize: 9.5 * scale, letterSpacing: "0.22em", textTransform: "uppercase", color: MINT, padding: `${3 * scale}px ${9 * scale}px`, borderRadius: 999, border: "1px solid rgba(94,234,212,0.4)", background: "rgba(255,255,255,0.06)", whiteSpace: "nowrap" }}>{text}</span>);
+  return (<span style={{ fontFamily: MONO, fontSize: 9.5 * scale, letterSpacing: "0.22em", textTransform: "uppercase", color: MINT, padding: `${3 * scale}px ${9 * scale}px`, borderRadius: 999, border: "1px solid rgba(143,179,245,0.4)", background: "rgba(255,255,255,0.06)", whiteSpace: "nowrap" }}>{text}</span>);
 }
 function Monogram({ attr, scale = 1 }) {
   const s = scale;
@@ -128,7 +129,7 @@ function ScaledFrame({ w, h, children }) {
 const LinkedInCard = forwardRef(function LinkedInCard({ c }, ref) {
   const cust = c.pov === "customer";
   return (
-    <div ref={ref} style={{ width: CHANNELS.linkedin.w, height: CHANNELS.linkedin.h, position: "relative", overflow: "hidden", fontFamily: DISPLAY, background: `radial-gradient(120% 120% at 0% 100%, rgba(94,234,212,0.16), transparent 45%), linear-gradient(135deg, ${PURPLE_INK} 0%, ${PURPLE_DEEP} 60%, #34215f 100%)` }}>
+    <div ref={ref} style={{ width: CHANNELS.linkedin.w, height: CHANNELS.linkedin.h, position: "relative", overflow: "hidden", fontFamily: DISPLAY, background: `radial-gradient(120% 120% at 0% 100%, rgba(143,179,245,0.16), transparent 45%), linear-gradient(135deg, ${PURPLE_INK} 0%, ${PURPLE_DEEP} 60%, #163a7a 100%)` }}>
       <div style={{ position: "absolute", left: 0, top: 40, bottom: 40, width: 4, background: `linear-gradient(${MINT}, ${PURPLE})`, borderTopRightRadius: 4, borderBottomRightRadius: 4 }} />
       <div style={{ position: "relative", height: "100%", padding: 34, paddingLeft: 40, display: "flex", flexDirection: "column", boxSizing: "border-box" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -136,7 +137,7 @@ const LinkedInCard = forwardRef(function LinkedInCard({ c }, ref) {
           {!cust && <Eyebrow text={c.eyebrow} />}
         </div>
         {c.headline && <div style={{ marginTop: 14, color: MINT, fontWeight: 700, fontSize: 20, lineHeight: 1.15, letterSpacing: "-0.02em" }}>{c.headline}</div>}
-        <div style={{ flex: 1, minHeight: 0, marginTop: 10, borderLeft: "2px solid rgba(94,234,212,0.5)", paddingLeft: 14, display: "flex" }}>
+        <div style={{ flex: 1, minHeight: 0, marginTop: 10, borderLeft: "2px solid rgba(143,179,245,0.5)", paddingLeft: 14, display: "flex" }}>
           <AutoFitText text={`\u201C${c.quote}\u201D`} max={20} min={12} style={{ color: "rgba(255,255,255,0.94)", fontWeight: 500, lineHeight: 1.3 }} />
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 8 }}>
@@ -151,8 +152,8 @@ const LinkedInCard = forwardRef(function LinkedInCard({ c }, ref) {
 const InstagramCard = forwardRef(function InstagramCard({ c }, ref) {
   const cust = c.pov === "customer";
   return (
-    <div ref={ref} style={{ width: CHANNELS.instagram.w, height: CHANNELS.instagram.h, position: "relative", overflow: "hidden", fontFamily: DISPLAY, background: `linear-gradient(155deg, ${PURPLE_DEEP} 0%, ${PURPLE_MID} 52%, ${PURPLE} 78%, #7d5fe0 100%)` }}>
-      <div style={{ position: "absolute", top: -120, right: -80, width: 360, height: 360, borderRadius: 999, background: "radial-gradient(circle, rgba(94,234,212,0.45), transparent 62%)" }} />
+    <div ref={ref} style={{ width: CHANNELS.instagram.w, height: CHANNELS.instagram.h, position: "relative", overflow: "hidden", fontFamily: DISPLAY, background: `linear-gradient(155deg, ${PURPLE_DEEP} 0%, ${PURPLE_MID} 52%, ${PURPLE} 78%, #6f97e6 100%)` }}>
+      <div style={{ position: "absolute", top: -120, right: -80, width: 360, height: 360, borderRadius: 999, background: "radial-gradient(circle, rgba(143,179,245,0.45), transparent 62%)" }} />
       <div style={{ position: "absolute", left: 22, top: 92, fontSize: 260, lineHeight: 0.7, color: "rgba(255,255,255,0.08)", fontFamily: "Georgia, serif" }}>&ldquo;</div>
       <div style={{ position: "relative", height: "100%", padding: 44, display: "flex", flexDirection: "column", boxSizing: "border-box" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -177,7 +178,7 @@ const InstagramCard = forwardRef(function InstagramCard({ c }, ref) {
 const XCard = forwardRef(function XCard({ c }, ref) {
   const cust = c.pov === "customer";
   return (
-    <div ref={ref} style={{ width: CHANNELS.x.w, height: CHANNELS.x.h, position: "relative", overflow: "hidden", fontFamily: DISPLAY, background: `radial-gradient(100% 140% at 100% 0%, rgba(109,70,198,0.35), transparent 55%), #100a22` }}>
+    <div ref={ref} style={{ width: CHANNELS.x.w, height: CHANNELS.x.h, position: "relative", overflow: "hidden", fontFamily: DISPLAY, background: `radial-gradient(100% 140% at 100% 0%, rgba(48,102,201,0.35), transparent 55%), #0a1730` }}>
       <div style={{ position: "relative", height: "100%", padding: 34, display: "flex", flexDirection: "column", boxSizing: "border-box" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           {cust ? <Poster attr={c.attribution} scale={0.95} /> : (

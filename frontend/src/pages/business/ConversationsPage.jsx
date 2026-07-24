@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   Mic,
   Search,
@@ -29,7 +29,6 @@ import {
 } from "lucide-react";
 import PageHero from "@/components/business/PageHero";
 import { toast } from "sonner";
-import { PAGE_OUTCOMES, SMART_NBA } from "@/mocks/fintech";
 import api, { formatApiError } from "@/lib/api";
 
 function toConversation(s) {
@@ -146,18 +145,98 @@ export default function ConversationsPage() {
 
   const selected = conversations.find((c) => c.id === selectedId) || filtered[0];
 
+  const signalsStats = useMemo(() => {
+    const totalBuying = conversations.reduce((s, c) => s + (c.signals.buyingSignals?.length || 0), 0);
+    const totalPain = conversations.reduce((s, c) => s + (c.signals.painPoints?.length || 0), 0);
+    const approvedCount = conversations.filter((c) => c.draftedStory?.status === "approved").length;
+    const draftedCount = conversations.filter((c) => c.draftedStory).length;
+    return { totalBuying, totalPain, approvedCount, draftedCount };
+  }, [conversations]);
+
+  const northStar = useMemo(() => {
+    if (conversations.length === 0) {
+      return {
+        label: "Buying signals detected across your calls",
+        value: "0",
+        delta: "Upload your first call to start extracting signals",
+        attribution:
+          "Every transcript you import gets scanned for motivations, pain points, buying signals and objections — automatically.",
+      };
+    }
+    return {
+      label: "Buying signals detected across your calls",
+      value: `${signalsStats.totalBuying}`,
+      delta: `across ${conversations.length} conversation${conversations.length === 1 ? "" : "s"} · ${signalsStats.approvedCount} approved`,
+      attribution: `${signalsStats.totalPain} pain points and ${signalsStats.draftedCount} drafted testimonials surfaced from your calls so far.`,
+    };
+  }, [conversations, signalsStats]);
+
+  const topSignalConversation = useMemo(() => {
+    if (conversations.length === 0) return null;
+    return [...conversations].sort((a, b) => b.signalScore - a.signalScore)[0];
+  }, [conversations]);
+
+  const smartAction = useMemo(() => {
+    if (!topSignalConversation) {
+      return {
+        eyebrow: "Intelligent action",
+        headline: "Upload a customer call to unlock your first intelligent action",
+        reasoning: [],
+        outcome:
+          "Once a transcript is analyzed, Uplaud surfaces the single highest-signal conversation here with a recommended next step.",
+        cta: "Go to Sources",
+      };
+    }
+    const c = topSignalConversation;
+    const topBuying = c.signals.buyingSignals?.[0];
+    const topPain = c.signals.painPoints?.[0];
+    const status = c.draftedStory?.status;
+    let outcome, cta;
+    if (!c.draftedStory) {
+      outcome = `No testimonial drafted yet from this call — draft one now while the signal is fresh.`;
+      cta = "Draft testimonial";
+    } else if (status === "draft") {
+      outcome = `A testimonial is drafted but hasn't been sent to ${c.person} for approval yet.`;
+      cta = "Send for approval";
+    } else if (status === "awaiting_approval") {
+      outcome = `Waiting on ${c.person} to approve — check the approval page or nudge them.`;
+      cta = "View approval page";
+    } else {
+      outcome = `Approved and ready — amplify this testimonial across LinkedIn, Instagram and X.`;
+      cta = "Amplify now";
+    }
+    return {
+      eyebrow: "Intelligent action",
+      headline: `${c.person}'s call at ${c.company} has the highest signal score right now (${Math.round(c.signalScore * 100)}/100)`,
+      reasoning: [
+        { label: "Sentiment", value: `${c.sentiment} · ${c.type}` },
+        topBuying ? { label: "Buying signal", value: topBuying } : null,
+        topPain ? { label: "Pain point", value: topPain } : null,
+      ].filter(Boolean),
+      outcome,
+      cta,
+    };
+  }, [topSignalConversation]);
+
+  const handleIntelligentAction = () => {
+    if (!topSignalConversation) {
+      toast.info("Upload a call transcript in Sources to get started");
+      return;
+    }
+    setSelectedId(topSignalConversation.id);
+    toast.success(`Jumped to ${topSignalConversation.person}'s call`, {
+      description: smartAction.outcome,
+    });
+  };
+
   return (
     <div data-testid="conversations-page" className="space-y-12">
       <PageHero
-        eyebrow={PAGE_OUTCOMES.conversations.eyebrow}
-        question={PAGE_OUTCOMES.conversations.question}
-        northStar={PAGE_OUTCOMES.conversations.northStar}
-        smartAction={SMART_NBA.conversations}
-        onAction={() =>
-          toast.success("Themes exported to Ads Manager", {
-            description: "Meta CFO creative refresh queued.",
-          })
-        }
+        eyebrow="Growth Signals · AI-extracted from customer calls"
+        question="Which conversation should you act on next?"
+        northStar={northStar}
+        smartAction={smartAction}
+        onAction={handleIntelligentAction}
       />
 
       {/* Latest approved testimonial — the key takeaway */}

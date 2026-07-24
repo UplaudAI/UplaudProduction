@@ -645,6 +645,13 @@ async def analyze_source(source_id: str, regenerate: bool = False, current=Depen
         "testimonial_is_verbatim": is_verbatim,
         "status": "analyzed",
     })
+    business_name = (
+        await airtable_client.get_business_name_by_email_domain(current["email"])
+        or current["company"]
+    )
+    await airtable_client.upsert_growth_signal(
+        source_id, business_name, insights.model_dump(), doc.get("testimonial_status", "draft")
+    )
     return source_to_out(doc)
 
 
@@ -750,6 +757,8 @@ async def public_approve_testimonial(share_id: str, request: Request):
         share_link=share_link,
         date_added=now[:10],
     )
+    if ins:
+        await airtable_client.upsert_growth_signal(doc["id"], business_name, ins, "approved")
     return _public_payload(doc)
 
 
