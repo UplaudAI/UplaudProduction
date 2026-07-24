@@ -1,0 +1,33 @@
+{
+  "summary": "Smoke-tested login + 4 requested routes on branch conflict_220726_1738. Login works, dashboard + Warm Pipeline + Growth Signals + Growth Amplification pages all compile and render with sidebar/navigation intact. One data issue: Warm Pipeline shows 0 leads instead of the 6 seeded warm leads described in the request.",
+  "tested_scope": ["frontend", "backend", "auth", "integration"],
+  "passed": [
+    "POST /api/auth/login returns 200 with JWT for dcameron@payrewards.com",
+    "Login UI flow redirects authenticated user to /business (Data Sources view) with PayRewards workspace loaded",
+    "/business/referrals renders Warm Pipeline page (heading, stats card, table, agent-actions section) with no runtime errors",
+    "/business/conversations renders Growth Signals page (AI-extracted signals view, filters, transcript section)",
+    "/business/social renders Growth Amplification page (testimonial composer, live previews for LinkedIn/Instagram/X)",
+    "GET /api/warm-leads returns 200 with business_name PayRewards"
+  ],
+  "failed": [
+    {
+      "area": "Warm Pipeline data seeding",
+      "issue": "Review request states 6 seeded warm leads should be visible, but Warm Pipeline shows '0 · Waiting on your first referral' and 'No referrals yet'. Backend GET /api/warm-leads returns {\"business_name\":\"PayRewards\",\"leads\":[]}.",
+      "evidence": "curl /api/warm-leads with valid JWT -> {\"business_name\":\"PayRewards\",\"leads\":[]}; UI screenshot shows empty state",
+      "priority": "HIGH"
+    },
+    {
+      "area": "Console 404s",
+      "issue": "Two 404 network requests observed in browser console during page navigation (likely optional assets/endpoints such as /api/dashboard/stats, /api/growth-signals, /api/social/posts which are not defined in server.py). Not blocking UI render.",
+      "evidence": "Console: 'Failed to load resource: the server responded with a status of 404' x2; server.py grep shows no /dashboard/stats, /growth-signals, /social/posts routes",
+      "priority": "LOW"
+    }
+  ],
+  "action_items": [
+    "Run the seed script / verify DB fixtures so PayRewards has the 6 warm leads referenced in the requirements (currently empty)",
+    "Optional: investigate the two 404 requests during navigation and either add endpoints or remove the frontend calls to keep the console clean"
+  ],
+  "success_rate": {"backend": "75%", "frontend": "100%"},
+  "retest_needed": true,
+  "full_testing_deferred": true
+}
