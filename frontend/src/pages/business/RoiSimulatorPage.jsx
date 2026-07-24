@@ -114,13 +114,13 @@ export default function RoiSimulatorPage() {
         question="How much does Uplaud cut PayRewards' blended CAC?"
         subhead="Plug in your real Meta / Google numbers on the left. Every metric below recomputes live — ready for the board deck."
         northStar={{
-          label: "Blended CAC · with Uplaud",
-          value: fmtMoney(scenarios.up.blendedCac),
-          delta: `-${fmtPct(cacDeltaPct, 1)} vs ${fmtMoney(scenarios.sq.blendedCac)} paid-only`,
+          label: "Blended CAC improvement · with Uplaud",
+          value: `${fmtPct(cacDeltaPct, 1)} lower`,
+          delta: `${fmtMoney(scenarios.sq.blendedCac)} → ${fmtMoney(scenarios.up.blendedCac)}`,
           attribution:
             "Uplaud sourced customers cost a fraction of paid CAC, pulling the blended number down without adding ad spend.",
           stats: [
-            { label: "Customers / mo", value: fmtNum(scenarios.up.customersMo) },
+            { label: "Blended CAC now", value: fmtMoney(scenarios.up.blendedCac) },
             { label: "Uplaud-sourced / mo", value: fmtNum(scenarios.up.uplaudCustomersMo) },
             { label: "CAC savings / yr", value: fmtCompactMoney(scenarios.up.cacSavingsYr) },
           ],
