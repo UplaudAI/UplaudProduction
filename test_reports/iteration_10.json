@@ -1,0 +1,27 @@
+{
+  "summary": "Blog integration E2E smoke test passed on backend and frontend. Public blog list shows 2 seeded posts, single post page renders correctly, admin auth with token P@yRew@rds123 works, and admin create/list/delete draft flow succeeds end-to-end.",
+  "tested_scope": ["backend", "frontend", "auth", "integration"],
+  "passed": [
+    "GET /api/blog?limit=50 -> 200, returns 2 seeded posts (personalized-outreach, compounding-growth-flywheel)",
+    "GET /api/admin/blog without token -> 401 (auth enforced)",
+    "GET /api/admin/blog with X-Admin-Token: P@yRew@rds123 -> 200 with 2 posts",
+    "Frontend /blog renders featured post + 1 secondary card via data-testid selectors",
+    "Clicking featured post navigates to /blog/personalized-outreach and renders full post h1",
+    "Admin /admin/blog login form accepts token, dashboard loads, existing posts listed",
+    "Admin can create a new draft post via POST /api/blog; row appears with 'Draft' badge; DELETE /api/blog/{slug} also works (cleanup succeeded)"
+  ],
+  "failed": [
+    {
+      "area": "backend",
+      "issue": "GET /api/blog/voice-to-campaign returns 404",
+      "evidence": "curl HTTP:404 for that slug. Only expected since seeded slugs are 'personalized-outreach' and 'compounding-growth-flywheel'. Not a bug; the endpoint pattern works (GET /api/blog/{slug}) — the specific slug just isn't seeded. Flag for main agent to confirm intended seed slugs.",
+      "priority": "LOW"
+    }
+  ],
+  "action_items": [
+    "Confirm whether 'voice-to-campaign' slug was supposed to be seeded (main agent mentioned it as an example endpoint). Actual seeded slugs are 'personalized-outreach' and 'compounding-growth-flywheel', which resolve fine."
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "retest_needed": false,
+  "full_testing_deferred": true
+}

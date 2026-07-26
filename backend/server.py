@@ -142,6 +142,33 @@ class EventLogRequest(BaseModel):
     details: str = ""
 
 
+class BlogPostIn(BaseModel):
+    title: str
+    slug: Optional[str] = None
+    excerpt: str
+    content: str
+    cover_image: Optional[str] = None
+    tag: Optional[str] = None
+    author: str = "Uplaud Team"
+    published: bool = True
+
+
+class BlogPostOut(BaseModel):
+    title: str
+    slug: str
+    excerpt: str
+    content: str
+    cover_image: Optional[str] = None
+    tag: Optional[str] = None
+    author: str
+    published: bool
+    created_at: str
+
+
+class BlogListResponse(BaseModel):
+    posts: List[BlogPostOut]
+
+
 # ---------------------------------------------------------------------------
 # Auth helpers
 # ---------------------------------------------------------------------------
@@ -1161,6 +1188,111 @@ async def update_agent_plan_status(lead_id: str, action: str, current=Depends(ge
     return AgentPlanOut(**existing)
 
 
+# ---------------------------------------------------------------------------
+# Routes: blog
+# ---------------------------------------------------------------------------
+def check_admin_token(request: Request):
+    token = request.headers.get("X-Admin-Token", "").strip()
+    expected = os.environ.get("ADMIN_PASSWORD", "P@yRew@rds123").strip()
+    if not token or token != expected:
+        raise HTTPException(status_code=401, detail="Unauthorized admin token")
+    return token
+
+
+@api_router.get("/blog", response_model=BlogListResponse)
+async def list_blog_posts(limit: int = 50):
+    docs = await db.blog_posts.find({"published": True}, {"_id": 0}).sort("created_at", -1).to_list(limit)
+    return BlogListResponse(posts=docs)
+
+
+@api_router.get("/blog/{slug}", response_model=BlogPostOut)
+async def get_blog_post(slug: str):
+    doc = await db.blog_posts.find_one({"slug": slug}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Blog post not found")
+    return BlogPostOut(**doc)
+
+
+@api_router.get("/admin/blog", response_model=BlogListResponse)
+async def admin_list_blog_posts(limit: int = 200, token: str = Depends(check_admin_token)):
+    docs = await db.blog_posts.find({}, {"_id": 0}).sort("created_at", -1).to_list(limit)
+    return BlogListResponse(posts=docs)
+
+
+@api_router.post("/blog", response_model=BlogPostOut)
+async def create_blog_post(body: BlogPostIn, token: str = Depends(check_admin_token)):
+    slug = (body.slug or "").strip().lower()
+    if not slug:
+        slug = re.sub(r"[^\w\s-]", "", body.title.lower())
+        slug = re.sub(r"[-\s]+", "-", slug).strip("-")
+    existing = await db.blog_posts.find_one({"slug": slug})
+    if existing:
+        slug = f"{slug}-{uuid.uuid4().hex[:6]}"
+    doc = {
+        "title": body.title,
+        "slug": slug,
+        "excerpt": body.excerpt,
+        "content": body.content,
+        "cover_image": body.cover_image,
+        "tag": body.tag,
+        "author": body.author or "Uplaud Team",
+        "published": body.published,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.blog_posts.insert_one(doc)
+    doc.pop("_id", None)
+    return BlogPostOut(**doc)
+
+
+@api_router.put("/blog/{slug}", response_model=BlogPostOut)
+async def update_blog_post(slug: str, body: BlogPostIn, token: str = Depends(check_admin_token)):
+    post = await db.blog_posts.find_one({"slug": slug})
+    if not post:
+        raise HTTPException(status_code=404, detail="Blog post not found")
+    new_slug = (body.slug or "").strip().lower()
+    if not new_slug:
+        new_slug = slug
+    elif new_slug != slug:
+        existing = await db.blog_posts.find_one({"slug": new_slug})
+        if existing:
+            raise HTTPException(status_code=400, detail="Slug already in use")
+    update_data = {
+        "title": body.title,
+        "slug": new_slug,
+        "excerpt": body.excerpt,
+        "content": body.content,
+        "cover_image": body.cover_image,
+        "tag": body.tag,
+        "author": body.author,
+        "published": body.published,
+    }
+    await db.blog_posts.update_one({"slug": slug}, {"$set": update_data})
+    updated = await db.blog_posts.find_one({"slug": new_slug}, {"_id": 0})
+    return BlogPostOut(**updated)
+
+
+@api_router.delete("/blog/{slug}")
+async def delete_blog_post(slug: str, token: str = Depends(check_admin_token)):
+    res = await db.blog_posts.delete_one({"slug": slug})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Blog post not found")
+    return {"status": "ok"}
+
+
+@api_router.post("/admin/upload")
+async def admin_upload(file: UploadFile = File(...), token: str = Depends(check_admin_token)):
+    uploads_dir = "/app/frontend/public/uploads"
+    os.makedirs(uploads_dir, exist_ok=True)
+    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+    filename = f"{uuid.uuid4().hex[:12]}.{ext}" if ext else uuid.uuid4().hex[:12]
+    filepath = os.path.join(uploads_dir, filename)
+    content = await file.read()
+    with open(filepath, "wb") as f:
+        f.write(content)
+    url = f"/uploads/{filename}"
+    return {"url": url}
+
+
 app.include_router(api_router)
 
 app.add_middleware(
@@ -1177,6 +1309,70 @@ async def startup():
     await db.users.create_index("email", unique=True)
     await db.sources.create_index("owner")
     await db.agent_plans.create_index("lead_id", unique=True)
+    await db.blog_posts.create_index("slug", unique=True)
+
+    # Seed initial blog posts if empty
+    if await db.blog_posts.count_documents({}) == 0:
+        initial_posts = [
+            {
+                "title": "The Compounding Growth Flywheel",
+                "slug": "compounding-growth-flywheel",
+                "excerpt": "Discover how capturing and leveraging customer voice creates an organic, high-converting acquisition loop for B2B SaaS.",
+                "content": """# The Compounding Growth Flywheel
+
+In modern B2B SaaS, old-school advertising playbook yields diminishing returns. Customers are increasingly blind to display banners, cold outbound emails, and sponsored search ads. What *actually* gets them to convert? **Peer validation.**
+
+## Step 1: Capture Customer Voice At High-Signal Moments
+The growth flywheel starts when a customer expresses authentic, high-signal delight. This happens during:
+- A successful onboarding completion.
+- A quarterly business review showing positive ROI.
+- An organic product demo where the user says, *"Wow, this saves me hours."*
+
+## Step 2: Convert Delighted Voices Into Reusable Growth Campaigns
+Once captured, these testimonials shouldn't just sit in a drawer. You can convert them into:
+1. **Verbatim customer proof cards** for landing pages.
+2. **Personalized outbound emails** to warm referrals.
+3. **Scroll-stopping social posts** on LinkedIn and X.
+
+By automating these processes, Uplaud turns customer satisfaction directly into new, warm pipeline.""",
+                "cover_image": "https://images.unsplash.com/photo-1551434678-e076c223a692?auto=format&fit=crop&w=1200&q=80",
+                "tag": "Growth",
+                "author": "Uplaud Team",
+                "published": True,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            },
+            {
+                "title": "The Science of Warm Outbound Outreach",
+                "slug": "personalized-outreach",
+                "excerpt": "Why generic cold emails fail and how grounding your outbound in real, mutual peer reviews boosts demo bookings by 400%.",
+                "content": """# The Science of Warm Outbound Outreach
+
+We have all received them: the dry, robotic outbound email pitch that promises "unprecedented synergy" and demands 15 minutes of your time. If you are like most decision-makers, you archive them instantly.
+
+## The Problem: The Trust Deficit
+Cold emails fail because there is zero trust. You don't know the sender, you don't know their brand, and you have no reason to believe their claims.
+
+## The Solution: Referred Peer Social Proof
+When outreach is grounded in the real, verbatim experience of a mutual contact, everything changes. For instance:
+
+> *"Hi Sarah, your contact Deepthi Rao recently saw PayRewards in action and specifically thought it would be transformational for your vendor rebates workflow..."*
+
+This approach converts cold outbound into **warm, trusted outreach**. It immediately:
+- Establishes credibility through a mutual relationship.
+- Focuses on a real workflow pain-point.
+- Backs up the value proposition with verified testimonials.
+
+By deploying personalized Referral Agents, B2B businesses can book more high-quality demos without ever sounding "salesy." """,
+                "cover_image": "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80",
+                "tag": "Outreach",
+                "author": "Uplaud Team",
+                "published": True,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+        ]
+        await db.blog_posts.insert_many(initial_posts)
+        logger.info("Seeded initial blog posts")
+
     admin_email = os.environ["ADMIN_EMAIL"].lower().strip()
     admin_password = os.environ["ADMIN_PASSWORD"]
     existing = await db.users.find_one({"email": admin_email})
