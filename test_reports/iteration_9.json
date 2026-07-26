@@ -1,0 +1,19 @@
+{
+  "summary": "E2E verified: Referral Agent plans are persisted to Airtable's Circles table and served from Airtable on subsequent GET /api/warm-leads calls without re-running the agent. UI (Warm Pipeline) renders cached plans, and status updates propagate to Airtable.",
+  "tested_scope": ["backend", "frontend", "integration", "auth"],
+  "passed": [
+    "POST /api/auth/login with dcameron@payrewards.com succeeds and returns JWT.",
+    "GET /api/warm-leads returns 8 leads for PayRewards, all with agent_plan populated.",
+    "POST /api/warm-leads/{id}/agent-run?force=true (rec0iOgY8bpfaM8Tk) returns 200 with all fields (research_headline, research_summary, email_subject/body, linkedin_message, next_action, generated_at).",
+    "Direct Airtable GET on Circles/rec0iOgY8bpfaM8Tk confirms all 9 new columns populated (Research_Headline, Research_Summary, Email_Subject, Email_Body, Linkedin_Message, Next_Action_Label, Next_Action_Cta, Agent_Plan_Status=pending, Agent_Plan_Generated_At=2026-07-26T23:46:57Z).",
+    "Subsequent GET /api/warm-leads returned the same plan with matching generated_at in ~0.9s (vs 7.5s for the agent-run) proving cached read from Airtable, no LLM re-invocation.",
+    "POST /api/warm-leads/{id}/agent-plan/approve updates Airtable Agent_Plan_Status to 'approved' and returns updated plan.",
+    "Frontend /business login + navigation to Warm Pipeline works; header shows '8 researched by the Referral Agent · 1 approved' matching backend state; lead rows show cached headlines (e.g., Marcelo Lebre, Vinay Chandrasekaran); no console/UI errors."
+  ],
+  "failed": [],
+  "action_items": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "retest_needed": false,
+  "full_testing_deferred": true,
+  "notes": "Only rec0iOgY8bpfaM8Tk was force-re-run and independently verified in Airtable. Other 7 leads had Mongo-cached plans surfaced through the fallback path; they will be persisted to Airtable next time their agent-run is triggered. Consider a one-time backfill if immediate persistence for all existing leads is desired."
+}

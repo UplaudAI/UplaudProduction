@@ -313,6 +313,22 @@ async def create_circle_record(
 
 
 def _circle_to_lead_dict(f: dict, uf: dict, record_id: str, created_time: str = "") -> dict:
+    agent_plan = None
+    if f.get("Email_Body") or f.get("Linkedin_Message"):
+        agent_plan = {
+            "lead_id": record_id,
+            "status": f.get("Agent_Plan_Status") or "pending",
+            "research_headline": f.get("Research_Headline") or "",
+            "research_summary": f.get("Research_Summary", "").split("\n") if f.get("Research_Summary") else [],
+            "email_subject": f.get("Email_Subject") or "",
+            "email_body": f.get("Email_Body") or "",
+            "linkedin_message": f.get("Linkedin_Message") or "",
+            "next_action": {
+                "label": f.get("Next_Action_Label") or "Send a personalized intro",
+                "cta": f.get("Next_Action_Cta") or "Send Email",
+            },
+            "generated_at": f.get("Agent_Plan_Generated_At") or "",
+        }
     return {
         "id": record_id,
         "created_at": created_time or "",
@@ -340,6 +356,7 @@ def _circle_to_lead_dict(f: dict, uf: dict, record_id: str, created_time: str = 
         "job_start_date": uf.get("Job_Start_Date", ""),
         "twitter_url": uf.get("Twitter_URL", ""),
         "github_url": uf.get("Github_URL", ""),
+        "agent_plan": agent_plan,
     }
 
 
@@ -485,3 +502,32 @@ async def log_event(event: str, page: str = "", share_id: str = "", details: str
         await _create(TABLE_EVENT_LOG, fields)
     except Exception as e:
         logger.warning("Airtable event log failed: %s", e)
+
+
+async def update_circle_agent_plan(lead_id: str, plan: dict) -> None:
+    """Save the agent's research findings and outreach drafts directly into the Airtable Circles record."""
+    fields = {
+        "Research_Headline": plan.get("research_headline") or "",
+        "Research_Summary": "\n".join(plan.get("research_summary") or []),
+        "Email_Subject": plan.get("email_subject") or "",
+        "Email_Body": plan.get("email_body") or "",
+        "Linkedin_Message": plan.get("linkedin_message") or "",
+        "Next_Action_Label": plan.get("next_action", {}).get("label") or "",
+        "Next_Action_Cta": plan.get("next_action", {}).get("cta") or "",
+        "Agent_Plan_Status": plan.get("status") or "pending",
+        "Agent_Plan_Generated_At": plan.get("generated_at") or "",
+    }
+    try:
+        await _update(TABLE_CIRCLES, lead_id, fields)
+        logger.info("Saved agent plan to Airtable for lead %s", lead_id)
+    except Exception as e:
+        logger.warning("Failed to save agent plan to Airtable for lead %s: %s", lead_id, e)
+
+
+async def update_circle_agent_plan_status(lead_id: str, status: str) -> None:
+    """Update only the agent plan status (approved/skipped) in the Airtable Circles record."""
+    try:
+        await _update(TABLE_CIRCLES, lead_id, {"Agent_Plan_Status": status})
+        logger.info("Updated agent plan status to %s in Airtable for lead %s", status, lead_id)
+    except Exception as e:
+        logger.warning("Failed to update agent plan status in Airtable for lead %s: %s", lead_id, e)

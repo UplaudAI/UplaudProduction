@@ -1102,7 +1102,8 @@ async def get_warm_leads(current=Depends(get_current_user)):
     plans = await db.agent_plans.find({"lead_id": {"$in": lead_ids}}, {"_id": 0}).to_list(len(lead_ids) or 1)
     plan_map = {p["lead_id"]: p for p in plans}
     for l in leads:
-        l["agent_plan"] = plan_map.get(l["id"])
+        if not l.get("agent_plan"):
+            l["agent_plan"] = plan_map.get(l["id"])
     return {"business_name": business_name, "leads": leads}
 
 
@@ -1142,6 +1143,7 @@ async def run_referral_agent(lead_id: str, force: bool = False, current=Depends(
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.agent_plans.update_one({"lead_id": lead_id}, {"$set": plan}, upsert=True)
+    await airtable_client.update_circle_agent_plan(lead_id, plan)
     return AgentPlanOut(**plan)
 
 
@@ -1154,6 +1156,7 @@ async def update_agent_plan_status(lead_id: str, action: str, current=Depends(ge
         raise HTTPException(status_code=404, detail="No agent plan found for this lead yet.")
     new_status = "approved" if action == "approve" else "skipped"
     await db.agent_plans.update_one({"lead_id": lead_id}, {"$set": {"status": new_status}})
+    await airtable_client.update_circle_agent_plan_status(lead_id, new_status)
     existing["status"] = new_status
     return AgentPlanOut(**existing)
 
