@@ -221,7 +221,22 @@ def create_access_token(user_id: str, email: str) -> str:
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
+# Token cache: maps token -> (expiry_timestamp, user_data_dict)
+TOKEN_CACHE = {}
+CACHE_TTL_SECONDS = 300 # Cache for 5 minutes
+
 async def verify_supabase_token(token: str) -> Optional[dict]:
+    import time
+    now = time.time()
+    
+    # Check cache first to avoid rate limiting and connection overhead
+    if token in TOKEN_CACHE:
+        expiry, cached_user = TOKEN_CACHE[token]
+        if now < expiry:
+            return cached_user
+        else:
+            del TOKEN_CACHE[token]
+
     supabase_url = os.environ.get("SUPABASE_URL", "https://nqvkhcrzxdonmmtjzqup.supabase.co")
     supabase_url = supabase_url.rstrip("/")
     api_url = f"{supabase_url}/auth/v1/user"
@@ -236,7 +251,10 @@ async def verify_supabase_token(token: str) -> Optional[dict]:
         async with httpx.AsyncClient() as client:
             resp = await client.get(api_url, headers=headers, timeout=10.0)
             if resp.status_code == 200:
-                return resp.json()
+                user_data = resp.json()
+                # Cache successful token verification to prevent Supabase 429 / 403 blocks
+                TOKEN_CACHE[token] = (now + CACHE_TTL_SECONDS, user_data)
+                return user_data
     except Exception as e:
         logger.error(f"Supabase token verification request failed: {e}")
     return None
@@ -794,7 +812,7 @@ async def get_source(source_id: str, current=Depends(get_current_user)):
 
 
 @api_router.post("/sources/{source_id}/analyze", response_model=SourceOut)
-async def analyze_source(source_id: str, regenerate: bool = False, current=Depends(get_current_user)):
+async def analyze_source(source_id: str, request: Request, regenerate: bool = False, current=Depends(get_current_user)):
     doc = await db.sources.find_one({"id": source_id, "owner": current["id"]})
     if not doc:
         raise HTTPException(status_code=404, detail="Source not found")
@@ -842,6 +860,22 @@ async def analyze_source(source_id: str, regenerate: bool = False, current=Depen
     await airtable_client.upsert_growth_signal(
         source_id, business_name, insights.model_dump(), doc.get("testimonial_status", "draft")
     )
+    
+    # Sync the testimonial to Airtable's Uplaud table immediately upon transcript analysis
+    try:
+        speaker_name = insights.speaker_name or doc.get("client_name") or "Customer"
+        reviewer_id = await airtable_client.find_or_create_user(name=speaker_name, email=doc.get("client_email") or None)
+        share_link = f"{str(request.base_url).rstrip('/')}/t/{doc['share_id']}"
+        await airtable_client.create_uplaud_record(
+            business_name=business_name,
+            testimonial=testimonial,
+            reviewer_record_id=reviewer_id,
+            share_link=share_link,
+            date_added=datetime.now(timezone.utc).date().isoformat()
+        )
+    except Exception as ae:
+        logger.warning(f"Failed to sync testimonial to Airtable Uplaud table on analysis: {ae}")
+        
     return source_to_out(doc)
 
 
