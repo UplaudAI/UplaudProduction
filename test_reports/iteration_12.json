@@ -1,0 +1,35 @@
+{
+  "summary": "Tested Blog List, Single Post + Lead Magnet, and Admin /admin/blog flows end-to-end against Airtable-backed backend. Public blog and lead magnet work well; Admin blog list is broken due to a pageSize>100 issue in Airtable client.",
+  "tested_scope": ["frontend", "backend", "integration"],
+  "passed": [
+    "GET /api/blog returns 2 posts (personalized-outreach, compounding-growth-flywheel)",
+    "GET /api/blog/{slug} returns full post content",
+    "BlogListPage renders both posts with cover images and excerpts",
+    "BlogPostPage renders single post and Lead Magnet widget ('Convert Post to Lead Magnet') at bottom",
+    "POST /api/blog/lead-magnet with {email, slug} returns 200 and UI shows 'Playbook sent! Check your inbox shortly.' + toast 'PDF request received!'",
+    "Admin login at /admin/blog with token 'P@yRew@rds123' succeeds (Signed in toast)",
+    "GET /api/admin/blog?limit=10 (with X-Admin-Token) returns posts correctly"
+  ],
+  "failed": [
+    {
+      "area": "Admin blog listing (frontend + backend)",
+      "issue": "AdminBlogPage shows 'No posts yet.' after successful login. Root cause: frontend calls GET /api/admin/blog?limit=200 but Airtable's pageSize parameter is capped at 100. The list_blog_posts_airtable() helper in backend/airtable_client.py passes pageSize=limit directly, so Airtable rejects the request, the try/except silently returns [], and admin UI is unusable for content management.",
+      "evidence": "curl /api/admin/blog?limit=100 -> 2 posts; curl /api/admin/blog?limit=101 -> {\"posts\":[]}; curl /api/admin/blog?limit=200 -> {\"posts\":[]}. UI screenshot shows 'All posts / No posts yet.' after login. AdminBlogPage.jsx line 112 uses `?limit=200`.",
+      "priority": "HIGH"
+    },
+    {
+      "area": "BlogListPage React warning",
+      "issue": "Console warning: 'Each child in a list should have a unique key prop' in BlogListPage render. Not user-visible but should be fixed.",
+      "evidence": "Browser console: 'Check the render method of BlogListPage.'",
+      "priority": "LOW"
+    }
+  ],
+  "action_items": [
+    "Fix Airtable pageSize cap: in backend/airtable_client.py list_blog_posts_airtable, clamp pageSize to min(limit, 100) and, if a higher limit is needed, iterate with Airtable's `offset` pagination until `limit` records are collected. Alternatively, change AdminBlogPage.jsx to request `?limit=100` (short-term).",
+    "Add a unique `key` prop on the mapped list of posts inside BlogListPage.jsx.",
+    "Re-test Admin flow after fix: list should show both seeded posts, and 'New post' + create draft should work end-to-end."
+  ],
+  "success_rate": {"backend": "80%", "frontend": "75%"},
+  "retest_needed": true,
+  "full_testing_deferred": true
+}

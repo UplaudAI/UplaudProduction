@@ -531,3 +531,115 @@ async def update_circle_agent_plan_status(lead_id: str, status: str) -> None:
         logger.info("Updated agent plan status to %s in Airtable for lead %s", status, lead_id)
     except Exception as e:
         logger.warning("Failed to update agent plan status in Airtable for lead %s: %s", lead_id, e)
+
+
+TABLE_BLOG_POSTS = "Blog_Posts"
+
+
+def _record_to_blog_post(rec: dict) -> dict:
+    f = rec.get("fields", {})
+    return {
+        "title": f.get("Title") or "",
+        "slug": f.get("Slug") or "",
+        "excerpt": f.get("Excerpt") or "",
+        "content": f.get("Content") or "",
+        "cover_image": f.get("Cover_Image") or None,
+        "tag": f.get("Tag") or None,
+        "author": f.get("Author") or "Uplaud Team",
+        "published": bool(f.get("Published")),
+        "created_at": f.get("Created_At") or rec.get("createdTime", "")
+    }
+
+
+async def list_blog_posts_airtable(limit: int = 50, published_only: bool = True) -> list:
+    """Fetch blog posts from Airtable, optionally filtering by Published=1, sorted by Created_At/createdTime descending."""
+    params = {"pageSize": limit}
+    if published_only:
+        params["filterByFormula"] = "{Published}=1"
+    try:
+        data = await _get(TABLE_BLOG_POSTS, params)
+        records = data.get("records", [])
+        posts = [_record_to_blog_post(r) for r in records]
+        posts.sort(key=lambda p: p["created_at"], reverse=True)
+        return posts
+    except Exception as e:
+        logger.warning("Airtable list_blog_posts failed: %s", e)
+        return []
+
+
+async def get_blog_post_airtable(slug: str) -> Optional[dict]:
+    """Fetch a single blog post by Slug from Airtable."""
+    try:
+        formula = f'LOWER({{Slug}})="{_escape(slug.lower())}"'
+        data = await _get(TABLE_BLOG_POSTS, {"filterByFormula": formula, "maxRecords": 1})
+        records = data.get("records", [])
+        if records:
+            return _record_to_blog_post(records[0])
+    except Exception as e:
+        logger.warning("Airtable get_blog_post failed for slug %s: %s", slug, e)
+    return None
+
+
+async def create_blog_post_airtable(post: dict) -> Optional[dict]:
+    """Create a new blog post in Airtable and return the created post."""
+    fields = {
+        "Title": post.get("title") or "",
+        "Slug": post.get("slug") or "",
+        "Excerpt": post.get("excerpt") or "",
+        "Content": post.get("content") or "",
+        "Cover_Image": post.get("cover_image") or "",
+        "Tag": post.get("tag") or "",
+        "Author": post.get("author") or "Uplaud Team",
+        "Published": bool(post.get("published")),
+        "Created_At": post.get("created_at") or datetime.now(timezone.utc).isoformat()
+    }
+    try:
+        rec = await _create(TABLE_BLOG_POSTS, fields)
+        return _record_to_blog_post(rec) if rec else None
+    except Exception as e:
+        logger.warning("Airtable create_blog_post failed: %s", e)
+        return None
+
+
+async def update_blog_post_airtable(slug: str, post: dict) -> Optional[dict]:
+    """Update an existing blog post by its old Slug in Airtable and return the updated post."""
+    try:
+        formula = f'LOWER({{Slug}})="{_escape(slug.lower())}"'
+        data = await _get(TABLE_BLOG_POSTS, {"filterByFormula": formula, "maxRecords": 1})
+        records = data.get("records", [])
+        if not records:
+            return None
+        record_id = records[0]["id"]
+        fields = {
+            "Title": post.get("title") or "",
+            "Slug": post.get("slug") or "",
+            "Excerpt": post.get("excerpt") or "",
+            "Content": post.get("content") or "",
+            "Cover_Image": post.get("cover_image") or "",
+            "Tag": post.get("tag") or "",
+            "Author": post.get("author") or "Uplaud Team",
+            "Published": bool(post.get("published"))
+        }
+        rec = await _update(TABLE_BLOG_POSTS, record_id, fields)
+        return _record_to_blog_post(rec) if rec else None
+    except Exception as e:
+        logger.warning("Airtable update_blog_post failed for slug %s: %s", slug, e)
+        return None
+
+
+async def delete_blog_post_airtable(slug: str) -> bool:
+    """Delete a blog post by Slug in Airtable."""
+    try:
+        formula = f'LOWER({{Slug}})="{_escape(slug.lower())}"'
+        data = await _get(TABLE_BLOG_POSTS, {"filterByFormula": formula, "maxRecords": 1})
+        records = data.get("records", [])
+        if not records:
+            return False
+        record_id = records[0]["id"]
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.delete(f"{AIRTABLE_API_URL}/{TABLE_BLOG_POSTS}/{record_id}", headers=_headers())
+            r.raise_for_status()
+            return True
+    except Exception as e:
+        logger.warning("Airtable delete_blog_post failed for slug %s: %s", slug, e)
+        return False
