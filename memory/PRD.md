@@ -162,3 +162,17 @@ available code so the user can see how much progress has been made.
   behavior (masked by de-dupe in `list_uplaud_by_business` on read); left as-is, not part of the
   reported bugs. Also noted minor perf items from testing_agent (rapid `/api/sources` refetches,
   duplicate React keys on conversation cards, Airtable call volume) — non-blocking, deferred.
+
+## What's been implemented (2026-07-27, cont'd — Warm Pipeline referral bug)
+- **Referrals submitted via the public testimonial page weren't appearing in Warm Pipeline**
+  even though they existed correctly in Airtable's `Circles` table (`Business_Name="Scalis"`).
+  Root cause: a stale bad `Business` table row (`Business Name="Www"`, `Business Domain=
+  "www.scalis.ai"`, left over from before the site had www-prefix stripping) was shadowing the
+  correct `Scalis`/`scalis.ai` row in `get_business_name_by_email_domain()`'s loose
+  `biz_domain.endswith(domain)` substring check — so the Warm Pipeline read path resolved the
+  logged-in user's business to "Www" while referral writes (sourced directly from the Growth
+  Signal record's `Business_Name` field) correctly used "Scalis". Deleted the bad Airtable row
+  and hardened `get_business_name_by_email_domain()` in `airtable_client.py` to normalize
+  "www." on both sides and always prefer an exact domain match over a subdomain-style match.
+  Verified via testing_agent end-to-end (upload → analyze → approve → refer a friend → confirmed
+  the referral now appears in Warm Pipeline / `GET /api/warm-leads`).
