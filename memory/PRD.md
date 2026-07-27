@@ -135,3 +135,30 @@ available code so the user can see how much progress has been made.
   transcript end-to-end, confirmed it appears in the Growth Signals page (`/business/conversations`)
   conversation list with full extracted signals + drafted testimonial, no console/network errors.
 - Added `beautifulsoup4` to backend/requirements.txt for HTML parsing.
+
+## What's been implemented (2026-07-27, cont'd — 2 more bug fixes)
+- **Public testimonial share links ("/t/{share_id}") always showed "invalid or expired"**: root
+  cause — `public_get_testimonial`/`public_update_testimonial`/`public_approve_testimonial`/
+  `send_approval`/`submit_referrals` in server.py were still querying MongoDB `db.sources`/
+  `db.users`, which have been empty since the earlier Sources rewrite moved everything to
+  in-memory `TEMP_SOURCES` + Airtable `Growth_Signals` (no data ever migrated). Rewrote all five
+  endpoints to resolve the source via a new `find_public_source()` helper (checks `TEMP_SOURCES`
+  first, then Airtable `Growth_Signals` by `Share_Id`), added `get_growth_signal_by_share_id()` /
+  `update_growth_signal_by_source_id()` to `airtable_client.py`, and added `Approved_At` /
+  `Approval_Requested_At` fields to the `Growth_Signals` Airtable table. Verified via
+  testing_agent: the exact previously-broken link `/t/46651f8c7376` now loads correctly, plus
+  edit/approve/refer-a-friend all work end-to-end on a freshly uploaded transcript.
+- **Sources page (`/business/import`, first landing page for new users) redesigned**: added a
+  personalized dark "Welcome to Uplaud" hero (`WelcomeBanner`) shown only in the zero-source
+  state — greets the user by first name/company and gives a 3-step overview (capture voice →
+  extract signals & testimonials → turn wins into referrals/social), with an upload CTA; the
+  existing metrics-driven `PageHero` now only renders once sources exist. Decoupled the
+  "Personalize workspace" card's visibility from `sources.length` — it now shows/hides based on
+  whether the business profile actually has `brand_voice`/`logo_url` set (fetched via
+  `GET /api/business/profile`), so it correctly disappears once a workspace has been
+  personalized regardless of how many sources exist. Verified via testing_agent.
+- P2 backlog: `analyze_source` already creates an Uplaud-table record on analysis, and
+  `public_approve_testimonial` creates another on approval — pre-existing duplicate-write
+  behavior (masked by de-dupe in `list_uplaud_by_business` on read); left as-is, not part of the
+  reported bugs. Also noted minor perf items from testing_agent (rapid `/api/sources` refetches,
+  duplicate React keys on conversation cards, Airtable call volume) — non-blocking, deferred.
