@@ -453,7 +453,7 @@ async def list_uplaud_by_business(business_name: str) -> list:
 TABLE_GROWTH_SIGNALS = "Growth_Signals"
 
 
-async def upsert_growth_signal(source_id: str, business_name: str, insights: dict, testimonial_status: str) -> None:
+async def upsert_growth_signal(source_id: str, business_name: str, insights: dict, testimonial_status: str, testimonial_draft: str = "", share_id: str = "") -> None:
     """Persist AI-extracted growth signals for a conversation to Airtable (create or update by Source_Id)."""
     if not _enabled():
         return
@@ -474,6 +474,8 @@ async def upsert_growth_signal(source_id: str, business_name: str, insights: dic
         "Customer_Language": "\n".join(insights.get("customer_language", [])),
         "Product_Feedback": "\n".join(insights.get("product_feedback", [])),
         "FAQs": "\n".join(insights.get("faqs", [])),
+        "Testimonial_Draft": testimonial_draft,
+        "Share_Id": share_id,
         "Testimonial_Status": testimonial_status,
         "Created_At": datetime.now(timezone.utc).isoformat(),
     }
@@ -487,6 +489,20 @@ async def upsert_growth_signal(source_id: str, business_name: str, insights: dic
             await _create(TABLE_GROWTH_SIGNALS, fields)
     except Exception as e:
         logger.warning("Airtable growth-signal upsert failed: %s", e)
+
+
+
+async def list_growth_signals_by_business(business_name: str) -> list:
+    """Return Growth_Signals records for the given business from Airtable."""
+    if not business_name:
+        return []
+    try:
+        formula = f'{{Business_Name}}="{_escape(business_name)}"'
+        data = await _get(TABLE_GROWTH_SIGNALS, {"filterByFormula": formula, "pageSize": 100})
+        return data.get("records", [])
+    except Exception as e:
+        logger.warning("Airtable growth signals list failed: %s", e)
+        return []
 
 
 async def log_event(event: str, page: str = "", share_id: str = "", details: str = "", user_email: str = "") -> None:

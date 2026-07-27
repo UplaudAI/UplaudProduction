@@ -143,27 +143,27 @@ export default function ImportReviewsPage() {
   const dynamicSmartAction = {
     eyebrow: "Next best action",
     headline: hasData 
-      ? "Connect Fathom to close the 12% of demo calls we're missing"
+      ? "Connect your CRM, meeting provider, or customer testimonial sources"
       : "Upload your first sales/demo transcript to begin",
     reasoning: hasData ? [
-      { label: "Est. impact", value: "+42 conversations/mo" },
-      { label: "Visibility boost", value: "+$68k of pipeline visibility" },
+      { label: "Sync integration", value: "Keep pipeline, contacts, and deal attribution fully updated" },
+      { label: "Growth loops", value: "Continuously extract customer voice into amplification assets" },
     ] : [
       { label: "Process", value: "Drag & drop any Zoom/Gong/Google Meet transcript" },
       { label: "Expected outcome", value: "Auto-extract motivations and draft testimonials" },
     ],
     outcome: hasData 
-      ? "Integrate Fathom to automatically stream and sync all your meeting recordings and transcripts into your Growth Engine."
+      ? "Connect your CRM (HubSpot/Salesforce) or meeting providers (Zoom/Gong/Fathom) to automatically sync reviews and signals."
       : "Our AI model will parse your text or PDF file, extract structured growth insights, and draft ready-to-publish customer testimonials.",
-    cta: hasData ? "Connect Fathom" : "Upload transcript",
+    cta: hasData ? "Connect integration" : "Upload transcript",
   };
 
   const handleHeroAction = () => {
     if (!hasData) {
       pickFile();
     } else {
-      toast.info("Fathom integration is simulated in the preview environment.", {
-        description: "In production, this securely connects your Fathom account."
+      toast.info("Integrations are simulated in the preview environment.", {
+        description: "In production, this securely connects your CRM or meeting provider."
       });
     }
   };
@@ -373,55 +373,57 @@ export default function ImportReviewsPage() {
         {/* Right — sources (dual streams) */}
         <div className="lg:col-span-2 space-y-5">
           {/* Conversation sources */}
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Mic className="w-3.5 h-3.5 text-[#6d46c6]" strokeWidth={1.75} />
-              <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#4b5563]">
-                Conversations
+          {false && (
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <Mic className="w-3.5 h-3.5 text-[#6d46c6]" strokeWidth={1.75} />
+                <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#4b5563]">
+                  Conversations
+                </div>
+              </div>
+              <div className="space-y-2">
+                {CONVERSATION_SOURCES.slice(0, 4).map((s) => (
+                  <div
+                    key={s.id}
+                    data-testid={`source-card-${s.id}`}
+                    className="rounded-xl border border-[#eeeaf6] bg-white p-3 hover:border-[#d9d1ee] transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-[12px] font-semibold"
+                        style={{ backgroundColor: s.color }}
+                      >
+                        {s.label[0]}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[12.5px] font-semibold text-[#111827] leading-tight">
+                          {s.label}
+                        </div>
+                        <div className="text-[10.5px] font-mono text-[#9ca3af] mt-0.5">
+                          {s.connected
+                            ? `${s.syncs} synced`
+                            : "Not connected"}
+                        </div>
+                      </div>
+                      {s.connected ? (
+                        <span className="text-[10px] font-mono text-[#0f9b7c] bg-[#ecfdf7] border border-[#c8f0e4] rounded-full px-2 py-0.5">
+                          live
+                        </span>
+                      ) : (
+                        <button
+                          data-testid={`source-connect-${s.id}`}
+                          className="text-[11px] font-medium text-[#6d46c6] hover:underline flex items-center gap-1"
+                        >
+                          <Plus className="w-3 h-3" strokeWidth={2} />
+                          Connect
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-            <div className="space-y-2">
-              {CONVERSATION_SOURCES.slice(0, 4).map((s) => (
-                <div
-                  key={s.id}
-                  data-testid={`source-card-${s.id}`}
-                  className="rounded-xl border border-[#eeeaf6] bg-white p-3 hover:border-[#d9d1ee] transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-[12px] font-semibold"
-                      style={{ backgroundColor: s.color }}
-                    >
-                      {s.label[0]}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[12.5px] font-semibold text-[#111827] leading-tight">
-                        {s.label}
-                      </div>
-                      <div className="text-[10.5px] font-mono text-[#9ca3af] mt-0.5">
-                        {s.connected
-                          ? `${s.syncs} synced`
-                          : "Not connected"}
-                      </div>
-                    </div>
-                    {s.connected ? (
-                      <span className="text-[10px] font-mono text-[#0f9b7c] bg-[#ecfdf7] border border-[#c8f0e4] rounded-full px-2 py-0.5">
-                        live
-                      </span>
-                    ) : (
-                      <button
-                        data-testid={`source-connect-${s.id}`}
-                        className="text-[11px] font-medium text-[#6d46c6] hover:underline flex items-center gap-1"
-                      >
-                        <Plus className="w-3 h-3" strokeWidth={2} />
-                        Connect
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          )}
 
           {/* Review sources */}
           <div>
