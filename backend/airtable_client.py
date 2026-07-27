@@ -170,23 +170,39 @@ def parse_contact(contact: str) -> dict:
     return {"linkedin": c} if c else {}
 
 
+def _normalize_domain(raw: str) -> str:
+    d = (raw or "").lower().strip()
+    d = re.sub(r"^https?://", "", d).rstrip("/")
+    if d.startswith("www."):
+        d = d[4:]
+    return d
+
+
 async def get_business_name_by_email_domain(email: str) -> Optional[str]:
-    """Resolve Business_Name from the Business table's Business Domain field for the given email's domain."""
+    """Resolve Business_Name from the Business table's Business Domain field for the given email's
+    domain. Exact domain matches (after normalizing away scheme/www) always win over a looser
+    subdomain match, so an unrelated business record can never shadow the real one."""
     if not email or "@" not in email:
         return None
-    domain = email.split("@", 1)[1].strip().lower()
+    domain = _normalize_domain(email.split("@", 1)[1])
     try:
         data = await _get(TABLE_BUSINESS, {"pageSize": 100})
     except Exception as e:
         logger.warning("Airtable business lookup failed: %s", e)
         return None
+    exact_match, subdomain_match = None, None
     for rec in data.get("records", []):
         fields = rec.get("fields", {})
-        biz_domain = (fields.get("Business Domain") or "").lower()
-        biz_domain = re.sub(r"^https?://", "", biz_domain).rstrip("/")
-        if biz_domain and (biz_domain == domain or domain.endswith(biz_domain) or biz_domain.endswith(domain)):
-            return fields.get("Business Name")
-    return None
+        biz_domain = _normalize_domain(fields.get("Business Domain") or "")
+        if not biz_domain:
+            continue
+        if biz_domain == domain and exact_match is None:
+            exact_match = fields.get("Business Name")
+        elif subdomain_match is None and (
+            domain.endswith("." + biz_domain) or biz_domain.endswith("." + domain)
+        ):
+            subdomain_match = fields.get("Business Name")
+    return exact_match or subdomain_match
 
 
 async def find_or_create_user(

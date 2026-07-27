@@ -622,9 +622,8 @@ function WelcomeBanner({ firstName, companyName, onUpload }) {
           Hey {firstName} — let&apos;s turn {companyName}&apos;s customer voice into growth.
         </h1>
         <p className="mt-4 text-[14px] text-white/70 max-w-[600px] leading-relaxed">
-          Uplaud listens to every call, review and conversation your customers have with{" "}
-          {companyName}, then automatically extracts growth signals, drafts testimonials they
-          approve, and turns those wins into referral campaigns and on-brand social content — a
+          Uplaud converts every touchpoint that you have with your customers or leads at{" "}
+          {companyName} into a growth engine. Just upload your transcript, and watch as Uplaud automatically extracts growth signals, drafts testimonials , and turns those wins into referral campaigns and on-brand social content — a
           growth engine that runs itself.
         </p>
         <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
