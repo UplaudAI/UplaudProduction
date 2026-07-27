@@ -1,0 +1,22 @@
+{
+  "summary": "Verified Airtable-backed blog flow end-to-end: public blog list, single post + Lead Magnet widget, lead magnet submission, and admin auth + list + draft creation. All 4 acceptance criteria pass. Backend endpoints healthy, frontend renders correctly, integration between frontend/backend/Airtable/MongoDB works.",
+  "tested_scope": ["frontend", "backend", "auth", "integration"],
+  "passed": [
+    "GET /api/blog returns 2 posts from Airtable (personalized-outreach, compounding-growth-flywheel)",
+    "GET /api/blog/{slug} returns 200 for existing slug",
+    "POST /api/blog/lead-magnet with {email, slug} returns {status: 'ok'} (stores in MongoDB lead_magnet_signups + Airtable)",
+    "GET /api/admin/blog with X-Admin-Token 'P@yRew@rds123' returns 200 with 2 posts",
+    "GET /api/admin/blog with wrong token returns 401",
+    "Frontend /blog page renders featured post + card (verified via UI screenshot)",
+    "Frontend /blog/personalized-outreach renders lead-magnet-widget",
+    "Lead magnet form submit shows success message 'Playbook sent! Check your inbox shortly.'",
+    "Admin login at /admin/blog with P@yRew@rds123 authenticates and lists both existing posts",
+    "Admin can create a new DRAFT post via New Post form; new row appears in admin list with 'Post created' toast"
+  ],
+  "failed": [],
+  "action_items": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "retest_needed": false,
+  "full_testing_deferred": true,
+  "notes": "Blog list uses data-testid='blog-featured' (not slug-suffixed) for the hero card and 'blog-post-{slug}' for grid cards; consumers of AdminBlogPage use 'admin-post-row-{slug}'. All flows exercised via public preview URL."
+}

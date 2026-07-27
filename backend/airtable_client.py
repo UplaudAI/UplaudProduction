@@ -553,18 +553,27 @@ def _record_to_blog_post(rec: dict) -> dict:
 
 async def list_blog_posts_airtable(limit: int = 50, published_only: bool = True) -> list:
     """Fetch blog posts from Airtable, optionally filtering by Published=1, sorted by Created_At/createdTime descending."""
-    params = {"pageSize": limit}
-    if published_only:
-        params["filterByFormula"] = "{Published}=1"
-    try:
-        data = await _get(TABLE_BLOG_POSTS, params)
-        records = data.get("records", [])
-        posts = [_record_to_blog_post(r) for r in records]
-        posts.sort(key=lambda p: p["created_at"], reverse=True)
-        return posts
-    except Exception as e:
-        logger.warning("Airtable list_blog_posts failed: %s", e)
-        return []
+    posts = []
+    offset = None
+    while len(posts) < limit:
+        page_size = min(limit - len(posts), 100)
+        params = {"pageSize": page_size}
+        if published_only:
+            params["filterByFormula"] = "{Published}=1"
+        if offset:
+            params["offset"] = offset
+        try:
+            data = await _get(TABLE_BLOG_POSTS, params)
+            records = data.get("records", [])
+            posts.extend([_record_to_blog_post(r) for r in records])
+            offset = data.get("offset")
+            if not offset or not records:
+                break
+        except Exception as e:
+            logger.warning("Airtable list_blog_posts failed: %s", e)
+            break
+    posts.sort(key=lambda p: p["created_at"], reverse=True)
+    return posts[:limit]
 
 
 async def get_blog_post_airtable(slug: str) -> Optional[dict]:
