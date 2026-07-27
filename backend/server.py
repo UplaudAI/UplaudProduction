@@ -971,8 +971,8 @@ def record_to_source_out(rec: dict) -> SourceOut:
         testimonial_is_verbatim=True,
         share_id=f.get("Share_Id") or rec.get("id")[:12],
         testimonial_status=f.get("Testimonial_Status") or "draft",
-        approved_at=None,
-        approval_requested_at=None,
+        approved_at=f.get("Approved_At") or None,
+        approval_requested_at=f.get("Approval_Requested_At") or None,
     )
 
 
@@ -1252,6 +1252,43 @@ async def email_draft(source_id: str, current=Depends(get_current_user)):
     )
 
 
+def _growth_signal_record_to_pub_doc(rec: dict) -> dict:
+    """Adapt a raw Airtable Growth_Signals record into the doc shape the public
+    testimonial endpoints expect (mirrors a TEMP_SOURCES entry)."""
+    f = rec.get("fields", {})
+    insights = {
+        "company_name": f.get("Company", ""),
+        "speaker_name": f.get("Person", ""),
+        "speaker_role": f.get("Role", ""),
+        "sentiment_label": f.get("Sentiment") or "Positive",
+        "signal_score": int(f.get("Signal_Score") or 0),
+        "call_type": f.get("Call_Type") or "Demo",
+    }
+    return {
+        "id": f.get("Source_Id") or rec.get("id"),
+        "share_id": f.get("Share_Id") or "",
+        "brand": f.get("Business_Name") or "PayRewards",
+        "client_name": f.get("Company") or f.get("Person") or "Customer",
+        "insights": insights,
+        "testimonial_draft": f.get("Testimonial_Draft") or "",
+        "testimonial_status": f.get("Testimonial_Status") or "draft",
+        "approved_at": f.get("Approved_At") or None,
+    }
+
+
+async def find_public_source(share_id: str) -> Optional[dict]:
+    """Locate a source by its public share_id — checks the in-memory TEMP_SOURCES cache
+    first (freshly uploaded, not-yet-analyzed sources), then falls back to Airtable
+    Growth_Signals (the system of record once a source has been analyzed)."""
+    for doc in TEMP_SOURCES.values():
+        if doc.get("share_id") == share_id:
+            return doc
+    rec = await airtable_client.get_growth_signal_by_share_id(share_id)
+    if rec:
+        return _growth_signal_record_to_pub_doc(rec)
+    return None
+
+
 def _public_payload(doc: dict) -> PublicTestimonial:
     ins = doc.get("insights") or {}
     return PublicTestimonial(
@@ -1268,7 +1305,7 @@ def _public_payload(doc: dict) -> PublicTestimonial:
 
 @api_router.get("/public/testimonial/{share_id}", response_model=PublicTestimonial)
 async def public_get_testimonial(share_id: str):
-    doc = await db.sources.find_one({"share_id": share_id}, {"_id": 0})
+    doc = await find_public_source(share_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Testimonial not found")
     return _public_payload(doc)
@@ -1276,33 +1313,34 @@ async def public_get_testimonial(share_id: str):
 
 @api_router.put("/public/testimonial/{share_id}", response_model=PublicTestimonial)
 async def public_update_testimonial(share_id: str, body: PublicUpdate):
-    doc = await db.sources.find_one({"share_id": share_id})
+    doc = await find_public_source(share_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Testimonial not found")
     if doc.get("testimonial_status") == "approved":
         raise HTTPException(status_code=400, detail="This testimonial is already approved and locked.")
-    await db.sources.update_one({"share_id": share_id}, {"$set": {"testimonial_draft": body.testimonial_draft}})
     doc["testimonial_draft"] = body.testimonial_draft
+    if doc["id"] in TEMP_SOURCES:
+        TEMP_SOURCES[doc["id"]]["testimonial_draft"] = body.testimonial_draft
+    await airtable_client.update_growth_signal_by_source_id(doc["id"], {"Testimonial_Draft": body.testimonial_draft})
     return _public_payload(doc)
 
 
 @api_router.post("/public/testimonial/{share_id}/approve", response_model=PublicTestimonial)
 async def public_approve_testimonial(share_id: str, request: Request):
-    doc = await db.sources.find_one({"share_id": share_id})
+    doc = await find_public_source(share_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Testimonial not found")
     now = datetime.now(timezone.utc).isoformat()
-    await db.sources.update_one(
-        {"share_id": share_id},
-        {"$set": {"testimonial_status": "approved", "approved_at": now}},
-    )
     doc["testimonial_status"] = "approved"
     doc["approved_at"] = now
+    if doc["id"] in TEMP_SOURCES:
+        TEMP_SOURCES[doc["id"]].update({"testimonial_status": "approved", "approved_at": now})
+    await airtable_client.update_growth_signal_by_source_id(
+        doc["id"], {"Testimonial_Status": "approved", "Approved_At": now}
+    )
 
     # Sync the approved testimonial to Airtable (User + Uplaud tables)
-    owner = await db.users.find_one({"id": doc.get("owner")}, {"_id": 0})
-    owner_email = (owner or {}).get("email", "")
-    business_name = await airtable_client.get_business_name_by_email_domain(owner_email) or doc.get("brand") or "PayRewards"
+    business_name = doc.get("brand") or "PayRewards"
     ins = doc.get("insights") or {}
     speaker_name = ins.get("speaker_name") or doc.get("client_name", "")
     reviewer_id = await airtable_client.find_or_create_user(name=speaker_name, email=doc.get("client_email") or None)
@@ -1314,22 +1352,32 @@ async def public_approve_testimonial(share_id: str, request: Request):
         share_link=share_link,
         date_added=now[:10],
     )
-    if ins:
-        await airtable_client.upsert_growth_signal(doc["id"], business_name, ins, "approved")
     return _public_payload(doc)
 
 
 @api_router.post("/sources/{source_id}/send-approval")
 async def send_approval(source_id: str, current=Depends(get_current_user)):
-    doc = await db.sources.find_one({"id": source_id, "owner": current["id"]})
-    if not doc:
-        raise HTTPException(status_code=404, detail="Source not found")
+    doc = TEMP_SOURCES.get(source_id)
+    share_id = doc.get("share_id") if doc else None
+    if not share_id:
+        business_name = (
+            await airtable_client.get_business_name_by_email_domain(current["email"])
+            or current["company"]
+        )
+        records = await airtable_client.list_growth_signals_by_business(business_name)
+        rec = next((r for r in records if r.get("fields", {}).get("Source_Id") == source_id), None)
+        if not doc and not rec:
+            raise HTTPException(status_code=404, detail="Source not found")
+        if rec:
+            share_id = rec.get("fields", {}).get("Share_Id") or rec.get("id")[:12]
+    share_id = share_id or uuid.uuid4().hex[:12]
     now = datetime.now(timezone.utc).isoformat()
-    share_id = doc.get("share_id") or uuid.uuid4().hex[:12]
-    new_status = "sent" if doc.get("testimonial_status") != "approved" else "approved"
-    await db.sources.update_one(
-        {"id": source_id},
-        {"$set": {"testimonial_status": new_status, "approval_requested_at": now, "share_id": share_id}},
+    new_status = "sent" if (not doc or doc.get("testimonial_status") != "approved") else "approved"
+    if doc:
+        doc.update({"testimonial_status": new_status, "approval_requested_at": now, "share_id": share_id})
+        TEMP_SOURCES[source_id] = doc
+    await airtable_client.update_growth_signal_by_source_id(
+        source_id, {"Testimonial_Status": new_status, "Approval_Requested_At": now, "Share_Id": share_id}
     )
     return {"share_id": share_id, "public_path": f"/t/{share_id}"}
 
@@ -1538,7 +1586,7 @@ class AgentPlanOut(BaseModel):
 
 @api_router.post("/public/testimonial/{share_id}/referrals")
 async def submit_referrals(share_id: str, body: ReferralSubmit):
-    doc = await db.sources.find_one({"share_id": share_id}, {"_id": 0})
+    doc = await find_public_source(share_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Testimonial not found")
     clean = [
@@ -1560,7 +1608,6 @@ async def submit_referrals(share_id: str, body: ReferralSubmit):
         "id": str(uuid.uuid4()),
         "share_id": share_id,
         "source_id": doc["id"],
-        "owner": doc.get("owner"),
         "brand": doc.get("brand") or "PayRewards",
         "referrer_name": referrer_name,
         "referrer_company": ins.get("company_name") or doc.get("client_name", ""),
@@ -1571,9 +1618,7 @@ async def submit_referrals(share_id: str, body: ReferralSubmit):
 
     # Each referred friend becomes a Circles entry (Initiator = referrer, Receiver = referee),
     # plus a User record for the referee enriched via People Data Labs.
-    owner = await db.users.find_one({"id": doc.get("owner")}, {"_id": 0})
-    owner_email = (owner or {}).get("email", "")
-    business_name = await airtable_client.get_business_name_by_email_domain(owner_email) or doc.get("brand") or "PayRewards"
+    business_name = doc.get("brand") or "PayRewards"
     today = datetime.now(timezone.utc).date().isoformat()
     for r in clean:
         parsed = airtable_client.parse_contact(r["contact"])

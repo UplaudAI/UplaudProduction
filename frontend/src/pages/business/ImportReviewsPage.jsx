@@ -11,14 +11,35 @@ import {
   Plus,
   Mic,
   MessagesSquare,
+  Quote,
+  Share2,
 } from "lucide-react";
-import { setImported } from "@/lib/business-storage";
+import { setImported, getAuth } from "@/lib/business-storage";
 import api, { formatApiError } from "@/lib/api";
 import { REVIEW_SOURCES, CONVERSATION_SOURCES, PAGE_OUTCOMES } from "@/mocks/fintech";
 import PageHero from "@/components/business/PageHero";
 
+const OVERVIEW_STEPS = [
+  {
+    icon: Mic,
+    title: "Capture customer voice",
+    body: "Drop in sales/demo transcripts, reviews or CRM notes — Uplaud reads every word.",
+  },
+  {
+    icon: Quote,
+    title: "Extract signals & testimonials",
+    body: "AI surfaces motivations, pain points & buying signals, then drafts a testimonial for approval.",
+  },
+  {
+    icon: Share2,
+    title: "Turn wins into growth",
+    body: "Approved stories become referral campaigns and on-brand social posts — automatically.",
+  },
+];
+
 export default function ImportReviewsPage() {
   const nav = useNavigate();
+  const user = getAuth();
   const [dragOver, setDragOver] = useState(false);
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -28,6 +49,8 @@ export default function ImportReviewsPage() {
   const [loading, setLoading] = useState(true);
   const [websiteInput, setWebsiteInput] = useState("");
   const [personalizing, setPersonalizing] = useState(false);
+  const [profile, setProfile] = useState(null);
+  const [profileLoaded, setProfileLoaded] = useState(false);
   const fileRef = useRef(null);
 
   const fetchSources = () => {
@@ -37,9 +60,21 @@ export default function ImportReviewsPage() {
       .finally(() => setLoading(false));
   };
 
+  const fetchProfile = () => {
+    api.get("/business/profile")
+      .then(({ data }) => setProfile(data))
+      .catch(() => setProfile(null))
+      .finally(() => setProfileLoaded(true));
+  };
+
   useEffect(() => {
     fetchSources();
+    fetchProfile();
   }, []);
+
+  const isPersonalized = Boolean(profile?.brand_voice || profile?.logo_url);
+  const firstName = (user?.name || "").split(" ")[0] || "there";
+  const companyName = user?.workspace || user?.company || profile?.company_name || "your workspace";
 
   const handlePersonalize = async (e) => {
     e.preventDefault();
@@ -170,16 +205,20 @@ export default function ImportReviewsPage() {
 
   return (
     <div data-testid="import-page" className="max-w-[1080px] mx-auto space-y-10">
-      <PageHero
-        eyebrow={PAGE_OUTCOMES.import.eyebrow}
-        question={PAGE_OUTCOMES.import.question}
-        northStar={dynamicNorthStar}
-        smartAction={dynamicSmartAction}
-        onAction={handleHeroAction}
-      />
+      {hasData ? (
+        <PageHero
+          eyebrow={PAGE_OUTCOMES.import.eyebrow}
+          question={PAGE_OUTCOMES.import.question}
+          northStar={dynamicNorthStar}
+          smartAction={dynamicSmartAction}
+          onAction={handleHeroAction}
+        />
+      ) : (
+        <WelcomeBanner firstName={firstName} companyName={companyName} onUpload={pickFile} />
+      )}
 
-      {!hasData && (
-        <div className="rounded-2xl border border-[#d9d1ee] bg-[#fdfcff] p-8 shadow-sm flex flex-col md:flex-row items-center gap-6 animate-in fade-in duration-300">
+      {profileLoaded && !isPersonalized && (
+        <div data-testid="personalize-workspace-card" className="rounded-2xl border border-[#d9d1ee] bg-[#fdfcff] p-8 shadow-sm flex flex-col md:flex-row items-center gap-6 animate-in fade-in duration-300">
           <div className="w-12 h-12 rounded-xl bg-[#f5f3ff] text-[#6d46c6] flex items-center justify-center shrink-0">
             <Sparkles className="w-6 h-6" strokeWidth={1.75} />
           </div>
@@ -194,6 +233,7 @@ export default function ImportReviewsPage() {
               <input
                 type="text"
                 required
+                data-testid="personalize-website-input"
                 value={websiteInput}
                 onChange={(e) => setWebsiteInput(e.target.value)}
                 placeholder="scalis.ai"
@@ -201,6 +241,7 @@ export default function ImportReviewsPage() {
               />
               <button
                 type="submit"
+                data-testid="personalize-workspace-btn"
                 disabled={personalizing}
                 className="btn-primary h-10 !py-0 whitespace-nowrap"
               >
@@ -549,6 +590,67 @@ function RowLine({ text, done }) {
       <span className={done ? "text-[#111827]" : "text-[#9ca3af]"}>
         {text}
       </span>
+    </div>
+  );
+}
+
+function WelcomeBanner({ firstName, companyName, onUpload }) {
+  return (
+    <div
+      data-testid="sources-welcome-banner"
+      className="relative overflow-hidden rounded-3xl bg-[#1b1435] text-white p-10 md:p-12 noise"
+    >
+      <div
+        aria-hidden
+        className="absolute -top-24 -right-20 w-[380px] h-[380px] rounded-full"
+        style={{ background: "radial-gradient(circle, rgba(94,234,212,0.22), transparent 60%)" }}
+      />
+      <div
+        aria-hidden
+        className="absolute -bottom-32 -left-16 w-[320px] h-[320px] rounded-full"
+        style={{ background: "radial-gradient(circle, rgba(109,70,198,0.45), transparent 60%)" }}
+      />
+      <div className="relative">
+        <span className="chip chip-dark">
+          <Sparkles className="w-3.5 h-3.5 text-[#5eead4]" strokeWidth={2} />
+          Welcome to Uplaud
+        </span>
+        <h1
+          data-testid="welcome-headline"
+          className="mt-5 font-display text-[28px] md:text-[36px] font-semibold leading-[1.14] max-w-[640px]"
+        >
+          Hey {firstName} — let&apos;s turn {companyName}&apos;s customer voice into growth.
+        </h1>
+        <p className="mt-4 text-[14px] text-white/70 max-w-[600px] leading-relaxed">
+          Uplaud listens to every call, review and conversation your customers have with{" "}
+          {companyName}, then automatically extracts growth signals, drafts testimonials they
+          approve, and turns those wins into referral campaigns and on-brand social content — a
+          growth engine that runs itself.
+        </p>
+        <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
+          {OVERVIEW_STEPS.map((s, i) => (
+            <div
+              key={s.title}
+              data-testid={`overview-step-${i}`}
+              className="rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-xl p-5"
+            >
+              <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center mb-3">
+                <s.icon className="w-4 h-4 text-[#5eead4]" strokeWidth={1.75} />
+              </div>
+              <div className="font-display text-[14px] font-semibold">{s.title}</div>
+              <p className="mt-1.5 text-[12.5px] text-white/60 leading-relaxed">{s.body}</p>
+            </div>
+          ))}
+        </div>
+        <button
+          data-testid="welcome-upload-btn"
+          onClick={onUpload}
+          className="btn-primary mt-8 h-11 !py-0"
+        >
+          Upload your first transcript
+          <ArrowUpRight className="w-4 h-4" strokeWidth={1.75} />
+        </button>
+      </div>
     </div>
   );
 }

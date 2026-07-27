@@ -492,6 +492,34 @@ async def upsert_growth_signal(source_id: str, business_name: str, insights: dic
 
 
 
+async def get_growth_signal_by_share_id(share_id: str) -> Optional[dict]:
+    """Fetch a single Growth_Signals record by its public Share_Id (used by /public/testimonial/*)."""
+    if not share_id:
+        return None
+    try:
+        formula = f'{{Share_Id}}="{_escape(share_id)}"'
+        data = await _get(TABLE_GROWTH_SIGNALS, {"filterByFormula": formula, "maxRecords": 1})
+        records = data.get("records", [])
+        return records[0] if records else None
+    except Exception as e:
+        logger.warning("Airtable growth signal lookup by share_id failed: %s", e)
+        return None
+
+
+async def update_growth_signal_by_source_id(source_id: str, fields: dict) -> bool:
+    """Partial update of a Growth_Signals record located by Source_Id. Returns True if a record was updated."""
+    try:
+        formula = f'{{Source_Id}}="{_escape(source_id)}"'
+        existing = await _get(TABLE_GROWTH_SIGNALS, {"filterByFormula": formula, "pageSize": 1})
+        recs = existing.get("records", [])
+        if recs:
+            await _update(TABLE_GROWTH_SIGNALS, recs[0]["id"], fields)
+            return True
+    except Exception as e:
+        logger.warning("Airtable growth-signal partial update failed: %s", e)
+    return False
+
+
 async def list_growth_signals_by_business(business_name: str) -> list:
     """Return Growth_Signals records for the given business from Airtable."""
     if not business_name:
