@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import api from "@/lib/api";
 import {
@@ -64,6 +64,7 @@ export default function DashboardLayout() {
   const loc = useLocation();
   const user = getAuth();
   const [sources, setSources] = useState([]);
+  const zeroStateChecked = useRef(false);
 
   useEffect(() => {
     if (!user) {
@@ -71,8 +72,12 @@ export default function DashboardLayout() {
     }
   }, [user, nav]);
 
+  // Only redirect brand-new (zero-source) users to Sources ONCE, right after login —
+  // not on every subsequent navigation, otherwise the app would keep bouncing a user
+  // back to Sources whenever they try to visit any other page.
   useEffect(() => {
-    if (user) {
+    if (user && !zeroStateChecked.current) {
+      zeroStateChecked.current = true;
       api.get("/sources")
         .then(({ data }) => {
           setSources(data || []);
