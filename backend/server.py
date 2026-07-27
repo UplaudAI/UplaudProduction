@@ -13,6 +13,7 @@ import asyncio
 import logging
 import bcrypt
 import jwt
+import httpx
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 
@@ -64,6 +65,7 @@ class UserOut(BaseModel):
     name: str
     role: str
     company: str
+    approved: Optional[bool] = True
 
 
 class LoginResponse(BaseModel):
@@ -195,20 +197,92 @@ def create_access_token(user_id: str, email: str) -> str:
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
+async def verify_supabase_token(token: str) -> Optional[dict]:
+    supabase_url = os.environ.get("SUPABASE_URL", "https://nqvkhcrzxdonmmtjzqup.supabase.co")
+    supabase_url = supabase_url.rstrip("/")
+    api_url = f"{supabase_url}/auth/v1/user"
+    supabase_key = os.environ.get("SUPABASE_PUBLISHABLE_KEY", "sb_publishable_TTolYCpD5R_nBnxx1Dt7yw_Mk42tl_4")
+    
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "apikey": supabase_key
+    }
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(api_url, headers=headers, timeout=10.0)
+            if resp.status_code == 200:
+                return resp.json()
+    except Exception as e:
+        logger.error(f"Supabase token verification request failed: {e}")
+    return None
+
+
 async def get_current_user(request: Request) -> dict:
     auth_header = request.headers.get("Authorization", "")
     token = auth_header[7:] if auth_header.startswith("Bearer ") else None
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Try decoding local token first (backward compatibility)
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0})
+        if user:
+            # Check approval flag
+            if not user.get("approved", True):
+                raise HTTPException(status_code=403, detail="Your account is pending approval by an administrator.")
+            return user
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0})
+    except HTTPException:
+        raise  # Re-raise HTTPException (like 403 for unapproved users)
+    except Exception:
+        pass # Fallback to Supabase verification
+        
+    # Verify with Supabase
+    supabase_user = await verify_supabase_token(token)
+    if not supabase_user:
+        raise HTTPException(status_code=401, detail="Invalid token or not authenticated")
+        
+    supabase_id = supabase_user.get("id") or supabase_user.get("sub")
+    email = supabase_user.get("email", "").lower().strip()
+    
+    if not supabase_id or not email:
+        raise HTTPException(status_code=401, detail="Invalid Supabase token data")
+        
+    # Find user in Mongo
+    user = await db.users.find_one({"$or": [{"id": supabase_id}, {"email": email}]})
+    
     if not user:
-        raise HTTPException(status_code=401, detail="User not found")
+        # Create user record
+        is_admin = (email == os.environ.get("ADMIN_EMAIL", "").lower().strip())
+        user = {
+            "id": supabase_id,
+            "email": email,
+            "name": email.split("@")[0],
+            "role": "business",
+            "company": "My Company",
+            "approved": True if is_admin else False,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.users.insert_one(user)
+        # remove mongo _id
+        user.pop("_id", None)
+    else:
+        # Ensure ID or email is synchronized
+        if user.get("id") != supabase_id:
+            await db.users.update_one({"_id": user["_id"]}, {"$set": {"id": supabase_id}})
+            user["id"] = supabase_id
+        user.pop("_id", None)
+        
+    # Check approval flag
+    if not user.get("approved", True):
+        raise HTTPException(
+            status_code=403,
+            detail="Your account is pending approval by an administrator."
+        )
+        
     return user
 
 
@@ -219,6 +293,7 @@ def user_to_out(user: dict) -> UserOut:
         name=user["name"],
         role=user["role"],
         company=user["company"],
+        approved=user.get("approved", True),
     )
 
 

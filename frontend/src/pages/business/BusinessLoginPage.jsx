@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowUpRight, Lock, Mail, Sparkles, ShieldCheck } from "lucide-react";
 import { setAuth, getAuth, getImported } from "@/lib/business-storage";
+import { supabase } from "@/lib/supabase";
 import api, { formatApiError } from "@/lib/api";
 
 const LOGO_URL =
@@ -11,8 +12,10 @@ export default function BusinessLoginPage() {
   const nav = useNavigate();
   const [email, setEmail] = useState("dcameron@payrewards.com");
   const [password, setPassword] = useState("P@yRew@rds123");
+  const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   useEffect(() => {
     if (getAuth()) {
@@ -23,25 +26,108 @@ export default function BusinessLoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setSuccess("");
     if (!email || !password) {
       setError("Please enter your email and password");
       return;
     }
     setLoading(true);
-    try {
-      const { data } = await api.post("/auth/login", { email, password });
-      setAuth({
-        email: data.user.email,
-        name: data.user.name,
-        role: data.user.role,
-        workspace: data.user.company,
-        token: data.token,
-      });
-      const dest = getImported() ? "/business/insights" : "/business/import";
-      nav(dest, { replace: true });
-    } catch (err) {
-      setError(formatApiError(err.response?.data?.detail) || "Login failed");
-      setLoading(false);
+
+    if (isSignUp) {
+      // ----------------------------------------------------
+      // SIGN UP FLOW
+      // ----------------------------------------------------
+      try {
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+        if (signUpError) {
+          setError(signUpError.message);
+          setLoading(false);
+          return;
+        }
+
+        // Trigger auto-provisioning call on backend if session is immediately returned
+        if (data?.session?.access_token) {
+          try {
+            await api.get("/auth/me", {
+              headers: { Authorization: `Bearer ${data.session.access_token}` },
+            });
+          } catch (pErr) {
+            // Failure is expected if they are not approved yet, but it triggers provisioning!
+          }
+        }
+
+        setSuccess("Registration successful! Your account is pending administrator approval before you can sign in.");
+        setIsSignUp(false);
+      } catch (err) {
+        setError(err.message || "Sign up failed");
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // ----------------------------------------------------
+      // SIGN IN / LOGIN FLOW
+      // ----------------------------------------------------
+      try {
+        // Attempt signing in with Supabase first
+        const { data: sessionData, error: authError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (authError) {
+          // Fall back to local MongoDB login if user is not in Supabase yet (e.g. initial demo/test users)
+          try {
+            const { data } = await api.post("/auth/login", { email, password });
+            setAuth({
+              email: data.user.email,
+              name: data.user.name,
+              role: data.user.role,
+              workspace: data.user.company,
+              token: data.token,
+            });
+            const dest = getImported() ? "/business/insights" : "/business/import";
+            nav(dest, { replace: true });
+            return;
+          } catch (fallbackErr) {
+            setError(authError.message || "Invalid email or password");
+            setLoading(false);
+            return;
+          }
+        }
+
+        // Successfully logged in to Supabase!
+        const token = sessionData.session.access_token;
+
+        // Query `/auth/me` on FastAPI backend to fetch profile & verify approval status
+        try {
+          const userProfileRes = await api.get("/auth/me", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const profile = userProfileRes.data;
+
+          setAuth({
+            email: profile.email,
+            name: profile.name,
+            role: profile.role,
+            workspace: profile.company,
+            token: token,
+          });
+          const dest = getImported() ? "/business/insights" : "/business/import";
+          nav(dest, { replace: true });
+        } catch (backendErr) {
+          const msg = backendErr.response?.data?.detail || "Authentication failed on the backend.";
+          setError(msg);
+          // Sign out of Supabase to clean up local state
+          await supabase.auth.signOut();
+          setLoading(false);
+        }
+      } catch (err) {
+        setError("An unexpected error occurred during sign in.");
+        setLoading(false);
+      }
     }
   };
 
@@ -68,7 +154,7 @@ export default function BusinessLoginPage() {
         <div className="max-w-[440px] w-full mx-auto lg:mx-0 lg:ml-4">
           <span className="chip mb-6" data-testid="login-eyebrow">
             <span className="dot" />
-            Sign in to your workspace
+            {isSignUp ? "Create a new account" : "Sign in to your workspace"}
           </span>
           <h1
             data-testid="login-headline"
@@ -127,9 +213,17 @@ export default function BusinessLoginPage() {
             {error && (
               <p
                 data-testid="login-error"
-                className="text-[13px] text-red-600"
+                className="text-[13px] text-red-600 font-medium"
               >
                 {error}
+              </p>
+            )}
+
+            {success && (
+              <p
+                className="text-[13px] text-green-600 font-medium bg-green-50 p-3 rounded-xl border border-green-100"
+              >
+                {success}
               </p>
             )}
 
@@ -139,18 +233,22 @@ export default function BusinessLoginPage() {
               data-testid="login-submit-btn"
               className="btn-primary w-full justify-center h-12"
             >
-              {loading ? "Signing in..." : "Sign in"}
+              {loading ? (isSignUp ? "Registering..." : "Signing in...") : (isSignUp ? "Register Account" : "Sign in")}
               {!loading && <ArrowUpRight className="w-4 h-4" strokeWidth={1.75} />}
             </button>
 
             <div className="flex items-center justify-between text-[12.5px] text-[#4b5563]">
-              <a
-                href="#"
-                data-testid="login-forgot-link"
-                className="hover:text-[#6d46c6] transition-colors"
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSignUp(!isSignUp);
+                  setError("");
+                  setSuccess("");
+                }}
+                className="hover:text-[#6d46c6] transition-colors font-medium text-[#6d46c6]"
               >
-                Forgot password?
-              </a>
+                {isSignUp ? "Already have an account? Sign in" : "New user? Create an account"}
+              </button>
               <span className="flex items-center gap-1.5 text-[#9ca3af]">
                 <ShieldCheck className="w-3.5 h-3.5" />
                 SOC 2 &nbsp;·&nbsp; SSO ready

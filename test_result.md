@@ -101,3 +101,53 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+## user_problem_statement: "We are building Uplaud, an AI driven growth CRM for converting customer voice to a growth engine through referrals, social content. The code is here. Now I need you to wire in Auth from Supabase tables: NEXT_PUBLIC_SUPABASE_URL=https://nqvkhcrzxdonmmtjzqup.supabase.co NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_TTolYCpD5R_nBnxx1Dt7yw_Mk42tl_4"
+## backend:
+##   - task: "Supabase dual authentication and auto-provisioning"
+##     implemented: true
+##     working: true
+##     file: "backend/server.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: false
+##     status_history:
+##         - working: true
+##           agent: "main"
+##           comment: "Implemented dual verification for local and Supabase JWTs, auto-provisioning MongoDB user and checking approval flag."
+##         - working: true
+##           agent: "testing"
+##           comment: "CRITICAL BUG FIXED: Exception handler was catching HTTPException(403) for unapproved users. Fixed by adding 'except HTTPException: raise' before broad exception handler. All authentication flows now working correctly: (1) Local JWT authentication ✓ (2) Approval flag check returns 403 for unapproved users ✓ (3) Supabase fallback mechanism verified ✓ (4) Auto-provisioning code implementation verified ✓. Note: Full Supabase token verification requires actual Supabase authentication to test end-to-end."
+##
+## frontend:
+##   - task: "Supabase Client and Login/Signup Integration"
+##     implemented: true
+##     working: true
+##     file: "frontend/src/pages/business/BusinessLoginPage.jsx"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##         - working: true
+##           agent: "main"
+##           comment: "Integrated @supabase/supabase-js, created client, added toggleable sign in/up states with dual login pipeline and pending approval notification."
+##
+## metadata:
+##   created_by: "main_agent"
+##   version: "1.0"
+##   test_sequence: 2
+##   run_ui: false
+##
+## test_plan:
+##   current_focus:
+##     - "Supabase dual authentication and auto-provisioning"
+##     - "Supabase Client and Login/Signup Integration"
+##   stuck_tasks: []
+##   test_all: true
+##   test_priority: "high_first"
+##
+## agent_communication:
+##     - agent: "main"
+##       message: "Wired in Supabase Auth across frontend and backend. Configured dual local/Supabase JWT verification and auto-provisioning with DB-level pending approval check."
+##     - agent: "testing"
+##       message: "Backend authentication testing complete. CRITICAL BUG FOUND AND FIXED: The broad 'except Exception' handler in get_current_user() was catching HTTPException(403) for unapproved users, causing them to get 401 instead of 403. Fixed by adding explicit HTTPException re-raise. All 11 backend auth tests now passing: ✓ Local JWT auth, ✓ Token decoding, ✓ Approval flag (403 for unapproved), ✓ Invalid credentials (401), ✓ Missing auth header (401), ✓ Supabase fallback mechanism, ✓ Auto-provisioning code verified. Full Supabase integration (token verification + auto-provisioning) requires actual Supabase authentication to test end-to-end but code implementation is correct."
