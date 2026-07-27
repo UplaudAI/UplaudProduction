@@ -172,6 +172,10 @@ class LeadMagnetRequest(BaseModel):
     slug: str
 
 
+class BusinessProfileRequest(BaseModel):
+    website: str
+
+
 class BlogListResponse(BaseModel):
     posts: List[BlogPostOut]
 
@@ -735,6 +739,68 @@ async def login(body: LoginRequest):
 @api_router.get("/auth/me", response_model=UserOut)
 async def me(current=Depends(get_current_user)):
     return user_to_out(current)
+
+
+@api_router.post("/business/profile")
+async def save_business_profile(body: BusinessProfileRequest, current=Depends(get_current_user)):
+    website = body.website.strip().lower()
+    # Remove protocol prefix if present
+    clean_website = re.sub(r"^https?://", "", website).rstrip("/")
+    
+    # Derive business name
+    company_name = derive_business_name("user@" + clean_website) if clean_website else current.get("company", "My Company")
+    
+    profile = {
+        "user_id": current["id"],
+        "website": clean_website,
+        "company_name": company_name,
+        "brand_color": "#6d46c6", # Elegant purple fallback
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    # Save to MongoDB db.business_profiles
+    await db.business_profiles.update_one(
+        {"user_id": current["id"]},
+        {"$set": profile},
+        upsert=True
+    )
+    
+    # Also sync/upsert to Airtable's "Business" table!
+    if airtable_client._enabled():
+        try:
+            # Check if business already exists in Airtable
+            formula = f'{{Business Domain}}="{airtable_client._escape(clean_website)}"'
+            existing = await airtable_client._get(airtable_client.TABLE_BUSINESS, {"filterByFormula": formula, "pageSize": 1})
+            recs = existing.get("records", [])
+            fields = {
+                "Business Name": company_name,
+                "Business Domain": clean_website,
+            }
+            if recs:
+                await airtable_client._update(airtable_client.TABLE_BUSINESS, recs[0]["id"], fields)
+            else:
+                await airtable_client._create(airtable_client.TABLE_BUSINESS, fields)
+        except Exception as ae:
+            logger.warning(f"Failed to sync business profile to Airtable Business table: {ae}")
+            
+    return {"status": "ok", "profile": profile}
+
+
+@api_router.get("/business/profile")
+async def get_business_profile(current=Depends(get_current_user)):
+    profile = await db.business_profiles.find_one({"user_id": current["id"]}, {"_id": 0})
+    if not profile:
+        # Return a default empty profile derived from user's current company
+        email = current.get("email", "")
+        domain = email.split("@")[-1].lower() if "@" in email else ""
+        company_name = current.get("company", "My Company")
+        return {
+            "user_id": current["id"],
+            "website": domain,
+            "company_name": company_name,
+            "brand_color": "#6d46c6",
+        }
+    return profile
 
 
 # ---------------------------------------------------------------------------

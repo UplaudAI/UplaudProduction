@@ -17,6 +17,7 @@ import {
   PAGE_OUTCOMES,
 } from "@/mocks/fintech";
 import { toast } from "sonner";
+import { getAuth } from "@/lib/business-storage";
 import PageHero from "@/components/business/PageHero";
 import api, { formatApiError } from "@/lib/api";
 
@@ -118,6 +119,8 @@ const STAGE_STYLES = {
 };
 
 export default function ReferralAgentPage() {
+  const user = getAuth();
+  const businessName = user?.workspace || user?.company || "My Company";
   const [selectedId, setSelectedId] = useState(null);
   const [warmLeads, setWarmLeads] = useState([]);
   const [loadingLeads, setLoadingLeads] = useState(true);
@@ -221,7 +224,7 @@ export default function ReferralAgentPage() {
       : "Waiting on your first referral",
     trend: "up",
     attribution:
-      "Every warm intro is a named referral from someone who's tried PayRewards, enriched via People Data Labs and pre-researched by the Referral Agent before outreach.",
+      `Every warm intro is a named referral from someone who's tried ${businessName}, enriched via People Data Labs and pre-researched by the Referral Agent before outreach.`,
   };
 
   const bestLead =
@@ -255,7 +258,7 @@ export default function ReferralAgentPage() {
     <div data-testid="referral-agent-page" className="space-y-12">
       <PageHero
         eyebrow={PAGE_OUTCOMES.referrals.eyebrow}
-        question={PAGE_OUTCOMES.referrals.question}
+        question={`How many warm introductions did ${businessName} customers deliver?`}
         northStar={referralsNorthStar}
         smartAction={referralsSmartAction}
         onAction={() => bestLead && setSelectedId(bestLead.id)}

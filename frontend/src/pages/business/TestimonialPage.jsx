@@ -19,18 +19,19 @@ const NAVY = "#0B1F3A";
 const GOLD = "#E8B84B";
 const PURPLE = "#6d46c6";
 const BRAND_BLUE = "#3D5FCB";
-const PAYREWARDS_ICON =
-  "https://static.prod-images.emergentagent.com/jobs/75c19ea8-fc62-44e0-a0a1-452cda387c8a/images/9eecdd443021f8c59467aa1797367d9f98b416339e4d64069f1548b3c2bf2ab5.jpeg";
 
-function Wordmark({ light }) {
+function Wordmark({ light, brandName = "PayRewards" }) {
+  const initial = brandName ? brandName.charAt(0).toUpperCase() : "P";
   return (
     <div
       data-testid="payrewards-logo"
       className="inline-flex items-center gap-2 font-display font-bold tracking-tight"
     >
-      <img src={PAYREWARDS_ICON} alt="PayRewards" className="w-7 h-7 rounded-lg" />
-      <span className={light ? "text-white" : "text-[#0B1F3A]"}>
-        Pay<span style={{ color: BRAND_BLUE }}>Rewards</span>
+      <div className="w-7 h-7 rounded-lg bg-[#3D5FCB] text-white flex items-center justify-center font-bold text-[13px] shrink-0 shadow-sm">
+        {initial}
+      </div>
+      <span className={light ? "text-white" : "text-[#0B1F3A] font-display font-bold text-[16px] tracking-tight"}>
+        {brandName}
       </span>
     </div>
   );
@@ -102,7 +103,7 @@ export default function TestimonialPage() {
         className="min-h-screen flex flex-col items-center justify-center text-center px-6"
         style={{ backgroundColor: NAVY }}
       >
-        <Wordmark light />
+        <Wordmark light brandName="Uplaud" />
         <p className="mt-6 text-white/70">This testimonial link is invalid or has expired.</p>
       </div>
     );
@@ -111,7 +112,7 @@ export default function TestimonialPage() {
     <div className="min-h-screen bg-[#f7f6f2]" data-testid="testimonial-page">
       {/* Top bar */}
       <header className="h-16 border-b border-[#eae6dc] bg-white flex items-center px-6 sm:px-10">
-        <Wordmark />
+        <Wordmark brandName={data?.brand || "PayRewards"} />
         <span className="ml-auto text-[11px] font-mono text-[#9a9384] flex items-center gap-1.5">
           <ShieldCheck className="w-3.5 h-3.5" style={{ color: GOLD }} />
           Secure approval · powered by Uplaud

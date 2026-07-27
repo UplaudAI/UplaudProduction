@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { getAuth } from "@/lib/business-storage";
 import {
   RefreshCcw,
   Copy,
@@ -74,6 +75,8 @@ function computeScenarios(paid, uplaud) {
 
 /* ────────── page ────────── */
 export default function RoiSimulatorPage() {
+  const user = getAuth();
+  const businessName = user?.workspace || user?.company || "My Company";
   const [paid, setPaid] = useState(ROI_SIMULATOR_DEFAULTS.paid);
   const [uplaud, setUplaud] = useState(ROI_SIMULATOR_DEFAULTS.uplaud);
 
@@ -88,12 +91,12 @@ export default function RoiSimulatorPage() {
   const handleReset = () => {
     setPaid(ROI_SIMULATOR_DEFAULTS.paid);
     setUplaud(ROI_SIMULATOR_DEFAULTS.uplaud);
-    toast.success("Reset to PayRewards defaults");
+    toast.success(`Reset to ${businessName} defaults`);
   };
 
   const handleCopy = () => {
     const lines = [
-      "PayRewards × Uplaud — 12-month CAC projection",
+      `${businessName} × Uplaud — 12-month CAC projection`,
       "",
       `• Blended CAC drops ${fmtPct(cacDeltaPct, 1)} — ${fmtMoney(
         scenarios.sq.blendedCac
@@ -111,7 +114,7 @@ export default function RoiSimulatorPage() {
     <div data-testid="roi-simulator-page" className="space-y-14">
       <PageHero
         eyebrow="Business Impact · 12-month projection"
-        question="How much does Uplaud cut PayRewards' blended CAC?"
+        question={`How much does Uplaud cut ${businessName}'s blended CAC?`}
         subhead="Plug in your real Meta / Google numbers on the left. Every metric below recomputes live — ready for the board deck."
         northStar={{
           label: "Blended CAC improvement · with Uplaud",
@@ -163,7 +166,7 @@ export default function RoiSimulatorPage() {
             className="text-[12px] text-[#4b5563] hover:text-[#111827] flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#eeeaf6] hover:border-[#d9d1ee] transition-colors bg-white"
           >
             <RefreshCcw className="w-3.5 h-3.5" strokeWidth={1.75} />
-            Reset to PayRewards defaults
+            Reset to {businessName} defaults
           </button>
           <button
             data-testid="roi-copy-btn"
@@ -518,7 +521,7 @@ function BoardroomSummary({ custDelta, cacDeltaPct, sq, up, onCopy }) {
           Ready for slide 3 of the growth-review deck
         </div>
         <h3 className="mt-3 font-display text-[22px] font-semibold leading-snug">
-          Layering Uplaud on PayRewards' current ad spend cuts blended CAC{" "}
+          Layering Uplaud on {businessName}'s current ad spend cuts blended CAC{" "}
           <span className="text-[#5eead4]">{fmtPct(cacDeltaPct, 1)}</span>{" "}
           — from {fmtMoney(sq.blendedCac)} to{" "}
           <span className="text-[#5eead4]">{fmtMoney(up.blendedCac)}</span> — while adding{" "}

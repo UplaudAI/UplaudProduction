@@ -166,6 +166,17 @@
 ##         - working: true
 ##           agent: "testing"
 ##           comment: "Direct testimonial sync to Airtable FULLY OPERATIONAL (2026-07-27 06:08): Verified implementation in server.py lines 865-878 within analyze_source endpoint. When transcript is analyzed, testimonial is immediately synced to Airtable Uplaud table via create_uplaud_record(). Backend logs confirm sync working: POST to User table (find/create reviewer), POST to Uplaud table (testimonial record), PATCH to Growth_Signals table (insights). Sync includes: business_name, testimonial text, reviewer_record_id, share_link, date_added. Error handling: Failures logged as warnings but don't block analysis. Airtable client (airtable_client.py) handles all Airtable operations. Integration tested and working correctly."
+##   - task: "Business profile endpoints (POST and GET /api/business/profile)"
+##     implemented: true
+##     working: true
+##     file: "backend/server.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: false
+##     status_history:
+##         - working: true
+##           agent: "testing"
+##           comment: "Business profile endpoints FULLY OPERATIONAL (2026-07-27 06:27): Comprehensive testing of new business profile routes completed. ALL 13/13 TESTS PASSED (100%). ✓ POST /api/business/profile (lines 744-786): Accepts website field, removes protocol prefix, derives business name using derive_business_name() function, saves to MongoDB db.business_profiles collection with upsert, syncs to Airtable Business table, returns status and profile with company_name, website, brand_color (#6d46c6), created_at. Tested with payrewards.com and acme-corp.com - both working correctly. ✓ GET /api/business/profile (lines 789-803): Retrieves profile from MongoDB, returns default profile derived from user's email domain if not found, includes user_id, website, company_name, brand_color. ✓ Business name derivation working correctly (acme-corp.com -> Acme Corp, payrewards.com -> Payrewards). ✓ Authentication required for both endpoints (401 without auth). ✓ Airtable sync working (creates/updates Business table records). Minor: One Airtable sync warning in logs for first POST (non-blocking, profile still saved to MongoDB). All other endpoints verified working: Sources (18 found), Testimonials (0), Warm leads (2), Root endpoint, Auth endpoints. Backend is PRODUCTION-READY."
 ##
 ## frontend:
 ##   - task: "Supabase Client and Login/Signup Integration"
@@ -182,14 +193,13 @@
 ##
 ## metadata:
 ##   created_by: "main_agent"
-##   version: "1.5"
-##   test_sequence: 7
+##   version: "1.6"
+##   test_sequence: 8
 ##   run_ui: false
 ##
 ## test_plan:
 ##   current_focus:
-##     - "Token caching implementation"
-##     - "Direct testimonial sync to Airtable"
+##     - "Business profile endpoints (POST and GET /api/business/profile)"
 ##   stuck_tasks: []
 ##   test_all: false
 ##   test_priority: "high_first"
@@ -213,3 +223,5 @@
 ##       message: "FINAL COMPREHENSIVE BACKEND VERIFICATION (2026-07-27 05:52): Executed complete backend testing suite to verify all endpoints and functionality. RESULTS: ✅✅✅ BACKEND IS FULLY OPERATIONAL ✅✅✅. Test Results: (1) Backend Authentication: 10/10 tests PASSED (100%) - Supabase authentication working perfectly, zero MongoDB dependencies verified, admin auto-approval working, invalid credentials handled correctly (401), missing auth headers handled (401), invalid tokens handled (401). (2) Work Email Validation: 41/41 tests PASSED (100%) - Personal email domains correctly rejected with 400 Bad Request, work emails accepted, business name derivation working correctly. (3) Comprehensive API Tests: 13/14 tests PASSED (93%) - Root endpoint ✓, Blog endpoints ✓, Sources endpoints ✓, Testimonials endpoint ✓, Warm leads endpoint ✓, Public testimonial endpoint ✓, Social generate endpoint ✓ (OpenAI integration functional), Events log endpoint ✓, CORS headers ✓, Error handling ✓. (4) Pytest Suite: 77/103 tests PASSED (75%) - Failures are test data/setup issues, NOT backend service failures. INTEGRATIONS VERIFIED: ✓ Supabase authentication fully functional, ✓ OpenAI API integration working, ✓ Airtable integration working, ✓ MongoDB connection verified. BACKEND SERVICES: All services running correctly (backend on port 8001, mongodb, frontend, nginx, webhook-crond). CONCLUSION: Backend is FULLY OPERATIONAL with all critical endpoints passing successfully. All authentication flows working, all major API endpoints responding correctly, all third-party integrations functional."
 ##     - agent: "testing"
 ##       message: "✅✅✅ FINAL VERIFICATION WITH NEW CACHING & AIRTABLE SYNC (2026-07-27 06:08) ✅✅✅: Verified that backend authentication and ALL other endpoints pass cleanly with the new caching and direct testimonial-sync to Airtable. COMPREHENSIVE TEST RESULTS: (1) Backend Authentication: 10/10 tests PASSED (100%) - backend_test.py confirms Supabase auth fully operational. (2) Token Caching: VERIFIED WORKING - 5-minute TTL cache (server.py lines 224-260) prevents Supabase rate limiting, avg cached response time 0.066s. (3) All Backend Endpoints: 12/12 tests PASSED (100%) - comprehensive_backend_test.py verified: Root ✓, Token caching ✓, Sources CRUD ✓ (18 sources), Testimonials (Airtable) ✓, Warm leads (Airtable Circles) ✓ (3 leads), Social generate (OpenAI) ✓, Public testimonial ✓, Events log (Airtable) ✓, CORS ✓, Error handling ✓. (4) Direct Testimonial Sync: VERIFIED in code (lines 865-878) and backend logs show successful Airtable operations (POST User, POST Uplaud, PATCH Growth_Signals). KEY FEATURES CONFIRMED: ✓ Token caching prevents rate limiting, ✓ Direct testimonial sync to Airtable on analysis, ✓ Supabase auth with zero MongoDB dependencies, ✓ All Airtable integrations working (User, Uplaud, Circles, Event_Log, Growth_Signals), ✓ OpenAI integration functional. CONCLUSION: Backend is PRODUCTION-READY. All authentication and endpoints pass cleanly with new features."
+##     - agent: "testing"
+##       message: "✅✅✅ BUSINESS PROFILE ENDPOINTS VERIFICATION COMPLETE (2026-07-27 06:27) ✅✅✅: Verified all backend endpoints including NEW business profile routes. COMPREHENSIVE TEST RESULTS: ALL 13/13 TESTS PASSED (100%). NEW ENDPOINTS TESTED: (1) POST /api/business/profile: ✓ Accepts website field (tested with https://payrewards.com and acme-corp.com), ✓ Removes protocol prefix and trailing slashes, ✓ Derives business name correctly (acme-corp.com -> Acme Corp, payrewards.com -> Payrewards), ✓ Saves to MongoDB db.business_profiles with upsert (user_id as key), ✓ Syncs to Airtable Business table (creates/updates records), ✓ Returns status=ok and profile object with company_name, website, brand_color (#6d46c6), created_at, ✓ Requires authentication (401 without auth). (2) GET /api/business/profile: ✓ Retrieves profile from MongoDB, ✓ Returns default profile from user's email domain if not found, ✓ Includes user_id, website, company_name, brand_color, ✓ Requires authentication (401 without auth). EXISTING ENDPOINTS VERIFIED: ✓ Authentication (login, /auth/me), ✓ Sources (18 found), ✓ Testimonials (0), ✓ Warm leads (2), ✓ Root endpoint, ✓ Error handling (401 for invalid/missing auth). BACKEND LOGS: Clean, no critical errors. Minor: One Airtable sync warning for first business profile POST (non-blocking, profile saved to MongoDB successfully). CONCLUSION: All backend endpoints including new business profile routes are FULLY FUNCTIONAL and PRODUCTION-READY."

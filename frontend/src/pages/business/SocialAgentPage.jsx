@@ -10,6 +10,7 @@ import {
   Copy,
 } from "lucide-react";
 import PageHero from "@/components/business/PageHero";
+import { getAuth } from "@/lib/business-storage";
 import { toast } from "sonner";
 import SocialAssetStudio from "@/components/business/SocialAssets";
 import api, { formatApiError } from "@/lib/api";
@@ -23,6 +24,8 @@ const PLATFORMS = [
 const TONES = ["professional", "punchy", "founder-testimonial", "data-forward", "warm"];
 
 export default function SocialAgentPage() {
+  const user = getAuth();
+  const businessName = user?.workspace || user?.company || "My Company";
   const [testimonials, setTestimonials] = useState([]);
   const [loadingTestimonials, setLoadingTestimonials] = useState(true);
   const [selectedReviewId, setSelectedReviewId] = useState("");
@@ -61,7 +64,7 @@ export default function SocialAgentPage() {
       .post("/social/generate", {
         testimonial: review.body,
         attribution: review.customer,
-        company: "PayRewards",
+        company: businessName,
         pov: "company",
         channels: ["linkedin", "instagram", "x"],
         tone,
@@ -86,7 +89,7 @@ export default function SocialAgentPage() {
       const { data } = await api.post("/social/generate", {
         testimonial: review.body,
         attribution: review.customer,
-        company: "PayRewards",
+        company: businessName,
         pov: "company",
         channels: [platform],
         tone,
@@ -161,7 +164,7 @@ export default function SocialAgentPage() {
   return (
     <div data-testid="social-agent-page" className="space-y-10">
       <PageHero
-        eyebrow="Growth Amplification · PayRewards"
+        eyebrow={`Growth Amplification · ${businessName}`}
         question="Which testimonial should you amplify next?"
         northStar={northStar}
         smartAction={smartAction}
@@ -201,7 +204,7 @@ export default function SocialAgentPage() {
           <div className="space-y-4">
             <div>
               <label className="text-[11px] font-mono uppercase tracking-[0.14em] text-[#4b5563]">
-                Source testimonial (from Uplaud · PayRewards)
+                Source testimonial (from Uplaud · {businessName})
               </label>
               {loadingTestimonials ? (
                 <div className="mt-2 h-11 rounded-xl border border-[#eeeaf6] bg-[#faf9ff] animate-pulse" />
@@ -210,7 +213,7 @@ export default function SocialAgentPage() {
                   data-testid="social-no-testimonials"
                   className="mt-2 rounded-xl border border-[#eeeaf6] bg-[#faf9ff] p-4 text-[12.5px] text-[#9ca3af]"
                 >
-                  No approved testimonials yet for PayRewards in Uplaud — import & approve a customer source first.
+                  No approved testimonials yet for {businessName} in Uplaud — import & approve a customer source first.
                 </div>
               ) : (
                 <select
@@ -333,9 +336,9 @@ export default function SocialAgentPage() {
             Live previews · LinkedIn · Instagram · X
             {previewLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-[#6d46c6]" />}
           </div>
-          <LinkedInPreview content={channelContent?.linkedin} loading={previewLoading} />
-          <InstagramPreview content={channelContent?.instagram} loading={previewLoading} />
-          <XPreview content={channelContent?.x} loading={previewLoading} />
+          <LinkedInPreview businessName={businessName} content={channelContent?.linkedin} loading={previewLoading} />
+          <InstagramPreview businessName={businessName} content={channelContent?.instagram} loading={previewLoading} />
+          <XPreview businessName={businessName} content={channelContent?.x} loading={previewLoading} />
         </div>
       </div>
 
@@ -345,7 +348,7 @@ export default function SocialAgentPage() {
           <SocialAssetStudio
             quote={review.body}
             attribution={review.customer}
-            company="PayRewards"
+            company={businessName}
             pov="company"
             heading="Branded visual assets"
             subheading="Polished, PayRewards-voice posts your marketing team can publish — a different tone and design for each channel."
@@ -377,7 +380,7 @@ function copyChannelCaption(content, label) {
 }
 
 /* ─────────────── LinkedIn preview ─────────────── */
-function LinkedInPreview({ content, loading }) {
+function LinkedInPreview({ content, loading, businessName = "PayRewards" }) {
   return (
     <div
       data-testid="preview-linkedin"
@@ -389,7 +392,7 @@ function LinkedInPreview({ content, loading }) {
         </div>
         <div>
           <div className="text-[12.5px] font-semibold text-[#111827] leading-tight">
-            PayRewards
+            {businessName}
           </div>
           <div className="text-[10.5px] font-mono text-[#9ca3af]">
             LinkedIn · 8,412 followers
@@ -450,7 +453,7 @@ function LinkedInPreview({ content, loading }) {
 }
 
 /* ─────────────── Instagram preview ─────────────── */
-function InstagramPreview({ content, loading }) {
+function InstagramPreview({ content, loading, businessName = "PayRewards" }) {
   return (
     <div
       data-testid="preview-instagram"
@@ -468,7 +471,7 @@ function InstagramPreview({ content, loading }) {
         </div>
         <div>
           <div className="text-[12.5px] font-semibold text-[#111827] leading-tight">
-            payrewards
+            {businessName.toLowerCase().replace(/[^a-z0-9]+/g, "")}
           </div>
           <div className="text-[10.5px] font-mono text-[#9ca3af]">
             Instagram · Post
@@ -492,7 +495,12 @@ function InstagramPreview({ content, loading }) {
         ) : (
           <>
             <div className="flex items-center justify-between">
-              <img src="/payrewards-logo-lockup.png" alt="PayRewards" className="h-8 w-auto" />
+              <div className="flex items-center gap-1.5" style={{ color: "#fff" }}>
+                <div style={{ width: 18, height: 18, borderRadius: 5, backgroundColor: "#8FB3F5", color: "#0E2354", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 10 }}>
+                  {businessName.charAt(0).toUpperCase()}
+                </div>
+                <span className="font-semibold text-[12px] tracking-tight">{businessName}</span>
+              </div>
               {content.eyebrow && (
                 <span className="text-[9.5px] font-mono text-white/70 uppercase tracking-[0.22em]">
                   {content.eyebrow}
@@ -546,7 +554,7 @@ function InstagramPreview({ content, loading }) {
 }
 
 /* ─────────────── X (Twitter) preview ─────────────── */
-function XPreview({ content, loading }) {
+function XPreview({ content, loading, businessName = "PayRewards" }) {
   return (
     <div
       data-testid="preview-x"
@@ -558,13 +566,13 @@ function XPreview({ content, loading }) {
         </div>
         <div>
           <div className="text-[12.5px] font-semibold text-[#111827] leading-tight flex items-center gap-1">
-            PayRewards
+            {businessName}
             <span className="w-3.5 h-3.5 rounded-full bg-[#1d9bf0] text-white text-[8px] flex items-center justify-center font-bold">
               ✓
             </span>
           </div>
           <div className="text-[10.5px] font-mono text-[#9ca3af]">
-            @payrewards · 12,204 followers
+            @{businessName.toLowerCase().replace(/[^a-z0-9]+/g, "")} · 12,204 followers
           </div>
         </div>
         <span className="ml-auto text-[10px] font-mono text-[#6d46c6]">

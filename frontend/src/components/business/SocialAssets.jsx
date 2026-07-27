@@ -53,14 +53,16 @@ function initials(attr) {
   return ((p[0]?.[0] || "P") + (p[1]?.[0] || "")).toUpperCase();
 }
 
-function PayRewardsMark({ scale = 1 }) {
+function PayRewardsMark({ scale = 1, companyName = "PayRewards" }) {
   return (
-    <img
-      src="/payrewards-logo-lockup.png"
-      alt="PayRewards"
-      crossOrigin="anonymous"
-      style={{ height: 36 * scale, width: "auto", display: "block" }}
-    />
+    <div className="flex items-center gap-1.5" style={{ color: "#fff", pointerEvents: "none", userSelect: "none" }}>
+      <div style={{ width: 22 * scale, height: 22 * scale, borderRadius: 6 * scale, backgroundColor: MINT, color: PURPLE_DEEP, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 11 * scale, fontFamily: DISPLAY }}>
+        {companyName.charAt(0).toUpperCase()}
+      </div>
+      <span style={{ fontSize: 14 * scale, fontWeight: 700, fontFamily: DISPLAY, letterSpacing: "-0.01em", textTransform: "none" }}>
+        {companyName}
+      </span>
+    </div>
   );
 }
 function PoweredByUplaud({ scale = 1 }) {
@@ -133,7 +135,7 @@ const LinkedInCard = forwardRef(function LinkedInCard({ c }, ref) {
       <div style={{ position: "absolute", left: 0, top: 40, bottom: 40, width: 4, background: `linear-gradient(${MINT}, ${PURPLE})`, borderTopRightRadius: 4, borderBottomRightRadius: 4 }} />
       <div style={{ position: "relative", height: "100%", padding: 34, paddingLeft: 40, display: "flex", flexDirection: "column", boxSizing: "border-box" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          {cust ? <Poster attr={c.attribution} /> : <PayRewardsMark />}
+          {cust ? <Poster attr={c.attribution} /> : <PayRewardsMark companyName={c.company} />}
           {!cust && <Eyebrow text={c.eyebrow} />}
         </div>
         {c.headline && <div style={{ marginTop: 14, color: MINT, fontWeight: 700, fontSize: 20, lineHeight: 1.15, letterSpacing: "-0.02em" }}>{c.headline}</div>}
@@ -157,7 +159,7 @@ const InstagramCard = forwardRef(function InstagramCard({ c }, ref) {
       <div style={{ position: "absolute", left: 22, top: 92, fontSize: 260, lineHeight: 0.7, color: "rgba(255,255,255,0.08)", fontFamily: "Georgia, serif" }}>&ldquo;</div>
       <div style={{ position: "relative", height: "100%", padding: 44, display: "flex", flexDirection: "column", boxSizing: "border-box" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          {cust ? <Poster attr={c.attribution} scale={1.1} /> : <PayRewardsMark scale={1.06} />}
+          {cust ? <Poster attr={c.attribution} scale={1.1} /> : <PayRewardsMark companyName={c.company} scale={1.06} />}
           {!cust && <Stars scale={1.1} />}
         </div>
         {c.headline && (cust
@@ -183,8 +185,8 @@ const XCard = forwardRef(function XCard({ c }, ref) {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           {cust ? <Poster attr={c.attribution} scale={0.95} /> : (
             <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-              <PayRewardsMark scale={0.92} />
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "rgba(255,255,255,0.5)", fontFamily: MONO, fontSize: 11 }}>@payrewards <BadgeCheck style={{ width: 13, height: 13, color: MINT }} /></span>
+              <PayRewardsMark companyName={c.company} scale={0.92} />
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "rgba(255,255,255,0.5)", fontFamily: MONO, fontSize: 11 }}>@{c.company.toLowerCase().replace(/[^a-z0-9]+/g, "")} <BadgeCheck style={{ width: 13, height: 13, color: MINT }} /></span>
             </div>
           )}
           {!cust && <Eyebrow text={c.eyebrow} />}
@@ -304,7 +306,7 @@ export default function SocialAssetStudio({
       <div className="flex items-center gap-2">
         <Sparkles className="w-4 h-4" style={{ color: PURPLE }} />
         <h2 className="font-display text-[20px] font-semibold text-[#261c4d]">{resolvedHeading}</h2>
-        <span className="text-[10px] font-mono uppercase tracking-[0.16em] px-2 py-0.5 rounded-full" style={{ background: "#f0ebfb", color: PURPLE_MID }}>{isCustomer ? "Your voice" : "PayRewards voice"}</span>
+        <span className="text-[10px] font-mono uppercase tracking-[0.16em] px-2 py-0.5 rounded-full" style={{ background: "#f0ebfb", color: PURPLE_MID }}>{isCustomer ? "Your voice" : `${company} voice`}</span>
       </div>
       <p className="text-[13px] text-[#6b6480] mt-1">{resolvedSub}</p>
 

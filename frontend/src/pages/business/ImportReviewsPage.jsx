@@ -26,6 +26,8 @@ export default function ImportReviewsPage() {
   const [fileName, setFileName] = useState("");
   const [sources, setSources] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [websiteInput, setWebsiteInput] = useState("");
+  const [personalizing, setPersonalizing] = useState(false);
   const fileRef = useRef(null);
 
   const fetchSources = () => {
@@ -38,6 +40,35 @@ export default function ImportReviewsPage() {
   useEffect(() => {
     fetchSources();
   }, []);
+
+  const handlePersonalize = async (e) => {
+    e.preventDefault();
+    if (!websiteInput.trim()) return;
+    setPersonalizing(true);
+    try {
+      const { data } = await api.post("/business/profile", { website: websiteInput });
+      
+      // Update local storage so that we can immediately refresh user state
+      const auth = JSON.parse(localStorage.getItem("uplaud_business_auth_v1") || "{}");
+      if (auth) {
+        auth.workspace = data.profile.company_name;
+        auth.company = data.profile.company_name;
+        localStorage.setItem("uplaud_business_auth_v1", JSON.stringify(auth));
+      }
+      
+      toast.success("Workspace personalized successfully!", {
+        description: `Deriving brand: ${data.profile.company_name}. Initializing colors and assets.`,
+      });
+      
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+    } catch (err) {
+      toast.error("Personalization failed. Please try again.");
+    } finally {
+      setPersonalizing(false);
+    }
+  };
 
   const pickFile = () => fileRef.current?.click();
 
@@ -146,6 +177,39 @@ export default function ImportReviewsPage() {
         smartAction={dynamicSmartAction}
         onAction={handleHeroAction}
       />
+
+      {!hasData && (
+        <div className="rounded-2xl border border-[#d9d1ee] bg-[#fdfcff] p-8 shadow-sm flex flex-col md:flex-row items-center gap-6 animate-in fade-in duration-300">
+          <div className="w-12 h-12 rounded-xl bg-[#f5f3ff] text-[#6d46c6] flex items-center justify-center shrink-0">
+            <Sparkles className="w-6 h-6" strokeWidth={1.75} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-display text-[17px] font-semibold text-[#111827]">
+              {"Let's personalize your workspace!"}
+            </h3>
+            <p className="text-[13px] text-[#4b5563] mt-1 leading-relaxed">
+              Enter your company website to instantly extract and apply your brand assets (colors, logo initials, handles, and brand voice) across all social content, page headers, and image previews.
+            </p>
+            <form onSubmit={handlePersonalize} className="mt-4 flex gap-2 max-w-[480px]">
+              <input
+                type="text"
+                required
+                value={websiteInput}
+                onChange={(e) => setWebsiteInput(e.target.value)}
+                placeholder="scalis.ai"
+                className="flex-1 h-10 px-4 rounded-xl border border-[#e2d9f5] bg-white text-[13px] focus:outline-none focus:border-[#6d46c6] focus:ring-2 focus:ring-[#6d46c6]/10"
+              />
+              <button
+                type="submit"
+                disabled={personalizing}
+                className="btn-primary h-10 !py-0 whitespace-nowrap"
+              >
+                {personalizing ? "Analyzing brand..." : "Personalize Workspace"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Section header */}
       <div>

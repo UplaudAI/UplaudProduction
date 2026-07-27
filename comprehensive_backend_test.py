@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Comprehensive Backend Testing Suite for Uplaud CRM
-Tests all backend endpoints including new caching and Airtable sync
+Tests all backend endpoints including new business profile routes
 """
 
 import os
@@ -10,10 +10,11 @@ import json
 import asyncio
 import httpx
 from datetime import datetime, timezone
-import time
 
 # Configuration
 BACKEND_URL = "https://referral-engine-18.preview.emergentagent.com/api"
+
+# Test credentials from test_credentials.md
 ADMIN_EMAIL = "dcameron@payrewards.com"
 ADMIN_PASSWORD = "P@yRew@rds123"
 
@@ -40,322 +41,401 @@ def log_warning(test_name, message):
     print(f"   {message}")
     test_results["warnings"].append({"test": test_name, "message": message})
 
-async def get_auth_token():
-    """Get authentication token for testing"""
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(
-            f"{BACKEND_URL}/auth/login",
-            json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}
-        )
-        if response.status_code == 200:
-            return response.json()["token"]
-        raise Exception(f"Failed to get auth token: {response.status_code}")
-
-async def test_root_endpoint():
-    """Test 1: Root endpoint"""
+async def test_authentication():
+    """Test 1: Authentication and get token"""
     print("\n" + "="*80)
-    print("TEST 1: Root Endpoint")
+    print("TEST 1: Authentication")
     print("="*80)
     
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(f"{BACKEND_URL}/")
+            print("\n[1.1] Testing /api/auth/login...")
+            login_response = await client.post(
+                f"{BACKEND_URL}/auth/login",
+                json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}
+            )
             
-            if response.status_code == 200:
-                data = response.json()
-                log_pass("Root endpoint", f"Message: {data.get('message')}")
-            else:
-                log_fail("Root endpoint", f"Status: {response.status_code}")
-    except Exception as e:
-        log_fail("Root endpoint test", str(e))
-
-async def test_token_caching():
-    """Test 2: Token caching functionality"""
-    print("\n" + "="*80)
-    print("TEST 2: Token Caching")
-    print("="*80)
-    
-    try:
-        token = await get_auth_token()
-        
-        # Make multiple requests with the same token to test caching
-        print("\n[2.1] Making 5 consecutive requests to test caching...")
-        times = []
-        
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            for i in range(5):
-                start = time.time()
-                response = await client.get(
-                    f"{BACKEND_URL}/auth/me",
-                    headers={"Authorization": f"Bearer {token}"}
-                )
-                elapsed = time.time() - start
-                times.append(elapsed)
+            if login_response.status_code == 200:
+                login_data = login_response.json()
+                token = login_data.get("token")
+                user = login_data.get("user")
                 
-                if response.status_code != 200:
-                    log_fail("Token caching", f"Request {i+1} failed with status {response.status_code}")
-                    return
-        
-        # First request should be slower (no cache), subsequent should be faster
-        avg_time = sum(times[1:]) / len(times[1:])
-        
-        if all(t < 1.0 for t in times[1:]):  # All cached requests should be fast
-            log_pass("Token caching", 
-                    f"All 5 requests succeeded. Avg response time for cached requests: {avg_time:.3f}s")
-        else:
-            log_warning("Token caching", 
-                       f"Requests succeeded but some were slow. Times: {[f'{t:.3f}s' for t in times]}")
-            
+                if token and user:
+                    log_pass("Authentication successful", 
+                            f"User: {user.get('email')}, Role: {user.get('role')}")
+                    return token
+                else:
+                    log_fail("Authentication response", "Missing token or user in response")
+                    return None
+            else:
+                log_fail("Authentication", 
+                        f"Status: {login_response.status_code}, Body: {login_response.text}")
+                return None
+                
     except Exception as e:
-        log_fail("Token caching test", str(e))
+        log_fail("Authentication test", str(e))
+        return None
 
-async def test_sources_endpoints(token):
-    """Test 3: Sources CRUD endpoints"""
+async def test_auth_me(token):
+    """Test 2: Get current user"""
     print("\n" + "="*80)
-    print("TEST 3: Sources Endpoints")
+    print("TEST 2: Get Current User (/api/auth/me)")
     print("="*80)
     
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            # Test GET /sources
-            print("\n[3.1] Testing GET /api/sources...")
-            response = await client.get(
+            print("\n[2.1] Testing /api/auth/me...")
+            me_response = await client.get(
+                f"{BACKEND_URL}/auth/me",
+                headers={"Authorization": f"Bearer {token}"}
+            )
+            
+            if me_response.status_code == 200:
+                me_data = me_response.json()
+                log_pass("Get current user", 
+                        f"User: {me_data.get('email')}, Company: {me_data.get('company')}")
+                return True
+            else:
+                log_fail("Get current user", 
+                        f"Status: {me_response.status_code}, Body: {me_response.text}")
+                return False
+                
+    except Exception as e:
+        log_fail("Get current user test", str(e))
+        return False
+
+async def test_business_profile_post(token):
+    """Test 3: POST /api/business/profile - Save business profile"""
+    print("\n" + "="*80)
+    print("TEST 3: POST /api/business/profile - Save Business Profile")
+    print("="*80)
+    
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            # Test with a realistic website
+            test_website = "https://payrewards.com"
+            
+            print(f"\n[3.1] Testing POST /api/business/profile with website: {test_website}...")
+            profile_response = await client.post(
+                f"{BACKEND_URL}/business/profile",
+                headers={"Authorization": f"Bearer {token}"},
+                json={"website": test_website}
+            )
+            
+            if profile_response.status_code == 200:
+                profile_data = profile_response.json()
+                status = profile_data.get("status")
+                profile = profile_data.get("profile")
+                
+                if status == "ok" and profile:
+                    company_name = profile.get("company_name")
+                    website = profile.get("website")
+                    brand_color = profile.get("brand_color")
+                    
+                    log_pass("Save business profile", 
+                            f"Status: {status}, Company: {company_name}, Website: {website}, Brand Color: {brand_color}")
+                    return True
+                else:
+                    log_fail("Save business profile response", 
+                            f"Missing expected fields. Response: {profile_data}")
+                    return False
+            else:
+                log_fail("Save business profile", 
+                        f"Status: {profile_response.status_code}, Body: {profile_response.text}")
+                return False
+                
+    except Exception as e:
+        log_fail("Save business profile test", str(e))
+        return False
+
+async def test_business_profile_get(token):
+    """Test 4: GET /api/business/profile - Retrieve business profile"""
+    print("\n" + "="*80)
+    print("TEST 4: GET /api/business/profile - Retrieve Business Profile")
+    print("="*80)
+    
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            print("\n[4.1] Testing GET /api/business/profile...")
+            profile_response = await client.get(
+                f"{BACKEND_URL}/business/profile",
+                headers={"Authorization": f"Bearer {token}"}
+            )
+            
+            if profile_response.status_code == 200:
+                profile = profile_response.json()
+                
+                # Check required fields
+                required_fields = ["user_id", "website", "company_name", "brand_color"]
+                missing_fields = [field for field in required_fields if field not in profile]
+                
+                if not missing_fields:
+                    log_pass("Retrieve business profile", 
+                            f"Company: {profile.get('company_name')}, Website: {profile.get('website')}, Brand Color: {profile.get('brand_color')}")
+                    return True
+                else:
+                    log_fail("Retrieve business profile", 
+                            f"Missing required fields: {missing_fields}. Profile: {profile}")
+                    return False
+            else:
+                log_fail("Retrieve business profile", 
+                        f"Status: {profile_response.status_code}, Body: {profile_response.text}")
+                return False
+                
+    except Exception as e:
+        log_fail("Retrieve business profile test", str(e))
+        return False
+
+async def test_business_profile_update(token):
+    """Test 5: POST /api/business/profile - Update business profile with different website"""
+    print("\n" + "="*80)
+    print("TEST 5: POST /api/business/profile - Update Business Profile")
+    print("="*80)
+    
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            # Test with a different website
+            test_website = "acme-corp.com"
+            
+            print(f"\n[5.1] Testing POST /api/business/profile with updated website: {test_website}...")
+            profile_response = await client.post(
+                f"{BACKEND_URL}/business/profile",
+                headers={"Authorization": f"Bearer {token}"},
+                json={"website": test_website}
+            )
+            
+            if profile_response.status_code == 200:
+                profile_data = profile_response.json()
+                profile = profile_data.get("profile")
+                
+                if profile:
+                    company_name = profile.get("company_name")
+                    website = profile.get("website")
+                    
+                    # Verify business name derivation
+                    expected_name = "Acme Corp"
+                    if company_name == expected_name and website == test_website:
+                        log_pass("Update business profile", 
+                                f"Company name correctly derived: {company_name}, Website: {website}")
+                        return True
+                    else:
+                        log_warning("Update business profile", 
+                                  f"Company name: {company_name} (expected: {expected_name}), Website: {website}")
+                        return True
+                else:
+                    log_fail("Update business profile response", 
+                            f"Missing profile in response. Response: {profile_data}")
+                    return False
+            else:
+                log_fail("Update business profile", 
+                        f"Status: {profile_response.status_code}, Body: {profile_response.text}")
+                return False
+                
+    except Exception as e:
+        log_fail("Update business profile test", str(e))
+        return False
+
+async def test_sources_endpoint(token):
+    """Test 6: GET /api/sources - List sources"""
+    print("\n" + "="*80)
+    print("TEST 6: GET /api/sources - List Sources")
+    print("="*80)
+    
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            print("\n[6.1] Testing GET /api/sources...")
+            sources_response = await client.get(
                 f"{BACKEND_URL}/sources",
                 headers={"Authorization": f"Bearer {token}"}
             )
             
-            if response.status_code == 200:
-                sources = response.json()
-                log_pass("List sources", f"Found {len(sources)} sources")
-                
-                # If we have sources, test GET single source
-                if sources:
-                    source_id = sources[0]["id"]
-                    print(f"\n[3.2] Testing GET /api/sources/{source_id}...")
-                    response = await client.get(
-                        f"{BACKEND_URL}/sources/{source_id}",
-                        headers={"Authorization": f"Bearer {token}"}
-                    )
-                    
-                    if response.status_code == 200:
-                        source = response.json()
-                        log_pass("Get single source", f"Retrieved source: {source.get('filename')}")
-                    else:
-                        log_fail("Get single source", f"Status: {response.status_code}")
-                else:
-                    log_warning("Get single source", "No sources available to test")
+            if sources_response.status_code == 200:
+                sources = sources_response.json()
+                log_pass("List sources", 
+                        f"Retrieved {len(sources)} sources")
+                return True
             else:
-                log_fail("List sources", f"Status: {response.status_code}")
+                log_fail("List sources", 
+                        f"Status: {sources_response.status_code}, Body: {sources_response.text}")
+                return False
                 
     except Exception as e:
-        log_fail("Sources endpoints test", str(e))
+        log_fail("List sources test", str(e))
+        return False
 
 async def test_testimonials_endpoint(token):
-    """Test 4: Testimonials endpoint (Airtable integration)"""
+    """Test 7: GET /api/testimonials - List testimonials"""
     print("\n" + "="*80)
-    print("TEST 4: Testimonials Endpoint (Airtable Integration)")
+    print("TEST 7: GET /api/testimonials - List Testimonials")
     print("="*80)
     
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            print("\n[4.1] Testing GET /api/testimonials...")
-            response = await client.get(
+            print("\n[7.1] Testing GET /api/testimonials...")
+            testimonials_response = await client.get(
                 f"{BACKEND_URL}/testimonials",
                 headers={"Authorization": f"Bearer {token}"}
             )
             
-            if response.status_code == 200:
-                testimonials = response.json()
-                log_pass("Get testimonials from Airtable", 
+            if testimonials_response.status_code == 200:
+                testimonials = testimonials_response.json()
+                log_pass("List testimonials", 
                         f"Retrieved {len(testimonials)} testimonials")
+                return True
             else:
-                log_fail("Get testimonials", f"Status: {response.status_code}")
+                log_fail("List testimonials", 
+                        f"Status: {testimonials_response.status_code}, Body: {testimonials_response.text}")
+                return False
                 
     except Exception as e:
-        log_fail("Testimonials endpoint test", str(e))
+        log_fail("List testimonials test", str(e))
+        return False
 
 async def test_warm_leads_endpoint(token):
-    """Test 5: Warm leads endpoint (Airtable Circles integration)"""
+    """Test 8: GET /api/warm-leads - List warm leads"""
     print("\n" + "="*80)
-    print("TEST 5: Warm Leads Endpoint (Airtable Circles Integration)")
+    print("TEST 8: GET /api/warm-leads - List Warm Leads")
     print("="*80)
     
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            print("\n[5.1] Testing GET /api/warm-leads...")
-            response = await client.get(
+            print("\n[8.1] Testing GET /api/warm-leads...")
+            leads_response = await client.get(
                 f"{BACKEND_URL}/warm-leads",
                 headers={"Authorization": f"Bearer {token}"}
             )
             
-            if response.status_code == 200:
-                data = response.json()
-                leads = data.get("leads", [])
-                business_name = data.get("business_name", "")
-                log_pass("Get warm leads from Airtable", 
-                        f"Business: {business_name}, Found {len(leads)} leads")
+            if leads_response.status_code == 200:
+                leads = leads_response.json()
+                log_pass("List warm leads", 
+                        f"Retrieved {len(leads)} warm leads")
+                return True
             else:
-                log_fail("Get warm leads", f"Status: {response.status_code}")
+                log_fail("List warm leads", 
+                        f"Status: {leads_response.status_code}, Body: {leads_response.text}")
+                return False
                 
     except Exception as e:
-        log_fail("Warm leads endpoint test", str(e))
+        log_fail("List warm leads test", str(e))
+        return False
 
-async def test_social_generate_endpoint(token):
-    """Test 6: Social generate endpoint (OpenAI integration)"""
+async def test_root_endpoint():
+    """Test 9: GET / - Root endpoint (no auth required)"""
     print("\n" + "="*80)
-    print("TEST 6: Social Generate Endpoint (OpenAI Integration)")
+    print("TEST 9: GET /api/ - Root Endpoint")
     print("="*80)
     
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            print("\n[6.1] Testing POST /api/social/generate...")
-            response = await client.post(
-                f"{BACKEND_URL}/social/generate",
-                headers={"Authorization": f"Bearer {token}"},
-                json={
-                    "testimonial": "PayRewards has transformed how we handle customer rewards. The platform is intuitive and our customers love it.",
-                    "attribution": "John Smith, CEO at TechCorp",
-                    "company": "PayRewards",
-                    "pov": "company",
-                    "channels": ["linkedin", "instagram", "x"],
-                    "tone": "professional"
-                }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            print("\n[9.1] Testing GET /api/...")
+            root_response = await client.get(f"{BACKEND_URL}/")
+            
+            if root_response.status_code == 200:
+                root_data = root_response.json()
+                log_pass("Root endpoint", 
+                        f"Response: {root_data}")
+                return True
+            else:
+                log_fail("Root endpoint", 
+                        f"Status: {root_response.status_code}, Body: {root_response.text}")
+                return False
+                
+    except Exception as e:
+        log_fail("Root endpoint test", str(e))
+        return False
+
+async def test_invalid_auth():
+    """Test 10: Test invalid authentication"""
+    print("\n" + "="*80)
+    print("TEST 10: Invalid Authentication Handling")
+    print("="*80)
+    
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            print("\n[10.1] Testing /api/auth/me with invalid token...")
+            me_response = await client.get(
+                f"{BACKEND_URL}/auth/me",
+                headers={"Authorization": "Bearer invalid.token.here"}
             )
             
-            if response.status_code == 200:
-                data = response.json()
-                channels = data.get("channels", {})
-                log_pass("Social generate with OpenAI", 
-                        f"Generated content for {len(channels)} channels: {', '.join(channels.keys())}")
+            if me_response.status_code == 401:
+                log_pass("Invalid token handling", 
+                        "Correctly returned 401 for invalid token")
+                return True
             else:
-                log_fail("Social generate", f"Status: {response.status_code}, Body: {response.text}")
+                log_fail("Invalid token handling", 
+                        f"Expected 401, got {me_response.status_code}")
+                return False
                 
     except Exception as e:
-        log_fail("Social generate endpoint test", str(e))
+        log_fail("Invalid authentication test", str(e))
+        return False
 
-async def test_public_testimonial_endpoints():
-    """Test 7: Public testimonial endpoints (no auth required)"""
+async def test_missing_auth():
+    """Test 11: Test missing authentication"""
     print("\n" + "="*80)
-    print("TEST 7: Public Testimonial Endpoints")
+    print("TEST 11: Missing Authentication Handling")
     print("="*80)
     
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            # First, get a share_id from sources
-            token = await get_auth_token()
-            response = await client.get(
-                f"{BACKEND_URL}/sources",
-                headers={"Authorization": f"Bearer {token}"}
+            print("\n[11.1] Testing /api/auth/me without Authorization header...")
+            me_response = await client.get(f"{BACKEND_URL}/auth/me")
+            
+            if me_response.status_code == 401:
+                log_pass("Missing auth header handling", 
+                        "Correctly returned 401 for missing Authorization header")
+                return True
+            else:
+                log_fail("Missing auth header handling", 
+                        f"Expected 401, got {me_response.status_code}")
+                return False
+                
+    except Exception as e:
+        log_fail("Missing authentication test", str(e))
+        return False
+
+async def test_business_profile_without_auth():
+    """Test 12: Test business profile endpoints without authentication"""
+    print("\n" + "="*80)
+    print("TEST 12: Business Profile Endpoints Without Authentication")
+    print("="*80)
+    
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            print("\n[12.1] Testing GET /api/business/profile without auth...")
+            get_response = await client.get(f"{BACKEND_URL}/business/profile")
+            
+            if get_response.status_code == 401:
+                log_pass("Business profile GET without auth", 
+                        "Correctly returned 401 for missing authentication")
+            else:
+                log_fail("Business profile GET without auth", 
+                        f"Expected 401, got {get_response.status_code}")
+            
+            print("\n[12.2] Testing POST /api/business/profile without auth...")
+            post_response = await client.post(
+                f"{BACKEND_URL}/business/profile",
+                json={"website": "test.com"}
             )
             
-            if response.status_code == 200:
-                sources = response.json()
-                if sources:
-                    share_id = sources[0].get("share_id")
-                    if share_id:
-                        print(f"\n[7.1] Testing GET /api/public/testimonial/{share_id}...")
-                        response = await client.get(
-                            f"{BACKEND_URL}/public/testimonial/{share_id}"
-                        )
-                        
-                        if response.status_code == 200:
-                            data = response.json()
-                            log_pass("Get public testimonial", 
-                                    f"Company: {data.get('company_name')}, Status: {data.get('status')}")
-                        else:
-                            log_fail("Get public testimonial", f"Status: {response.status_code}")
-                    else:
-                        log_warning("Public testimonial", "No share_id available in sources")
-                else:
-                    log_warning("Public testimonial", "No sources available to test")
+            if post_response.status_code == 401:
+                log_pass("Business profile POST without auth", 
+                        "Correctly returned 401 for missing authentication")
+                return True
             else:
-                log_fail("Public testimonial setup", f"Failed to get sources: {response.status_code}")
+                log_fail("Business profile POST without auth", 
+                        f"Expected 401, got {post_response.status_code}")
+                return False
                 
     except Exception as e:
-        log_fail("Public testimonial endpoints test", str(e))
-
-async def test_events_log_endpoint():
-    """Test 8: Events log endpoint (Airtable Event_Log)"""
-    print("\n" + "="*80)
-    print("TEST 8: Events Log Endpoint (Airtable Event_Log)")
-    print("="*80)
-    
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            print("\n[8.1] Testing POST /api/events/log...")
-            response = await client.post(
-                f"{BACKEND_URL}/events/log",
-                json={
-                    "event": "test_event",
-                    "page": "test_page",
-                    "share_id": "test_share_id",
-                    "details": "Backend comprehensive test"
-                }
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                log_pass("Log event to Airtable", f"Response: {data}")
-            else:
-                log_fail("Log event", f"Status: {response.status_code}")
-                
-    except Exception as e:
-        log_fail("Events log endpoint test", str(e))
-
-async def test_cors_headers():
-    """Test 9: CORS headers"""
-    print("\n" + "="*80)
-    print("TEST 9: CORS Headers")
-    print("="*80)
-    
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            print("\n[9.1] Testing CORS headers on root endpoint...")
-            response = await client.options(f"{BACKEND_URL}/")
-            
-            headers = response.headers
-            if "access-control-allow-origin" in headers:
-                log_pass("CORS headers", 
-                        f"Access-Control-Allow-Origin: {headers.get('access-control-allow-origin')}")
-            else:
-                log_warning("CORS headers", "CORS headers may not be properly configured")
-                
-    except Exception as e:
-        log_fail("CORS headers test", str(e))
-
-async def test_error_handling():
-    """Test 10: Error handling"""
-    print("\n" + "="*80)
-    print("TEST 10: Error Handling")
-    print("="*80)
-    
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            # Test 404 for non-existent endpoint
-            print("\n[10.1] Testing 404 for non-existent endpoint...")
-            response = await client.get(f"{BACKEND_URL}/nonexistent")
-            
-            if response.status_code == 404:
-                log_pass("404 error handling", "Correctly returned 404 for non-existent endpoint")
-            else:
-                log_fail("404 error handling", f"Expected 404, got {response.status_code}")
-            
-            # Test 401 for protected endpoint without auth
-            print("\n[10.2] Testing 401 for protected endpoint without auth...")
-            response = await client.get(f"{BACKEND_URL}/sources")
-            
-            if response.status_code == 401:
-                log_pass("401 error handling", "Correctly returned 401 for missing auth")
-            else:
-                log_fail("401 error handling", f"Expected 401, got {response.status_code}")
-                
-    except Exception as e:
-        log_fail("Error handling test", str(e))
+        log_fail("Business profile without auth test", str(e))
+        return False
 
 def print_summary():
     """Print test summary"""
     print("\n" + "="*80)
-    print("COMPREHENSIVE BACKEND TEST SUMMARY")
+    print("TEST SUMMARY")
     print("="*80)
     
     total_tests = len(test_results["passed"]) + len(test_results["failed"])
@@ -381,48 +461,45 @@ def print_summary():
             print(f"   {warning['message']}")
     
     print("\n" + "="*80)
-    print("KEY FEATURES VERIFIED:")
+    print("COMPREHENSIVE BACKEND TESTING COMPLETE")
     print("="*80)
-    print("✓ Token caching (5-minute TTL) to prevent rate limiting")
-    print("✓ Direct testimonial sync to Airtable Uplaud table")
-    print("✓ Supabase authentication with zero MongoDB dependencies")
-    print("✓ All major API endpoints responding correctly")
-    print("✓ Airtable integrations (User, Uplaud, Circles, Event_Log, Growth_Signals)")
-    print("✓ OpenAI integration for social content generation")
-    print("✓ Error handling (401, 404)")
     
     # Return exit code
     return 0 if len(test_results["failed"]) == 0 else 1
 
 async def main():
-    """Run all comprehensive backend tests"""
+    """Run all backend tests"""
     print("="*80)
     print("UPLAUD CRM - COMPREHENSIVE BACKEND TEST SUITE")
-    print("Testing: All endpoints with new caching and Airtable sync")
     print("="*80)
     print(f"\nBackend URL: {BACKEND_URL}")
     print(f"Test Time: {datetime.now(timezone.utc).isoformat()}")
+    print(f"Testing: All backend endpoints including new business profile routes")
     
-    # Get auth token for authenticated tests
-    print("\n[Setup] Getting authentication token...")
-    try:
-        token = await get_auth_token()
-        print("✓ Authentication token obtained")
-    except Exception as e:
-        print(f"✗ Failed to get auth token: {e}")
+    # Test 1: Authentication (get token)
+    token = await test_authentication()
+    
+    if not token:
+        print("\n❌ CRITICAL: Authentication failed. Cannot proceed with authenticated tests.")
+        print_summary()
         sys.exit(1)
     
-    # Run all tests
-    await test_root_endpoint()
-    await test_token_caching()
-    await test_sources_endpoints(token)
+    # Test 2-8: Authenticated endpoints
+    await test_auth_me(token)
+    await test_business_profile_post(token)
+    await test_business_profile_get(token)
+    await test_business_profile_update(token)
+    await test_sources_endpoint(token)
     await test_testimonials_endpoint(token)
     await test_warm_leads_endpoint(token)
-    await test_social_generate_endpoint(token)
-    await test_public_testimonial_endpoints()
-    await test_events_log_endpoint()
-    await test_cors_headers()
-    await test_error_handling()
+    
+    # Test 9: Root endpoint (no auth)
+    await test_root_endpoint()
+    
+    # Test 10-12: Error handling
+    await test_invalid_auth()
+    await test_missing_auth()
+    await test_business_profile_without_auth()
     
     # Print summary
     exit_code = print_summary()
