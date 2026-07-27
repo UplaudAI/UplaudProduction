@@ -683,6 +683,7 @@ export default function FinanceLandingPage() {
 <div className="text-white/60 text-xs sm:text-sm mt-4 sm:mt-6">© 2026 Uplaud. All rights reserved.</div>
 </div>
 </footer>
+</div>
     </div>
   );
 }
