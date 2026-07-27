@@ -98,3 +98,13 @@ def test_admin_upload(admin_headers):
     assert r.status_code == 200, r.text
     assert "url" in r.json()
     assert r.json()["url"].startswith("/uploads/")
+
+
+def test_lead_magnet_signup():
+    payload = {
+        "email": "test-lead@example.com",
+        "slug": "compounding-growth-flywheel"
+    }
+    r = requests.post(f"{BASE_URL}/api/blog/lead-magnet", json=payload, timeout=10)
+    assert r.status_code == 200, r.text
+    assert r.json() == {"status": "ok"}

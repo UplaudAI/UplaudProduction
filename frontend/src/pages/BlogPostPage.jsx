@@ -4,6 +4,7 @@ import { useParams, Link } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ArrowLeft, ArrowUpRight } from "lucide-react";
+import { toast } from "sonner";
 import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
 
@@ -106,7 +107,27 @@ export default function BlogPostPage() {
                 </ReactMarkdown>
               </article>
 
-              <div className="mt-16 pt-10 border-t border-[#eeeaf6] flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              {/* Lead Magnet Widget */}
+              <div data-testid="lead-magnet-widget" className="mt-16 rounded-2xl border border-[#d9d1ee] bg-[#faf9ff] p-6 sm:p-8">
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                  <div className="flex-1">
+                    <span className="inline-flex items-center gap-1 text-[11px] font-mono uppercase tracking-widest text-[#6d46c6] bg-[#f5f3ff] px-2.5 py-0.5 rounded-full mb-3">
+                      💡 exclusive guide
+                    </span>
+                    <h3 className="font-display text-[20px] font-semibold text-[#111827]">
+                      Download "{post.title}" as a PDF Playbook
+                    </h3>
+                    <p className="mt-1.5 text-[13.5px] leading-relaxed text-[#4b5563]">
+                      We'll compile this article, including all checklist items and formatting, into a clean PDF copy for you to read offline or share directly with your team.
+                    </p>
+                  </div>
+                  <div className="w-full md:w-auto shrink-0 min-w-[280px]">
+                    <LeadMagnetForm slug={slug} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-10 pt-10 border-t border-[#eeeaf6] flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div>
                   <div className="font-display text-[20px] font-semibold text-[#111827]">
                     Turn your customer trust into your #1 acquisition channel.
@@ -130,5 +151,56 @@ export default function BlogPostPage() {
       </main>
       <Footer />
     </div>
+  );
+}
+
+function LeadMagnetForm({ slug }) {
+  const [email, setEmail] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!email.trim()) return;
+    setLoading(true);
+    try {
+      await axios.post(`${API}/blog/lead-magnet`, { email: email.trim(), slug });
+      setSubmitted(true);
+      toast.success("PDF request received!", { description: "Check your inbox in a couple of minutes." });
+    } catch (err) {
+      toast.error("Couldn't request PDF. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (submitted) {
+    return (
+      <div data-testid="lead-magnet-success" className="text-center md:text-left bg-white border border-[#c8f0e4] rounded-xl p-4 text-[#0f9b7c] text-[13px] font-medium">
+        🎉 Playbook sent! Check your inbox shortly.
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} data-testid="lead-magnet-form" className="space-y-2">
+      <input
+        type="email"
+        required
+        placeholder="Enter your work email"
+        data-testid="lead-magnet-email-input"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        className="w-full bg-white border border-[#eeeaf6] rounded-xl px-3 py-2.5 text-[13.5px] text-[#111827] focus:border-[#6d46c6] focus:outline-none"
+      />
+      <button
+        type="submit"
+        data-testid="lead-magnet-submit-btn"
+        disabled={loading}
+        className="btn-primary w-full justify-center h-10 text-[13px]"
+      >
+        {loading ? "Sending..." : "Download Playbook"}
+      </button>
+    </form>
   );
 }

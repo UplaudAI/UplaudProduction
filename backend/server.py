@@ -165,6 +165,11 @@ class BlogPostOut(BaseModel):
     created_at: str
 
 
+class LeadMagnetRequest(BaseModel):
+    email: EmailStr
+    slug: str
+
+
 class BlogListResponse(BaseModel):
     posts: List[BlogPostOut]
 
@@ -1291,6 +1296,30 @@ async def admin_upload(file: UploadFile = File(...), token: str = Depends(check_
         f.write(content)
     url = f"/uploads/{filename}"
     return {"url": url}
+
+
+@api_router.post("/blog/lead-magnet")
+async def blog_lead_magnet(body: LeadMagnetRequest):
+    email = body.email.lower().strip()
+    slug = body.slug.strip()
+    
+    # 1. Save to MongoDB
+    doc = {
+        "email": email,
+        "slug": slug,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.lead_magnet_signups.insert_one(doc)
+    
+    # 2. Save/Sync to Airtable as a CRM User Lead in the background!
+    name_part = email.split("@")[0].title().replace(".", " ").replace("-", " ")
+    asyncio.create_task(airtable_client.find_or_create_user(
+        name=name_part,
+        email=email,
+        extra_fields={"Interests": f"Blog Lead Magnet: {slug}"}
+    ))
+    
+    return {"status": "ok"}
 
 
 app.include_router(api_router)
