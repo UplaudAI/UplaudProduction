@@ -31,6 +31,23 @@ export default function BusinessLoginPage() {
       setError("Please enter your email and password");
       return;
     }
+    
+    const emailParts = email.toLowerCase().trim().split("@");
+    if (emailParts.length < 2) {
+      setError("Please enter a valid email address");
+      return;
+    }
+    const domain = emailParts[1];
+    const personalDomains = [
+      "gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "aol.com",
+      "icloud.com", "mail.com", "zoho.com", "yandex.com", "protonmail.com",
+      "proton.me", "gmx.com", "live.com", "msn.com", "me.com", "ymail.com"
+    ];
+    if (personalDomains.includes(domain)) {
+      setError("Please use your work email address. Personal email domains (like gmail.com) are not allowed.");
+      return;
+    }
+
     setLoading(true);
 
     if (isSignUp) {

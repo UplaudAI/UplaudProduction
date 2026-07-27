@@ -179,6 +179,30 @@ class BlogListResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # Auth helpers
 # ---------------------------------------------------------------------------
+def is_work_email(email: str) -> bool:
+    parts = email.lower().strip().split("@")
+    if len(parts) < 2:
+        return False
+    domain = parts[-1]
+    personal_domains = {
+        "gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "aol.com",
+        "icloud.com", "mail.com", "zoho.com", "yandex.com", "protonmail.com",
+        "proton.me", "gmx.com", "live.com", "msn.com", "me.com", "ymail.com"
+    }
+    return domain not in personal_domains
+
+
+def derive_business_name(email: str) -> str:
+    parts = email.lower().strip().split("@")
+    if len(parts) < 2:
+        return "My Company"
+    domain = parts[-1]
+    name_part = domain.split(".")[0]
+    name_part = name_part.replace("-", " ").replace("_", " ")
+    words = [word.capitalize() for word in name_part.split() if word]
+    return " ".join(words) if words else "My Company"
+
+
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
@@ -228,13 +252,15 @@ async def get_current_user(request: Request) -> dict:
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         email = payload.get("email", "local@example.com").lower().strip()
+        if not is_work_email(email):
+            raise HTTPException(status_code=400, detail="Personal email domains are not allowed. Please use your work email.")
         is_admin = (email == os.environ.get("ADMIN_EMAIL", "").lower().strip())
         return {
             "id": payload.get("sub", "local-id"),
             "email": email,
             "name": payload.get("name") or email.split("@")[0],
             "role": payload.get("role", "business"),
-            "company": payload.get("company", "My Company"),
+            "company": derive_business_name(email),
             "approved": True if is_admin else payload.get("approved", True)
         }
     except jwt.ExpiredSignatureError:
@@ -254,6 +280,9 @@ async def get_current_user(request: Request) -> dict:
     
     if not supabase_id or not email:
         raise HTTPException(status_code=401, detail="Invalid Supabase token data")
+        
+    if not is_work_email(email):
+        raise HTTPException(status_code=400, detail="Personal email domains are not allowed. Please use your work email.")
         
     user_metadata = supabase_user.get("user_metadata", {})
     app_metadata = supabase_user.get("app_metadata", {})
@@ -275,7 +304,7 @@ async def get_current_user(request: Request) -> dict:
         "email": email,
         "name": user_metadata.get("name") or email.split("@")[0],
         "role": app_metadata.get("role") or user_metadata.get("role") or "business",
-        "company": user_metadata.get("company") or "My Company",
+        "company": derive_business_name(email),
         "approved": approved
     }
 
@@ -626,6 +655,10 @@ async def login(body: LoginRequest):
     email = body.email.lower().strip()
     password = body.password
     
+    # Check for work email
+    if not is_work_email(email):
+        raise HTTPException(status_code=400, detail="Personal email domains (like gmail.com) are not allowed. Please use your work email.")
+    
     # Authenticate with Supabase directly over API
     supabase_url = os.environ.get("SUPABASE_URL", "https://nqvkhcrzxdonmmtjzqup.supabase.co")
     supabase_url = supabase_url.rstrip("/")
@@ -671,7 +704,7 @@ async def login(body: LoginRequest):
         email=email,
         name=user_metadata.get("name") or email.split("@")[0],
         role=app_metadata.get("role") or user_metadata.get("role") or "business",
-        company=user_metadata.get("company") or "My Company",
+        company=derive_business_name(email),
         approved=approved
     )
     

@@ -104,6 +104,17 @@
 
 ## user_problem_statement: "We are building Uplaud, an AI driven growth CRM for converting customer voice to a growth engine through referrals, social content. The code is here. Now I need you to wire in Auth from Supabase tables: NEXT_PUBLIC_SUPABASE_URL=https://nqvkhcrzxdonmmtjzqup.supabase.co NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_TTolYCpD5R_nBnxx1Dt7yw_Mk42tl_4"
 ## backend:
+##   - task: "Work email validation and business name derivation"
+##     implemented: true
+##     working: true
+##     file: "backend/server.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: false
+##     status_history:
+##         - working: true
+##           agent: "testing"
+##           comment: "Work email validation and business name derivation fully tested and working (2026-07-27). Created comprehensive test suite (test_work_email_validation.py) with 41 tests - ALL PASSED. ✓ is_work_email() correctly identifies personal domains (gmail.com, yahoo.com, hotmail.com, outlook.com, aol.com, icloud.com, protonmail.com, etc.) and rejects them. ✓ Personal emails rejected at /auth/login with 400 Bad Request and clear error message. ✓ Personal emails rejected in get_current_user() with 400 Bad Request. ✓ Work emails accepted (not rejected as personal). ✓ derive_business_name() correctly converts email domains to business names (e.g., acme-corp.com -> Acme Corp, tech-startup.io -> Tech Startup). ✓ Business name correctly populated in user object. Implementation: Lines 182-203 (is_work_email, derive_business_name), used in login endpoint (line 659) and get_current_user (lines 255, 284, 263, 307)."
 ##   - task: "Supabase dual authentication and metadata validation"
 ##     implemented: true
 ##     working: true
@@ -134,12 +145,13 @@
 ##
 ## metadata:
 ##   created_by: "main_agent"
-##   version: "1.1"
-##   test_sequence: 3
+##   version: "1.2"
+##   test_sequence: 4
 ##   run_ui: false
 ##
 ## test_plan:
 ##   current_focus:
+##     - "Work email validation and business name derivation"
 ##     - "Supabase dual authentication and metadata validation"
 ##     - "Supabase Client and Login/Signup Integration"
 ##   stuck_tasks: []
@@ -153,3 +165,5 @@
 ##       message: "Backend authentication testing complete. CRITICAL BUG FOUND AND FIXED: The broad 'except Exception' handler in get_current_user() was catching HTTPException(403) for unapproved users, causing them to get 401 instead of 403. Fixed by adding explicit HTTPException re-raise. All 11 backend auth tests now passing: ✓ Local JWT auth, ✓ Token decoding, ✓ Approval flag (403 for unapproved), ✓ Invalid credentials (401), ✓ Missing auth header (401), ✓ Supabase fallback mechanism, ✓ Auto-provisioning code verified. Full Supabase integration (token verification + auto-provisioning) requires actual Supabase authentication to test end-to-end but code implementation is correct."
 ##     - agent: "testing"
 ##       message: "ZERO MongoDB Dependencies Verified (2026-07-27): Comprehensive code analysis and testing confirms authentication has ZERO MongoDB dependencies. ✓ /auth/login: NO db.users calls, authenticates directly via Supabase POST /auth/v1/token API. ✓ get_current_user(): NO db.users calls, verifies tokens via Supabase GET /auth/v1/user API. ✓ Approval flags: Read from Supabase user_metadata/app_metadata only. ✓ Backend logs confirm all auth requests go to Supabase endpoints. ✓ Error handling: Returns 401 for invalid credentials, 403 for unapproved users, 401 for missing/invalid tokens. Updated backend_test.py to remove MongoDB dependencies. Test credentials don't exist in Supabase (expected), but code implementation is correct and fully Supabase-based."
+##     - agent: "testing"
+##       message: "Work Email Validation Testing Complete (2026-07-27): Created and executed comprehensive test suite for work email validation and business name derivation. ALL 41 TESTS PASSED ✅. Test coverage: (1) is_work_email() function unit tests - 19 tests covering all personal domains (gmail, yahoo, hotmail, outlook, aol, icloud, protonmail, proton.me, gmx, live, msn, me, ymail) and work email domains. (2) derive_business_name() function unit tests - 7 tests covering various domain formats (acme-corp.com -> Acme Corp, tech-startup.io -> Tech Startup, multi-word-company.com -> Multi Word Company). (3) Integration tests at /auth/login endpoint - 12 tests verifying personal emails rejected with 400 Bad Request and work emails accepted. (4) Integration tests in get_current_user() - 3 tests with local JWT tokens verifying personal email rejection and work email acceptance with correct business name derivation. Test file: /app/test_work_email_validation.py. All requirements verified: ✓ Valid work emails accepted, ✓ Personal domains rejected with 400, ✓ Business names derived correctly."
