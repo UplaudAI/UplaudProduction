@@ -225,12 +225,37 @@ export default function BusinessLoginPage() {
             </div>
 
             {error && (
-              <p
+              <div
                 data-testid="login-error"
-                className="text-[13px] text-red-600 font-medium"
+                className="text-[13px] text-red-600 font-medium bg-red-50 p-4 rounded-xl border border-red-100"
               >
-                {error}
-              </p>
+                {error.toLowerCase().includes("rate limit") ? (
+                  <div>
+                    <p className="font-semibold">{error}</p>
+                    <p className="mt-2 text-[12px] text-red-500 leading-relaxed font-normal">
+                      This is a security limit set by Supabase Auth (default is 3 signups/hour). To remove this limit:
+                    </p>
+                    <ol className="mt-2 list-decimal list-inside text-[11.5px] text-red-500 space-y-1 font-normal leading-relaxed">
+                      <li>
+                        Go to your{" "}
+                        <a
+                          href="https://supabase.com/dashboard/project/nqvkhcrzxdonmmtjzqup/auth/providers"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline hover:text-red-700 font-semibold"
+                        >
+                          Supabase Auth Providers Dashboard
+                        </a>
+                      </li>
+                      <li>Click on <b>Email</b></li>
+                      <li>Toggle <b>OFF</b> <b>{"\"Confirm Email\""}</b> {"(this disables validation emails so signups are instant and do not trigger rate limits)"}</li>
+                      <li>Click <b>Save</b></li>
+                    </ol>
+                  </div>
+                ) : (
+                  error
+                )}
+              </div>
             )}
 
             {success && (
