@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { getAuth } from "@/lib/business-storage";
 import {
   Sparkles,
   ArrowUpRight,
@@ -91,7 +92,20 @@ function EditableFunnel() {
       <div className="flex items-baseline gap-3 flex-wrap">
         <div>
           <h2 className="font-display text-[20px] font-semibold tracking-tight text-[#111827]">
-            The PayRewards growth funnel
+              const user = getAuth();
+  const businessName = user?.workspace || user?.company || "My Company";
+
+  return (
+    <section
+      data-testid="growth-funnel"
+      className="rounded-2xl border border-[#eeeaf6] bg-white p-8"
+    >
+      {/* Header */}
+      <div className="flex items-baseline gap-3 flex-wrap">
+        <div>
+          <h2 className="font-display text-[20px] font-semibold tracking-tight text-[#111827]">
+            The {businessName} growth funnel
+          </h2>
           </h2>
           <p className="text-[12px] text-[#9ca3af] mt-1">
             {editMode

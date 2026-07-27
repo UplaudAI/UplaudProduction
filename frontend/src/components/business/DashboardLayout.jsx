@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
+import api from "@/lib/api";
 import {
   Upload,
   MessagesSquare,
@@ -62,6 +63,7 @@ export default function DashboardLayout() {
   const nav = useNavigate();
   const loc = useLocation();
   const user = getAuth();
+  const [sources, setSources] = useState([]);
 
   useEffect(() => {
     if (!user) {
@@ -69,12 +71,31 @@ export default function DashboardLayout() {
     }
   }, [user, nav]);
 
+  useEffect(() => {
+    if (user) {
+      api.get("/sources")
+        .then(({ data }) => {
+          setSources(data || []);
+          if (!data || data.length === 0) {
+            const permittedPaths = ["/business/import", "/business/settings", "/business/roi-simulator", "/business"];
+            if (!permittedPaths.includes(loc.pathname)) {
+              nav("/business/import", { replace: true });
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }, [user, loc.pathname, nav]);
+
   const handleLogout = () => {
     clearAuth();
     nav("/business", { replace: true });
   };
 
   if (!user) return null;
+
+  const businessName = user.workspace || user.company || "My Company";
+  const logoInitial = businessName ? businessName.charAt(0).toUpperCase() : "M";
 
   return (
     <div
@@ -103,14 +124,14 @@ export default function DashboardLayout() {
           className="mx-3 mt-3 mb-4 px-3 py-2.5 rounded-xl border border-[#eeeaf6] hover:border-[#d9d1ee] flex items-center gap-3 transition-colors text-left"
         >
           <div className="w-8 h-8 rounded-lg bg-[#261c4d] text-white flex items-center justify-center font-display text-[13px] font-semibold">
-            {BRAND.logoInitial}
+            {logoInitial}
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-[13px] font-semibold text-[#111827] leading-tight truncate">
-              {BRAND.company}
+              {businessName}
             </div>
             <div className="text-[10.5px] text-[#9ca3af] font-mono truncate">
-              {BRAND.vertical}
+              B2B SaaS Workspace
             </div>
           </div>
           <ChevronDown className="w-4 h-4 text-[#9ca3af] shrink-0" />
@@ -212,7 +233,7 @@ function Topbar({ user, pathname }) {
         {title}
       </div>
       <span className="text-[11px] font-mono text-[#9ca3af]">
-        {BRAND.company}
+        {user?.workspace || user?.company || "My Company"}
       </span>
 
       <div className="ml-auto flex items-center gap-3">
