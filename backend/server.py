@@ -201,6 +201,8 @@ def derive_business_name(email: str) -> str:
     if len(parts) < 2:
         return "My Company"
     domain = parts[-1]
+    if domain.startswith("www."):
+        domain = domain[4:]
     name_part = domain.split(".")[0]
     name_part = name_part.replace("-", " ").replace("_", " ")
     words = [word.capitalize() for word in name_part.split() if word]
@@ -746,6 +748,8 @@ async def save_business_profile(body: BusinessProfileRequest, current=Depends(ge
     website = body.website.strip().lower()
     # Remove protocol prefix if present
     clean_website = re.sub(r"^https?://", "", website).rstrip("/")
+    if clean_website.startswith("www."):
+        clean_website = clean_website[4:]
     
     # Derive business name
     company_name = derive_business_name("user@" + clean_website) if clean_website else current.get("company", "My Company")
