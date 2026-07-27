@@ -1,0 +1,19 @@
+{
+  "summary": "Tested /finance route on the public frontend URL. The page fails to render due to a JSX compilation error in FinanceLandingPage.jsx. The dev server overlay 'Compiled with problems' is shown instead of the landing page, so the required h1 'Nobody moves their money because of an ad.' cannot be verified.",
+  "tested_scope": ["frontend"],
+  "passed": [],
+  "failed": [
+    {
+      "area": "frontend / FinanceLandingPage.jsx",
+      "issue": "Module build failed (babel-loader) - SyntaxError: /app/frontend/src/pages/FinanceLandingPage.jsx: Expected corresponding JSX closing tag for <svg>. (115:1424). Page renders CRA red error overlay instead of the Finance landing UI.",
+      "evidence": "Playwright screenshot shows: 'Compiled with problems: ERROR in ./src/pages/FinanceLandingPage.jsx ... SyntaxError: Expected corresponding JSX closing tag for <svg>. (115:1424)'. Locator('h1').wait_for timed out because no h1 renders.",
+      "priority": "HIGH"
+    }
+  ],
+  "action_items": [
+    "Fix the unclosed/mismatched <svg> tag around line 115 in /app/frontend/src/pages/FinanceLandingPage.jsx (JSX requires every <svg> and inner <path> to be properly self-closed like <path ... /> and <svg>...</svg>). After fix, revisit /finance to verify the h1 'Nobody moves their money because of an ad.' renders."
+  ],
+  "success_rate": {"backend": "skipped", "frontend": "0%"},
+  "retest_needed": true,
+  "full_testing_deferred": true
+}

@@ -2,6 +2,7 @@ import "@/App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import LandingPage from "@/pages/LandingPage";
+import FinanceLandingPage from "@/pages/FinanceLandingPage";
 import BlogListPage from "@/pages/BlogListPage";
 import BlogPostPage from "@/pages/BlogPostPage";
 import AdminBlogPage from "@/pages/AdminBlogPage";
@@ -25,6 +26,7 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<LandingPage />} />
+          <Route path="/finance" element={<FinanceLandingPage />} />
           <Route path="/blog" element={<BlogListPage />} />
           <Route path="/blog/:slug" element={<BlogPostPage />} />
           <Route path="/admin/blog" element={<AdminBlogPage />} />
