@@ -259,7 +259,7 @@ export default function ConversationsPage() {
             <div className="relative">
               <div className="flex items-center gap-2">
                 <FileCheck className="w-4 h-4 text-[#0f9b7c]" strokeWidth={1.75} />
-                <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#0f9b7c]">
+                <div className="text-[9px] font-mono uppercase tracking-[0.18em] text-[#0f9b7c]">
                   Latest customer-approved testimonial
                 </div>
               </div>
