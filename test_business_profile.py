@@ -9,7 +9,7 @@ import json
 import sys
 
 # Configuration
-BACKEND_URL = "https://referral-engine-18.preview.emergentagent.com/api"
+BACKEND_URL = "https://growth-signals-8.preview.emergentagent.com/api"
 ADMIN_EMAIL = "dcameron@payrewards.com"
 ADMIN_PASSWORD = "P@yRew@rds123"
 

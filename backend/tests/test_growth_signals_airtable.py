@@ -4,7 +4,7 @@ import time
 import requests
 import pytest
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://referral-engine-18.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://growth-signals-8.preview.emergentagent.com").rstrip("/")
 AIRTABLE_PAT = os.environ.get("AIRTABLE_PAT") or open("/app/backend/.env").read().split('AIRTABLE_PAT="')[1].split('"')[0]
 AIRTABLE_BASE_ID = "appFUJWWTaoJ3YiWt"
 AIRTABLE_URL = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/Growth_Signals"

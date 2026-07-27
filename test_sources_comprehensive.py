@@ -13,7 +13,7 @@ import io
 from datetime import datetime, timezone
 
 # Configuration
-BACKEND_URL = "https://referral-engine-18.preview.emergentagent.com/api"
+BACKEND_URL = "https://growth-signals-8.preview.emergentagent.com/api"
 
 # Test credentials
 ADMIN_EMAIL = "dcameron@payrewards.com"

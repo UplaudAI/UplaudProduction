@@ -2,7 +2,7 @@
 ## Supabase-Only Authentication (Zero MongoDB Dependencies)
 
 ### Test Date: 2026-07-27
-### Backend URL: https://referral-engine-18.preview.emergentagent.com/api
+### Backend URL: https://growth-signals-8.preview.emergentagent.com/api
 
 ---
 

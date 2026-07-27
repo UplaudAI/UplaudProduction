@@ -25,6 +25,9 @@ from pydantic import BaseModel, EmailStr, Field
 from docx import Document as DocxDocument
 from pypdf import PdfReader
 from openai import OpenAI
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin
+from collections import Counter
 
 import airtable_client
 
@@ -469,6 +472,93 @@ async def generate_insights(transcript: str, client_name: str, variation: int = 
 
 
 # ---------------------------------------------------------------------------
+# Website scraping — brand voice, brand color, logo extraction for the
+# "Personalize workspace" flow (Sources page, state 0).
+# ---------------------------------------------------------------------------
+HEX_COLOR_RE = re.compile(r"#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})\b")
+GENERIC_HEX = {"#fff", "#ffffff", "#000", "#000000", "#fafafa", "#f5f5f5", "#eee", "#eeeeee", "#ccc", "#cccccc"}
+
+BRAND_VOICE_SYSTEM = (
+    "You are a brand strategist. Given a company's homepage title, meta description and visible "
+    "site copy, infer their brand voice/tone in 2-3 concise sentences (e.g. playful vs formal, "
+    "technical vs approachable, energetic vs calm). Ground it strictly in the text provided — never "
+    "invent facts about the company. Respond with a single valid JSON object and nothing else."
+)
+
+
+def _extract_dominant_hex(html: str) -> Optional[str]:
+    """Best-effort dominant brand color from inline <style> blocks / style attrs (excludes generic black/white/gray)."""
+    codes = [c.lower() for c in HEX_COLOR_RE.findall(html)]
+    codes = [c if len(c) == 7 else "#" + "".join(ch * 2 for ch in c[1:]) for c in codes]
+    codes = [c for c in codes if c not in GENERIC_HEX]
+    if not codes:
+        return None
+    return Counter(codes).most_common(1)[0][0]
+
+
+async def scrape_business_website(website_domain: str) -> dict:
+    """Scrape the given domain's homepage and derive brand_color, logo_url and (via LLM) brand_voice.
+    Best-effort — returns whatever it can extract, never raises."""
+    result = {"brand_color": "", "logo_url": "", "brand_voice": ""}
+    url = f"https://{website_domain}"
+    html = ""
+    try:
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+            resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0 (UplaudBrandBot)"})
+            resp.raise_for_status()
+            html = resp.text
+            final_url = str(resp.url)
+    except Exception as e:
+        logger.warning("Website scrape failed for %s: %s", website_domain, e)
+        return result
+
+    try:
+        soup = BeautifulSoup(html, "html.parser")
+        title = (soup.title.string or "").strip() if soup.title and soup.title.string else ""
+        meta_desc_tag = soup.find("meta", attrs={"name": "description"}) or soup.find("meta", attrs={"property": "og:description"})
+        meta_description = (meta_desc_tag.get("content") or "").strip() if meta_desc_tag else ""
+
+        # Brand color: theme-color meta tag first, else dominant hex in inline CSS
+        theme_color_tag = soup.find("meta", attrs={"name": "theme-color"})
+        brand_color = (theme_color_tag.get("content") or "").strip() if theme_color_tag else ""
+        if not brand_color or not HEX_COLOR_RE.fullmatch(brand_color):
+            brand_color = _extract_dominant_hex(html) or ""
+        result["brand_color"] = brand_color
+
+        # Logo: og:image, then apple-touch-icon, then favicon link
+        logo_url = ""
+        og_image = soup.find("meta", attrs={"property": "og:image"})
+        if og_image and og_image.get("content"):
+            logo_url = og_image["content"]
+        if not logo_url:
+            icon_link = soup.find("link", attrs={"rel": lambda v: v and "apple-touch-icon" in v.lower()}) or \
+                soup.find("link", attrs={"rel": lambda v: v and "icon" in v.lower()})
+            if icon_link and icon_link.get("href"):
+                logo_url = icon_link["href"]
+        if logo_url:
+            result["logo_url"] = urljoin(final_url, logo_url)
+
+        # Brand voice: LLM inference grounded in scraped copy
+        body_text = " ".join(soup.get_text(" ", strip=True).split())[:3000]
+        if openai_client and (title or meta_description or body_text):
+            prompt = (
+                f"Homepage title: {title or 'N/A'}\n"
+                f"Meta description: {meta_description or 'N/A'}\n"
+                f"Visible site copy (truncated): {body_text or 'N/A'}\n\n"
+                'Return ONLY a JSON object: {"brand_voice": "2-3 sentence description of this brand\'s tone/voice"}'
+            )
+            try:
+                text = await asyncio.to_thread(_call_openai, BRAND_VOICE_SYSTEM, prompt, 0.3)
+                result["brand_voice"] = (_parse_json(text) or {}).get("brand_voice", "").strip()
+            except Exception as e:
+                logger.warning("Brand voice LLM inference failed for %s: %s", website_domain, e)
+    except Exception as e:
+        logger.warning("Website scrape parsing failed for %s: %s", website_domain, e)
+
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Referral Agent — research a warm lead's public web presence, then draft a
 # personalized email + LinkedIn InMail using the referrer's real testimonial.
 # ---------------------------------------------------------------------------
@@ -753,11 +843,17 @@ async def save_business_profile(body: BusinessProfileRequest, current=Depends(ge
     
     # Derive business name
     company_name = derive_business_name("user@" + clean_website) if clean_website else current.get("company", "My Company")
+
+    # Scrape the website for brand voice, brand color and logo
+    brand = await scrape_business_website(clean_website) if clean_website else {"brand_color": "", "logo_url": "", "brand_voice": ""}
+    brand_color = brand.get("brand_color") or "#6d46c6"
     
     profile = {
         "website": clean_website,
         "company_name": company_name,
-        "brand_color": "#6d46c6"
+        "brand_color": brand_color,
+        "logo_url": brand.get("logo_url") or "",
+        "brand_voice": brand.get("brand_voice") or "",
     }
     
     # Save/upsert directly to Airtable "Business" table (No MongoDB!)
@@ -769,7 +865,12 @@ async def save_business_profile(body: BusinessProfileRequest, current=Depends(ge
             fields = {
                 "Business Name": company_name,
                 "Business Domain": clean_website,
+                "Brand_Color": brand_color,
             }
+            if profile["logo_url"]:
+                fields["Logo_Url"] = profile["logo_url"]
+            if profile["brand_voice"]:
+                fields["Brand_Voice"] = profile["brand_voice"]
             if recs:
                 await airtable_client._update(airtable_client.TABLE_BUSINESS, recs[0]["id"], fields)
             else:
@@ -789,6 +890,9 @@ async def get_business_profile(current=Depends(get_current_user)):
     
     company_name = current.get("company", "My Company")
     website = domain
+    brand_color = "#6d46c6"
+    logo_url = ""
+    brand_voice = ""
     
     if airtable_client._enabled() and domain:
         try:
@@ -799,13 +903,18 @@ async def get_business_profile(current=Depends(get_current_user)):
                 fields = recs[0].get("fields", {})
                 company_name = fields.get("Business Name") or company_name
                 website = fields.get("Business Domain") or domain
+                brand_color = fields.get("Brand_Color") or brand_color
+                logo_url = fields.get("Logo_Url") or ""
+                brand_voice = fields.get("Brand_Voice") or ""
         except Exception as ae:
             logger.warning(f"Failed to fetch business profile from Airtable: {ae}")
             
     return {
         "website": website,
         "company_name": company_name,
-        "brand_color": "#6d46c6",
+        "brand_color": brand_color,
+        "logo_url": logo_url,
+        "brand_voice": brand_voice,
     }
 
 

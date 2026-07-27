@@ -13,7 +13,7 @@ from datetime import datetime, timezone, timedelta
 import jwt
 
 # Configuration
-BACKEND_URL = "https://referral-engine-18.preview.emergentagent.com/api"
+BACKEND_URL = "https://growth-signals-8.preview.emergentagent.com/api"
 JWT_SECRET = "uplaud-preview-jwt-secret-8f3a1c9d"
 JWT_ALGORITHM = "HS256"
 
