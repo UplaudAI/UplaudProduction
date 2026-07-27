@@ -8,7 +8,7 @@
   "failed": [
     {
       "area": "Frontend build / compile",
-      "issue": "SyntaxError in ./src/pages/FinanceLandingPage.jsx: Unterminated JSX contents (686:10). Webpack dev server shows red 'Compiled with problems' overlay when navigating to /finance (verified via public URL https://voice-to-campaign.preview.emergentagent.com/finance). Reproduced independently via `npx babel src/pages/FinanceLandingPage.jsx --presets=@babel/preset-react` which errors with the same message.",
+      "issue": "SyntaxError in ./src/pages/FinanceLandingPage.jsx: Unterminated JSX contents (686:10). Webpack dev server shows red 'Compiled with problems' overlay when navigating to /finance (verified via public URL https://referral-engine-18.preview.emergentagent.com/finance). Reproduced independently via `npx babel src/pages/FinanceLandingPage.jsx --presets=@babel/preset-react` which errors with the same message.",
       "evidence": "Screenshot captured shows webpack error overlay: 'ERROR in ./src/pages/FinanceLandingPage.jsx  Module build failed (from ./node_modules/babel-loader/lib/index.js): SyntaxError: Unterminated JSX contents. (686:10)'. Independent babel parse confirms same error.",
       "priority": "HIGH"
     },
