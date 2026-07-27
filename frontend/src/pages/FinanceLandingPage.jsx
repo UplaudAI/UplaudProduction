@@ -471,7 +471,7 @@ export default function FinanceLandingPage() {
 </div>
 </section>
 <section className="px-4 sm:px-6 py-12 sm:py-16 md:py-20 relative overflow-hidden fade-in-section min-h-screen flex items-center" style={{background: "linear-gradient(rgb(45, 22, 80) 0%, rgb(31, 14, 58) 50%, rgb(13, 3, 24) 100%)"}}>
-<div className="absolute inset-0 opacity-30 pointer-events-none" style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E\")", backgroundRepeat: "repeat", backgroundSize: "200px 200px" }}>
+<div className="absolute inset-0 opacity-30 pointer-events-none" style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg%20viewBox%3D%270%200%20200%20200%27%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%3E%3Cfilter%20id%3D%27noiseFilter%27%3E%3CfeTurbulence%20type%3D%27fractalNoise%27%20baseFrequency%3D%270.9%27%20numOctaves%3D%273%27%20stitchTiles%3D%27stitch%27%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D%27100%25%27%20height%3D%27100%25%27%20filter%3D%27url(%23noiseFilter)%27%2F%3E%3C%2Fsvg%3E\")", backgroundRepeat: "repeat", backgroundSize: "200px 200px" }}>
 </div>
 <div className="w-full mx-auto relative z-10 flex items-center justify-center" style={{ filter: "none" }}>
 <div className="flex items-center justify-center">
@@ -654,7 +654,7 @@ export default function FinanceLandingPage() {
         </section>
 </main>
 <footer className="px-4 sm:px-6 py-12 sm:py-16 md:py-24 relative overflow-hidden" style={{background: "linear-gradient(rgb(67, 23, 113) 0%, rgb(56, 20, 96) 50%, rgb(22, 3, 44) 100%)"}}>
-<div className="absolute inset-0 opacity-30 pointer-events-none" style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E\")", backgroundRepeat: "repeat", backgroundSize: "200px 200px" }}>
+<div className="absolute inset-0 opacity-30 pointer-events-none" style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg%20viewBox%3D%270%200%20200%20200%27%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%3E%3Cfilter%20id%3D%27noiseFilter%27%3E%3CfeTurbulence%20type%3D%27fractalNoise%27%20baseFrequency%3D%270.9%27%20numOctaves%3D%273%27%20stitchTiles%3D%27stitch%27%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D%27100%25%27%20height%3D%27100%25%27%20filter%3D%27url(%23noiseFilter)%27%2F%3E%3C%2Fsvg%3E\")", backgroundRepeat: "repeat", backgroundSize: "200px 200px" }}>
 </div>
 <div className="absolute left-0 right-0 bottom-0 flex items-end justify-center pointer-events-none overflow-hidden" style={{ height: "120px" }}>
 <div className="text-[15vw] sm:text-[18vw] font-bold leading-none" style={{ fontFamily: "'Bricolage Grotesque', sans-serif", transform: "translateY(15%)", background: "linear-gradient(rgba(78, 65, 109, 0.6) 0%, rgba(0, 0, 0, 0) 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>uplaud.ai</div>
