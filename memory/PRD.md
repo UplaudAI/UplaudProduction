@@ -176,3 +176,20 @@ available code so the user can see how much progress has been made.
   "www." on both sides and always prefer an exact domain match over a subdomain-style match.
   Verified via testing_agent end-to-end (upload → analyze → approve → refer a friend → confirmed
   the referral now appears in Warm Pipeline / `GET /api/warm-leads`).
+
+## What's been implemented (2026-07-27, cont'd — "keeps reverting to Sources page")
+- **Warm Pipeline (and any non-whitelisted page) kept redirecting back to Sources**: root cause
+  was `DashboardLayout.jsx`'s zero-source redirect `useEffect` had `loc.pathname` in its
+  dependency array, so it re-ran `GET /api/sources` and force-redirected to `/business/import`
+  on EVERY navigation whenever that call returned 0 sources for the resolved business. Fixed by
+  gating the check with a `zeroStateChecked` ref so it only runs once per login session, not on
+  every route change.
+- Also found + repaired the actual data corruption behind the "Scalis" account's 0-sources
+  read: one `Growth_Signals` record and one `Uplaud` record had been written with
+  `Business_Name="Www"` while the (now-deleted) bad Business row was shadowing `scalis.ai`;
+  relabeled both to `"Scalis"` directly in Airtable so that account's real testimonial/source
+  data is visible again.
+- Bonus fix found while testing: ROI Simulator page (`/business/roi-simulator`) crashed with
+  `ReferenceError: businessName is not defined` in the `BoardroomSummary` sub-component — it
+  referenced `businessName` without it being passed as a prop. Fixed by passing
+  `businessName` through from the parent. Both fixes verified via testing_agent.
