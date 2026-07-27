@@ -224,19 +224,23 @@ async def get_current_user(request: Request) -> dict:
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
     
-    # Try decoding local token first (backward compatibility)
+    # Try decoding local token first (backward compatibility for testing/local JWTs)
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0})
-        if user:
-            # Check approval flag
-            if not user.get("approved", True):
-                raise HTTPException(status_code=403, detail="Your account is pending approval by an administrator.")
-            return user
+        email = payload.get("email", "local@example.com").lower().strip()
+        is_admin = (email == os.environ.get("ADMIN_EMAIL", "").lower().strip())
+        return {
+            "id": payload.get("sub", "local-id"),
+            "email": email,
+            "name": payload.get("name") or email.split("@")[0],
+            "role": payload.get("role", "business"),
+            "company": payload.get("company", "My Company"),
+            "approved": True if is_admin else payload.get("approved", True)
+        }
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
     except HTTPException:
-        raise  # Re-raise HTTPException (like 403 for unapproved users)
+        raise
     except Exception:
         pass # Fallback to Supabase verification
         
@@ -251,39 +255,29 @@ async def get_current_user(request: Request) -> dict:
     if not supabase_id or not email:
         raise HTTPException(status_code=401, detail="Invalid Supabase token data")
         
-    # Find user in Mongo
-    user = await db.users.find_one({"$or": [{"id": supabase_id}, {"email": email}]})
+    user_metadata = supabase_user.get("user_metadata", {})
+    app_metadata = supabase_user.get("app_metadata", {})
     
-    if not user:
-        # Create user record
-        is_admin = (email == os.environ.get("ADMIN_EMAIL", "").lower().strip())
-        user = {
-            "id": supabase_id,
-            "email": email,
-            "name": email.split("@")[0],
-            "role": "business",
-            "company": "My Company",
-            "approved": True if is_admin else False,
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }
-        await db.users.insert_one(user)
-        # remove mongo _id
-        user.pop("_id", None)
-    else:
-        # Ensure ID or email is synchronized
-        if user.get("id") != supabase_id:
-            await db.users.update_one({"_id": user["_id"]}, {"$set": {"id": supabase_id}})
-            user["id"] = supabase_id
-        user.pop("_id", None)
+    approved = app_metadata.get("approved") if "approved" in app_metadata else user_metadata.get("approved", True)
+    
+    # Override for admin email
+    if email == os.environ.get("ADMIN_EMAIL", "").lower().strip():
+        approved = True
         
-    # Check approval flag
-    if not user.get("approved", True):
+    if not approved:
         raise HTTPException(
             status_code=403,
             detail="Your account is pending approval by an administrator."
         )
         
-    return user
+    return {
+        "id": supabase_id,
+        "email": email,
+        "name": user_metadata.get("name") or email.split("@")[0],
+        "role": app_metadata.get("role") or user_metadata.get("role") or "business",
+        "company": user_metadata.get("company") or "My Company",
+        "approved": approved
+    }
 
 
 def user_to_out(user: dict) -> UserOut:
@@ -630,11 +624,61 @@ async def root():
 @api_router.post("/auth/login", response_model=LoginResponse)
 async def login(body: LoginRequest):
     email = body.email.lower().strip()
-    user = await db.users.find_one({"email": email})
-    if not user or not verify_password(body.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-    token = create_access_token(user["id"], user["email"])
-    return LoginResponse(token=token, user=user_to_out(user))
+    password = body.password
+    
+    # Authenticate with Supabase directly over API
+    supabase_url = os.environ.get("SUPABASE_URL", "https://nqvkhcrzxdonmmtjzqup.supabase.co")
+    supabase_url = supabase_url.rstrip("/")
+    api_url = f"{supabase_url}/auth/v1/token?grant_type=password"
+    supabase_key = os.environ.get("SUPABASE_PUBLISHABLE_KEY", "sb_publishable_TTolYCpD5R_nBnxx1Dt7yw_Mk42tl_4")
+    
+    headers = {
+        "apikey": supabase_key,
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "email": email,
+        "password": password
+    }
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(api_url, headers=headers, json=payload, timeout=10.0)
+            if resp.status_code != 200:
+                raise HTTPException(status_code=401, detail="Invalid email or password")
+            resp_data = resp.json()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Supabase login request failed: {e}")
+        raise HTTPException(status_code=502, detail="Connection to authentication server failed")
+        
+    user_data = resp_data.get("user", {})
+    user_metadata = user_data.get("user_metadata", {})
+    app_metadata = user_data.get("app_metadata", {})
+    
+    approved = app_metadata.get("approved") if "approved" in app_metadata else user_metadata.get("approved", True)
+    
+    # Admin is always approved
+    if email == os.environ.get("ADMIN_EMAIL", "").lower().strip():
+        approved = True
+        
+    if not approved:
+        raise HTTPException(status_code=403, detail="Your account is pending approval by an administrator.")
+        
+    user_out = UserOut(
+        id=user_data["id"],
+        email=email,
+        name=user_metadata.get("name") or email.split("@")[0],
+        role=app_metadata.get("role") or user_metadata.get("role") or "business",
+        company=user_metadata.get("company") or "My Company",
+        approved=approved
+    )
+    
+    return LoginResponse(
+        token=resp_data["access_token"],
+        user=user_out
+    )
 
 
 @api_router.get("/auth/me", response_model=UserOut)
@@ -1416,27 +1460,8 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup():
-    await db.users.create_index("email", unique=True)
     await db.sources.create_index("owner")
     await db.agent_plans.create_index("lead_id", unique=True)
-
-    admin_email = os.environ["ADMIN_EMAIL"].lower().strip()
-    admin_password = os.environ["ADMIN_PASSWORD"]
-    existing = await db.users.find_one({"email": admin_email})
-    if not existing:
-        await db.users.insert_one({
-            "id": str(uuid.uuid4()),
-            "email": admin_email,
-            "password_hash": hash_password(admin_password),
-            "name": "David Cameron",
-            "role": "Head of Marketing",
-            "company": "PayRewards",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        })
-        logger.info("Seeded demo user %s", admin_email)
-    elif not verify_password(admin_password, existing["password_hash"]):
-        await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_password)}})
-        logger.info("Updated demo user password for %s", admin_email)
 
 
 @app.on_event("shutdown")

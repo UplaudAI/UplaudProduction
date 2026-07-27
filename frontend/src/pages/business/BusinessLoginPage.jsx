@@ -41,22 +41,19 @@ export default function BusinessLoginPage() {
         const { data, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
+          options: {
+            data: {
+              name: email.split("@")[0],
+              role: "business",
+              company: "My Company",
+              approved: false, // Default unapproved for new signups, stored directly in Supabase Auth Metadata!
+            }
+          }
         });
         if (signUpError) {
           setError(signUpError.message);
           setLoading(false);
           return;
-        }
-
-        // Trigger auto-provisioning call on backend if session is immediately returned
-        if (data?.session?.access_token) {
-          try {
-            await api.get("/auth/me", {
-              headers: { Authorization: `Bearer ${data.session.access_token}` },
-            });
-          } catch (pErr) {
-            // Failure is expected if they are not approved yet, but it triggers provisioning!
-          }
         }
 
         setSuccess("Registration successful! Your account is pending administrator approval before you can sign in.");
