@@ -114,3 +114,24 @@ available code so the user can see how much progress has been made.
 - Verified via testing_agent (100% pass, 9/9 frontend checks + 2/2 new backend Airtable tests):
   Airtable Growth_Signals persistence, live hero data on both pages, removed sections confirmed
   gone, visual fixes rendering correctly, no regressions in prior flows.
+
+## What's been implemented (2026-07-27 — bug fixes)
+- **Bug 1 (Personalize workspace not storing brand data)**: `POST/GET /api/business/profile`
+  previously only saved Business Name/Domain. Added `scrape_business_website()` in server.py —
+  fetches the entered site's homepage (httpx + BeautifulSoup), extracts brand color (theme-color
+  meta tag, else dominant non-generic hex from inline CSS), logo (og:image → apple-touch-icon →
+  favicon, resolved to an absolute URL), and calls OpenAI (gpt-4o) grounded strictly in the
+  scraped title/meta description/body text to infer a 2-3 sentence brand voice description.
+  Added `Brand_Voice` (multilineText), `Brand_Color` (singleLineText), `Logo_Url` (singleLineText)
+  fields to the Airtable `Business` table (via Metadata API) and wired both endpoints to
+  persist/read them. Verified live against stripe.com and payrewards.com — correct colors, logos
+  and grounded brand-voice text returned and round-tripped through Airtable.
+- **Bug 2 (extracted testimonial not showing in Growth Signals UI/Airtable)**: Root cause —
+  `airtable_client.upsert_growth_signal()` was sending `Testimonial_Draft` and `Share_Id` fields
+  that didn't exist in the real Airtable `Growth_Signals` table schema, so every create/update
+  silently failed with a 422 (caught and only logged as a warning, never surfaced). Added the two
+  missing fields to the table via the Airtable Metadata API. Verified via curl (200 OK on the
+  Airtable write, record now appears in `GET /api/sources`) and via testing_agent: uploaded a
+  transcript end-to-end, confirmed it appears in the Growth Signals page (`/business/conversations`)
+  conversation list with full extracted signals + drafted testimonial, no console/network errors.
+- Added `beautifulsoup4` to backend/requirements.txt for HTML parsing.
