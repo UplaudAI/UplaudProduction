@@ -279,6 +279,7 @@ export default function RoiSimulatorPage() {
 
           {/* Boardroom summary */}
           <BoardroomSummary
+            businessName={businessName}
             custDelta={custDelta}
             cacDeltaPct={cacDeltaPct}
             sq={scenarios.sq}
@@ -505,7 +506,7 @@ function DeltaSummary({ deltas }) {
 }
 
 /* ────────── boardroom summary ────────── */
-function BoardroomSummary({ custDelta, cacDeltaPct, sq, up, onCopy }) {
+function BoardroomSummary({ businessName, custDelta, cacDeltaPct, sq, up, onCopy }) {
   return (
     <section
       data-testid="roi-boardroom-summary"
