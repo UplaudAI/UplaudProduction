@@ -14,12 +14,12 @@ import sys
 import os
 
 # Backend URL from environment
-BACKEND_URL = os.getenv("REACT_APP_BACKEND_URL", "https://crm-preview-build-2.preview.emergentagent.com")
+BACKEND_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 API_BASE = f"{BACKEND_URL}/api"
 
 # Test credentials
 ADMIN_EMAIL = "dcameron@payrewards.com"
-ADMIN_PASSWORD = "P@yRew@rds123"
+ADMIN_PASSWORD = os.environ.get("TEST_PASSWORD", "")
 
 def login():
     """Login and get auth token"""

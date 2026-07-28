@@ -37,7 +37,7 @@
     "/app/backend/tests/test_auth_token_expiry.py (new)"
   ],
   "success_rate": {"backend": "100% (7/7 pass)", "frontend": "6/7 assertions pass — only the session-expired toast visibility fails (minor UX)"},
-  "test_credentials": "dcameron@payrewards.com / P@yRew@rds123",
+  "test_credentials": "dcameron@payrewards.com / <redacted>",
   "seed_data_creation": "Uploaded 1 test source (uplaud_test.txt) via UI on /business/import — analyzed successfully with real OpenAI.",
   "retest_needed": false,
   "main_agent_can_self_test": true,

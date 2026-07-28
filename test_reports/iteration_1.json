@@ -38,7 +38,7 @@
   ],
   "updated_files": [],
   "success_rate": {"backend": "100% (15/15 pass, blog endpoints treated as expected-missing)", "frontend": "100% of implemented pages load cleanly; blog admin/detail pages will 404 on API"},
-  "test_credentials": "dcameron@payrewards.com / P@yRew@rds123 (seeded on startup from backend/.env)",
+  "test_credentials": "dcameron@payrewards.com / <redacted> (seeded on startup from backend/.env)",
   "seed_data_creation": "Uploaded 1 test source (TEST_acme_call.txt) via POST /api/sources during pytest run; analyzed with real OpenAI. Airtable base already has 1 warm lead (Pujun Bhatnagar / Kintsugi) referred by Deepthi Rao. Agent plan generated + persisted in mongo db.agent_plans for lead rec3O9OUfjkln38Bo.",
   "retest_needed": false,
   "main_agent_can_self_test": true,

@@ -23,7 +23,7 @@
   ],
   "updated_files": ["/app/backend/tests/test_referral_outreach.py"],
   "success_rate": {"backend": "100% (4/4 pytest cases)", "frontend": "100% (9/9 targeted checks)"},
-  "test_credentials": "dcameron@payrewards.com / P@yRew@rds123",
+  "test_credentials": "dcameron@payrewards.com / <redacted>",
   "seed_data_creation": "None — tests only regenerate agent plans for existing warm leads via force=true.",
   "retest_needed": false,
   "should_main_agent_self_test": false,

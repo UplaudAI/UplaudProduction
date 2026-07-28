@@ -29,7 +29,7 @@ API = f"{BASE_URL}/api"
 SHARE_ID = "demo123"
 
 ADMIN_EMAIL = "dcameron@payrewards.com"
-ADMIN_PASSWORD = "P@yRew@rds123"
+ADMIN_PASSWORD = os.environ.get("TEST_PASSWORD", "")
 
 
 @pytest.fixture(scope="module")

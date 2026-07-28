@@ -4,14 +4,15 @@ Test suite for Business Profile endpoints (POST and GET /api/business/profile)
 Verifies that endpoints work correctly without MongoDB references
 """
 
-import requests
 import json
+import os
 import sys
+import requests
 
-# Configuration
-BACKEND_URL = "https://crm-preview-build-2.preview.emergentagent.com/api"
+# Configuration (this module is collected only after explicit live-test opt-in)
+BACKEND_URL = f"{os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')}/api"
 ADMIN_EMAIL = "dcameron@payrewards.com"
-ADMIN_PASSWORD = "P@yRew@rds123"
+ADMIN_PASSWORD = os.environ.get("TEST_PASSWORD", "")
 
 def print_test(name, passed, details=""):
     """Print test result"""

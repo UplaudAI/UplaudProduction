@@ -4,21 +4,18 @@ Comprehensive test suite for www. prefix handling in business name derivation.
 Tests both the derive_business_name() function and the POST /api/business/profile endpoint.
 """
 
-import requests
-import sys
 import os
+import requests
 
-# Add backend to path for unit tests
-sys.path.insert(0, '/app/backend')
-from server import derive_business_name
+from backend.server import derive_business_name
 
 # Backend URL from environment
-BACKEND_URL = os.getenv("REACT_APP_BACKEND_URL", "https://crm-preview-build-2.preview.emergentagent.com")
+BACKEND_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 API_BASE = f"{BACKEND_URL}/api"
 
 # Test credentials
 ADMIN_EMAIL = "dcameron@payrewards.com"
-ADMIN_PASSWORD = "P@yRew@rds123"
+ADMIN_PASSWORD = os.environ.get("TEST_PASSWORD", "")
 
 def login():
     """Login and get auth token"""

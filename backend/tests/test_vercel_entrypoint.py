@@ -62,10 +62,9 @@ def test_vercel_entrypoint_imports_without_runtime_credentials():
     )
 
     assert result.returncode == 0, result.stderr
-    assert result.stdout.splitlines() == [
-        "Uplaud Growth Engine API",
-        "uplaud-local-dev-secret",
-    ]
+    output_lines = result.stdout.splitlines()
+    assert output_lines[0] == "Uplaud Growth Engine API"
+    assert len(output_lines[1]) >= 32
 
 
 def test_vercel_entrypoint_lists_all_missing_runtime_variable_names():

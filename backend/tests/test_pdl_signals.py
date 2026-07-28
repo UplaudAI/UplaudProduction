@@ -28,7 +28,7 @@ BASE_URL = require_live_backend_url()
 API = f"{BASE_URL}/api"
 
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "dcameron@payrewards.com").strip('"')
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "P@yRew@rds123").strip('"')
+ADMIN_PASSWORD = os.environ.get("TEST_PASSWORD", "").strip('"')
 
 EXPECTED_NEW_KEYS = {
     "work_email",

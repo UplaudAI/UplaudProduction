@@ -60,7 +60,7 @@ validate_vercel_runtime_config()
 JWT_SECRET = (
     os.environ["JWT_SECRET"]
     if "VERCEL_ENV" in os.environ
-    else os.environ.get("JWT_SECRET") or "uplaud-local-dev-secret"
+    else os.environ.get("JWT_SECRET") or secrets.token_urlsafe(32)
 )
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_HOURS = 168
@@ -289,10 +289,10 @@ async def verify_supabase_token(token: str) -> Optional[dict]:
         else:
             del TOKEN_CACHE[token]
 
-    supabase_url = os.environ.get("SUPABASE_URL", "https://nqvkhcrzxdonmmtjzqup.supabase.co")
+    supabase_url = os.environ.get("SUPABASE_URL", "")
     supabase_url = supabase_url.rstrip("/")
     api_url = f"{supabase_url}/auth/v1/user"
-    supabase_key = os.environ.get("SUPABASE_PUBLISHABLE_KEY", "sb_publishable_TTolYCpD5R_nBnxx1Dt7yw_Mk42tl_4")
+    supabase_key = os.environ.get("SUPABASE_PUBLISHABLE_KEY", "")
     
     headers = {
         "Authorization": f"Bearer {token}",
@@ -817,10 +817,10 @@ async def login(body: LoginRequest):
         raise HTTPException(status_code=400, detail="Personal email domains (like gmail.com) are not allowed. Please use your work email.")
     
     # Authenticate with Supabase directly over API
-    supabase_url = os.environ.get("SUPABASE_URL", "https://nqvkhcrzxdonmmtjzqup.supabase.co")
+    supabase_url = os.environ.get("SUPABASE_URL", "")
     supabase_url = supabase_url.rstrip("/")
     api_url = f"{supabase_url}/auth/v1/token?grant_type=password"
-    supabase_key = os.environ.get("SUPABASE_PUBLISHABLE_KEY", "sb_publishable_TTolYCpD5R_nBnxx1Dt7yw_Mk42tl_4")
+    supabase_key = os.environ.get("SUPABASE_PUBLISHABLE_KEY", "")
     
     headers = {
         "apikey": supabase_key,

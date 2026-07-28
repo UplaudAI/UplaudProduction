@@ -6,7 +6,7 @@ from live_integration import require_live_backend_url
 
 pytestmark = pytest.mark.live_integration
 BASE_URL = require_live_backend_url()
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "P@yRew@rds123")
+ADMIN_PASSWORD = os.environ.get("TEST_PASSWORD", "")
 
 @pytest.fixture(scope="module")
 def admin_headers():

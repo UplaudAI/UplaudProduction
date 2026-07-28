@@ -12,18 +12,18 @@ import httpx
 from datetime import datetime, timezone, timedelta
 import jwt
 
-# Configuration
-BACKEND_URL = "https://crm-preview-build-2.preview.emergentagent.com/api"
-JWT_SECRET = "uplaud-preview-jwt-secret-8f3a1c9d"
+# Configuration (this module is collected only after explicit live-test opt-in)
+BACKEND_URL = f"{os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')}/api"
+JWT_SECRET = os.environ.get("TEST_JWT_SECRET", "")
 JWT_ALGORITHM = "HS256"
 
 # Test credentials from test_credentials.md
 ADMIN_EMAIL = "dcameron@payrewards.com"
-ADMIN_PASSWORD = "P@yRew@rds123"
+ADMIN_PASSWORD = os.environ.get("TEST_PASSWORD", "")
 
 # Supabase config
-SUPABASE_URL = "https://nqvkhcrzxdonmmtjzqup.supabase.co"
-SUPABASE_KEY = "sb_publishable_TTolYCpD5R_nBnxx1Dt7yw_Mk42tl_4"
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SUPABASE_KEY = os.environ.get("SUPABASE_PUBLISHABLE_KEY", "")
 
 # Test results
 test_results = {

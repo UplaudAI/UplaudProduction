@@ -85,8 +85,8 @@ $ sed -n '221,281p' server.py | grep "db.users"
 
 ### Backend Logs Analysis
 ```
-2026-07-27 04:58:14,701 - httpx - INFO - HTTP Request: POST https://nqvkhcrzxdonmmtjzqup.supabase.co/auth/v1/token?grant_type=password "HTTP/1.1 400 Bad Request"
-2026-07-27 04:58:15,493 - httpx - INFO - HTTP Request: GET https://nqvkhcrzxdonmmtjzqup.supabase.co/auth/v1/user "HTTP/1.1 403 Forbidden"
+2026-07-27 04:58:14,701 - httpx - INFO - HTTP Request: POST <redacted>/auth/v1/token?grant_type=password "HTTP/1.1 400 Bad Request"
+2026-07-27 04:58:15,493 - httpx - INFO - HTTP Request: GET <redacted>/auth/v1/user "HTTP/1.1 403 Forbidden"
 ```
 
 **Confirmed:**

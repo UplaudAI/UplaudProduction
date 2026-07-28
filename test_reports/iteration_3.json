@@ -34,7 +34,7 @@
   ],
   "updated_files": [],
   "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100% (3/3 targeted tests)"},
-  "test_credentials": "dcameron@payrewards.com / P@yRew@rds123 (from /app/memory/test_credentials.md)",
+  "test_credentials": "dcameron@payrewards.com / <redacted> (from /app/memory/test_credentials.md)",
   "seed_data_creation": "None",
   "retest_needed": false,
   "should_main_agent_self_test": false,

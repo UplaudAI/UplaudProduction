@@ -13,7 +13,7 @@ AIRTABLE_BASE_ID = "appFUJWWTaoJ3YiWt"
 AIRTABLE_URL = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/Growth_Signals"
 
 EMAIL = "dcameron@payrewards.com"
-PASSWORD = "P@yRew@rds123"
+PASSWORD = os.environ.get("TEST_PASSWORD", "")
 
 SAMPLE_TRANSCRIPT = """
 [00:00] Sarah Chen (VP Finance, Acme Corp): Hi, thanks for setting this up. We've been dealing with a huge headache managing vendor rebates across 47 different suppliers.

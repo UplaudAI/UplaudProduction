@@ -27,7 +27,7 @@ BASE_URL = require_live_backend_url()
 API = f"{BASE_URL}/api"
 
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "dcameron@payrewards.com").strip('"')
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "P@yRew@rds123").strip('"')
+ADMIN_PASSWORD = os.environ.get("TEST_PASSWORD", "").strip('"')
 
 # Agent-run can take 5-15s due to OpenAI web_search + draft calls
 LLM_TIMEOUT = 120.0

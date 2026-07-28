@@ -15,7 +15,7 @@ pytestmark = pytest.mark.live_integration
 BASE_URL = require_live_backend_url()
 
 ADMIN_EMAIL = "dcameron@payrewards.com"
-ADMIN_PASSWORD = "P@yRew@rds123"
+ADMIN_PASSWORD = os.environ.get("TEST_PASSWORD", "")
 
 TRANSCRIPT = """[Sales call — Uplaud demo with Acme Corp]
 Alex (Uplaud AE): Hey Sarah, tell me about what's driving your interest in Uplaud.

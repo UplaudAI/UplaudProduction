@@ -7,7 +7,7 @@
     "BlogListPage renders both posts with cover images and excerpts",
     "BlogPostPage renders single post and Lead Magnet widget ('Convert Post to Lead Magnet') at bottom",
     "POST /api/blog/lead-magnet with {email, slug} returns 200 and UI shows 'Playbook sent! Check your inbox shortly.' + toast 'PDF request received!'",
-    "Admin login at /admin/blog with token 'P@yRew@rds123' succeeds (Signed in toast)",
+    "Admin login at /admin/blog with token '<redacted>' succeeds (Signed in toast)",
     "GET /api/admin/blog?limit=10 (with X-Admin-Token) returns posts correctly"
   ],
   "failed": [

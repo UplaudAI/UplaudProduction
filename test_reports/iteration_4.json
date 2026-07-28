@@ -29,7 +29,7 @@
   ],
   "updated_files": ["/app/backend/tests/test_growth_signals_airtable.py"],
   "success_rate": {"backend": "100% (2/2 new Airtable tests)", "frontend": "100% (9/9 targeted checks)"},
-  "test_credentials": "dcameron@payrewards.com / P@yRew@rds123",
+  "test_credentials": "dcameron@payrewards.com / <redacted>",
   "seed_data_creation": "Uploaded 1 TEST source ('test_growth_signals.txt', client_name='Acme Corp') during Airtable persistence test — produces one Growth_Signals record in Airtable that could be cleaned up manually if desired.",
   "retest_needed": false,
   "should_main_agent_self_test": false,

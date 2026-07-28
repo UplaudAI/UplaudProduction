@@ -17,7 +17,7 @@ BASE_URL = require_live_backend_url()
 JWT_SECRET = os.environ.get("JWT_SECRET")
 
 EMAIL = "dcameron@payrewards.com"
-PASSWORD = "P@yRew@rds123"
+PASSWORD = os.environ.get("TEST_PASSWORD", "")
 
 
 def _login():

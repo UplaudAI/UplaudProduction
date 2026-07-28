@@ -15,9 +15,9 @@ import httpx
 from datetime import datetime, timezone, timedelta
 import jwt
 
-# Configuration
-BACKEND_URL = "https://crm-preview-build-2.preview.emergentagent.com/api"
-JWT_SECRET = "uplaud-preview-jwt-secret-8f3a1c9d"
+# Configuration (this module is collected only after explicit live-test opt-in)
+BACKEND_URL = f"{os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')}/api"
+JWT_SECRET = os.environ.get("TEST_JWT_SECRET", "")
 JWT_ALGORITHM = "HS256"
 
 # Test results

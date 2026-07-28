@@ -27,7 +27,7 @@ async function resolvePostLoginDestination() {
 export default function BusinessLoginPage() {
   const nav = useNavigate();
   const [email, setEmail] = useState("dcameron@payrewards.com");
-  const [password, setPassword] = useState("P@yRew@rds123");
+  const [password, setPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");

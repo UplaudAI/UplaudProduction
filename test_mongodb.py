@@ -1,24 +1,19 @@
-#!/usr/bin/env python3
-"""Test MongoDB connectivity"""
-import asyncio
-from motor.motor_asyncio import AsyncIOMotorClient
+"""Regression guard: V2 runtime persistence must remain Mongo-free."""
 
-async def test_mongodb():
-    try:
-        client = AsyncIOMotorClient('mongodb://localhost:27017')
-        db = client['test_database']
-        result = await db.command('ping')
-        print(f"✅ MongoDB connection successful: {result}")
-        
-        # Test collections
-        collections = await db.list_collection_names()
-        print(f"✅ Available collections: {collections}")
-        
-        return True
-    except Exception as e:
-        print(f"❌ MongoDB connection failed: {e}")
-        return False
+from pathlib import Path
 
-if __name__ == "__main__":
-    success = asyncio.run(test_mongodb())
-    exit(0 if success else 1)
+
+ROOT = Path(__file__).resolve().parent
+
+
+def test_runtime_has_no_mongodb_driver_or_configuration():
+    requirements = "\n".join(
+        (ROOT / path).read_text()
+        for path in ("requirements.txt", "backend/requirements.txt")
+    ).lower()
+    server_source = (ROOT / "backend/server.py").read_text()
+
+    assert "motor" not in requirements
+    assert "pymongo" not in requirements
+    assert "AsyncIOMotorClient" not in server_source
+    assert "MONGO_URL" not in server_source

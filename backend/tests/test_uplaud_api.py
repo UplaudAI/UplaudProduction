@@ -11,7 +11,7 @@ BASE_URL = require_live_backend_url()
 API = f"{BASE_URL}/api"
 
 EMAIL = "dcameron@payrewards.com"
-PASSWORD = "P@yRew@rds123"
+PASSWORD = os.environ.get("TEST_PASSWORD", "")
 
 
 @pytest.fixture(scope="session")

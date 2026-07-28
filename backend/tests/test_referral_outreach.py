@@ -15,7 +15,7 @@ from live_integration import require_live_backend_url
 pytestmark = pytest.mark.live_integration
 BASE_URL = require_live_backend_url()
 EMAIL = "dcameron@payrewards.com"
-PASSWORD = "P@yRew@rds123"
+PASSWORD = os.environ.get("TEST_PASSWORD", "")
 
 
 @pytest.fixture(scope="module")
