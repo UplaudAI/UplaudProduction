@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { ArrowUpRight, TrendingUp, Sparkles, ChevronRight } from "lucide-react";
+import { ArrowUpRight, TrendingUp, Sparkles, ChevronRight, FileCheck } from "lucide-react";
 
 /**
  * PageHero — outcome-first block that leads every business page.
@@ -204,6 +204,43 @@ function NorthStarBlock({ data, nav }) {
           {data.attribution}
         </p>
       )}
+
+      {data.latestTestimonial && (
+        <div
+          data-testid="hero-latest-testimonial"
+          className="mt-5 rounded-xl border border-[#bbf7d0] bg-[#f0fdf4] p-4 text-left transition-all relative overflow-hidden"
+        >
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-[#dcfce7] text-[#166534] border border-[#bbf7d0]">
+              <FileCheck className="w-3.5 h-3.5 text-[#166534]" strokeWidth={2} />
+              LATEST CUSTOMER-APPROVED TESTIMONIAL
+            </span>
+            {data.latestTestimonial.approvedAt && (
+              <span className="ml-auto text-[10px] font-mono text-[#166534]/75">
+                approved {new Date(data.latestTestimonial.approvedAt).toLocaleDateString()}
+              </span>
+            )}
+          </div>
+          <p className="mt-2.5 text-[12.5px] leading-relaxed text-[#111827] italic font-display">
+            &ldquo;{data.latestTestimonial.body}&rdquo;
+          </p>
+          <div className="mt-2.5 pt-2.5 border-t border-[#bbf7d0]/40 flex items-center justify-between gap-2 flex-wrap">
+            <div className="text-[11px] font-mono text-[#6d46c6] font-semibold">
+              — {data.latestTestimonial.attribution}
+            </div>
+            <button
+              data-testid="hero-latest-amplify-btn"
+              onClick={() => {
+                nav("/business/social");
+              }}
+              className="text-[11.5px] font-bold text-[#166534] hover:text-[#14532d] hover:underline whitespace-nowrap flex items-center gap-1"
+            >
+              Amplify across channels →
+            </button>
+          </div>
+        </div>
+      )}
+
       {(data.stats?.length > 0 || data.cta) && (
         <div className="mt-auto pt-4 space-y-3">
           {data.stats?.length > 0 && (

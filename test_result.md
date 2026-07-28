@@ -308,14 +308,14 @@
 ##   - task: "UI CHANGES: Growth Signals layout merge, Connect Source removal, and NBA route mapping"
 ##     implemented: true
 ##     working: true
-##     file: "frontend/src/pages/business/ConversationsPage.jsx, frontend/src/components/business/DashboardLayout.jsx"
+##     file: "frontend/src/pages/business/ConversationsPage.jsx, frontend/src/components/business/DashboardLayout.jsx, frontend/src/components/business/PageHero.jsx"
 ##     stuck_count: 0
 ##     priority: "high"
 ##     needs_retesting: true
 ##     status_history:
 ##         - working: true
 ##           agent: "main"
-##           comment: "Merged the approved/draft testimonial box below the buying signals into the same white box, delineated and well designed. Removed the Connect a Source button. Configured the 'Amplify Now' intelligent action to route to the Growth Amplification screen (/business/social). Hid the incomplete navigation options from the Left Nav and omitted empty sections."
+##           comment: "Integrated the Latest Customer-Approved Testimonial directly inside the top-left white box (Buying Signal Metrics card) using a highly delineated light green background, green border, and active pulse badge for clear contrast without cluttering metrics. Restored the Drafted Testimonial and approval flow card to its separate high-priority position above the AI-extracted signals (Insights) box in ConversationDetail. Removed the Connect a Source button. Configured the 'Amplify Now' intelligent action to route to the Growth Amplification screen (/business/social). Hid the incomplete navigation options from Left Nav and omitted empty sections."
 
 ##
 ## metadata:
