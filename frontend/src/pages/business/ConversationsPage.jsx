@@ -476,6 +476,21 @@ function ConversationDetail({ conversation: c, onChanged }) {
     if (onChanged) onChanged();
   };
 
+  const openApprovalPage = async () => {
+    setBusy(true);
+    try {
+      const { data } = await api.post(`/sources/${c._sourceId}/send-approval`);
+      setLocalStoryStatus("awaiting_approval");
+      if (onChanged) await onChanged();
+      const publicPath = data?.public_path || `/t/${data?.share_id || c.shareId}`;
+      window.open(publicPath, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail) || "Could not prepare approval page");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const SECTIONS = [
     {
       key: "motivations",
@@ -676,16 +691,15 @@ function ConversationDetail({ conversation: c, onChanged }) {
 
                   <div className="ml-auto flex items-center gap-2">
                     {c.shareId && (
-                      <a
+                      <button
                         data-testid="story-view-approval-page"
-                        href={`/t/${c.shareId}`}
-                        target="_blank"
-                        rel="noreferrer"
+                        onClick={openApprovalPage}
+                        disabled={busy}
                         className="btn-secondary h-10 !py-0"
                       >
                         <ArrowUpRight className="w-4 h-4" strokeWidth={1.75} />
-                        View approval page
-                      </a>
+                        {busy ? "Preparing..." : "View approval page"}
+                      </button>
                     )}
                     <button
                       data-testid="story-view-email-btn"

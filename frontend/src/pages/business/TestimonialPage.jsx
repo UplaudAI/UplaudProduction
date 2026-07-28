@@ -61,6 +61,7 @@ export default function TestimonialPage() {
     ? [data.speaker_name, data.speaker_role, data.company_name].filter(Boolean).join(", ")
     : "";
   const approved = data?.status === "approved";
+  const awaitingApproval = data?.status === "sent";
   const publicUrl = typeof window !== "undefined" ? window.location.href : "";
 
   const saveEdit = async () => {
@@ -124,17 +125,25 @@ export default function TestimonialPage() {
         <div className="text-center">
           <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-mono uppercase tracking-[0.18em]" style={{ backgroundColor: "#fdf6e6", color: "#9a7b25" }}>
             <Sparkles className="w-3.5 h-3.5" style={{ color: GOLD }} />
-            {approved ? "Approved & ready to share" : "A quick approval, on you"}
+              {approved
+                ? "Approved & ready to share"
+                : awaitingApproval
+                  ? "A quick approval, on you"
+                  : "Approval page not sent yet"}
           </span>
           <h1 className="mt-5 font-display text-[30px] sm:text-[38px] font-bold tracking-tight text-[#0B1F3A] leading-[1.1]">
             {approved
               ? "Thank you — let's make it fly."
-              : `${data.speaker_name ? data.speaker_name.split(" ")[0] + "," : "Hi,"} we drafted this from our chat.`}
+              : awaitingApproval
+                ? `${data.speaker_name ? data.speaker_name.split(" ")[0] + "," : "Hi,"} we drafted this from our chat.`
+                : "This testimonial is still being prepared."}
           </h1>
           <p className="mt-3 text-[14px] text-[#5b5445] max-w-[560px] mx-auto leading-relaxed">
             {approved
               ? "Your testimonial is approved. Grab the branded assets below and share them in a couple of taps."
-              : "These are your own words from our conversation — nothing added, nothing published without your OK. Tweak anything that doesn't sound like you, then approve."}
+              : awaitingApproval
+                ? "These are your own words from our conversation — nothing added, nothing published without your OK. Tweak anything that doesn't sound like you, then approve."
+                : "The approval request has not been sent yet. Ask the sender to open this approval page from Uplaud or send the approval request first."}
           </p>
         </div>
 
@@ -171,7 +180,7 @@ export default function TestimonialPage() {
             — {attribution}
           </div>
 
-          {!approved && (
+          {awaitingApproval && (
             <div className="mt-7 flex flex-wrap items-center gap-3">
               {editing ? (
                 <>
@@ -228,6 +237,11 @@ export default function TestimonialPage() {
             <div className="mt-6 inline-flex items-center gap-2 text-[13px] font-medium" style={{ color: "#0f9b7c" }}>
               <CheckCircle2 className="w-4 h-4" />
               Approved{data.approved_at ? ` on ${new Date(data.approved_at).toLocaleDateString()}` : ""}
+            </div>
+          )}
+          {!approved && !awaitingApproval && (
+            <div className="mt-6 rounded-xl border border-[#f4e08a] bg-[#fef9c3]/60 px-4 py-3 text-[13px] leading-relaxed text-[#7c5c0a]">
+              This testimonial is not awaiting approval yet. The sender needs to send the approval request from Uplaud first.
             </div>
           )}
         </div>
