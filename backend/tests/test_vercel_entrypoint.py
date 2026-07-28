@@ -256,14 +256,21 @@ def test_vercel_entrypoint_serves_api_root_and_representative_routes():
 
 
 def test_vercel_catch_all_entrypoint_serves_nested_api_routes():
-    catch_all = REPO_ROOT / "api" / "[...path].py"
-    spec = importlib.util.spec_from_file_location("vercel_api_catch_all", catch_all)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-
     from backend.server import app as server_app
 
-    assert module.app is server_app
+    entrypoints = [
+        REPO_ROOT / "api" / "[...path].py",
+        REPO_ROOT / "api" / "[path]" / "[subpath].py",
+        REPO_ROOT / "api" / "[path]" / "[subpath]" / "[id].py",
+        REPO_ROOT / "api" / "[path]" / "[subpath]" / "[id]" / "[action].py",
+    ]
+    for index, entrypoint in enumerate(entrypoints):
+        spec = importlib.util.spec_from_file_location(
+            f"vercel_api_catch_all_{index}", entrypoint
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        assert module.app is server_app
 
     response = TestClient(module.app).get("/api/session/me")
     assert response.status_code == 401
