@@ -159,10 +159,10 @@ export default function ImportReviewsPage() {
     return acc;
   }, 0);
 
-  // Dynamic values
-  const signalsSyncedValue = hasData ? totalSignals || (totalSources * 28 + 15) : 0;
-  const interactionsCount = hasData ? totalInteractions || totalSources : 0;
-  const reviewsCount = hasData ? totalSources * 3 : 0;
+  // Dynamic values sourced only from persisted Airtable-backed data.
+  const signalsSyncedValue = totalSignals;
+  const interactionsCount = totalInteractions;
+  const reviewsCount = 0;
   const sourcesCount = totalSources;
 
   const dynamicNorthStar = {
