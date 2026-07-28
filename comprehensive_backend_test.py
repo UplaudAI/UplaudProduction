@@ -11,6 +11,8 @@ import asyncio
 import httpx
 from datetime import datetime, timezone
 
+from live_test_guard import require_live_script_environment
+
 # Configuration (this module is collected only after explicit live-test opt-in)
 BACKEND_URL = f"{os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')}/api"
 
@@ -469,6 +471,7 @@ def print_summary():
 
 async def main():
     """Run all backend tests"""
+    require_live_script_environment()
     print("="*80)
     print("UPLAUD CRM - COMPREHENSIVE BACKEND TEST SUITE")
     print("="*80)

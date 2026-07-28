@@ -12,6 +12,8 @@ import httpx
 import io
 from datetime import datetime, timezone
 
+from live_test_guard import require_live_script_environment
+
 # Configuration (this module is collected only after explicit live-test opt-in)
 BACKEND_URL = f"{os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')}/api"
 
@@ -308,6 +310,7 @@ async def test_comprehensive_sources():
             log_fail("Code verification", str(e))
 
 async def main():
+    require_live_script_environment()
     await test_comprehensive_sources()
     
     # Print summary

@@ -10,11 +10,11 @@ import time
 import requests
 from datetime import datetime, timezone, timedelta
 
-from live_integration import require_live_backend_url
+from live_integration import require_live_backend_url, require_live_test_jwt_secret
 
 pytestmark = pytest.mark.live_integration
 BASE_URL = require_live_backend_url()
-JWT_SECRET = os.environ.get("JWT_SECRET")
+JWT_SECRET = require_live_test_jwt_secret()
 
 EMAIL = "dcameron@payrewards.com"
 PASSWORD = os.environ.get("TEST_PASSWORD", "")
@@ -54,9 +54,6 @@ def test_invalid_token_returns_401():
 
 def test_expired_token_returns_401():
     """Craft a JWT that is already expired using the same secret."""
-    if not JWT_SECRET:
-        import pytest
-        pytest.skip("JWT_SECRET not readable")
     expired_payload = {
         "sub": "nonexistent-user",
         "email": EMAIL,

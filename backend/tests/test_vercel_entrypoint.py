@@ -20,6 +20,8 @@ REQUIRED_VERCEL_ENV_VARS = (
     "PDL_API_KEY",
     "SUPABASE_URL",
     "SUPABASE_PUBLISHABLE_KEY",
+    "REACT_APP_SUPABASE_URL",
+    "REACT_APP_SUPABASE_PUBLISHABLE_KEY",
     "BLOB_PRIVATE_READ_WRITE_TOKEN",
     "BLOB_PUBLIC_READ_WRITE_TOKEN",
 )
@@ -231,6 +233,24 @@ def test_frontend_api_base_has_same_origin_fallback_and_one_shared_source():
             direct_env_users.append(source_path.relative_to(REPO_ROOT).as_posix())
 
     assert direct_env_users == ["frontend/src/lib/api.js"]
+
+
+def test_frontend_supabase_uses_required_cra_environment_names():
+    source = (REPO_ROOT / "frontend/src/lib/supabase.js").read_text()
+    readme = (REPO_ROOT / "README.md").read_text()
+
+    assert "process.env.REACT_APP_SUPABASE_URL" in source
+    assert "process.env.REACT_APP_SUPABASE_PUBLISHABLE_KEY" in source
+    assert "NEXT_PUBLIC_SUPABASE" not in source
+    assert '"http://localhost:54321"' not in source
+    assert '"unconfigured"' not in source
+    for name in (
+        "SUPABASE_URL",
+        "SUPABASE_PUBLISHABLE_KEY",
+        "REACT_APP_SUPABASE_URL",
+        "REACT_APP_SUPABASE_PUBLISHABLE_KEY",
+    ):
+        assert f"`{name}`" in readme
 
 
 def test_frontend_manifest_has_no_private_or_url_dependencies():

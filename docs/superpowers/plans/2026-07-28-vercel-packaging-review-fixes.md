@@ -20,8 +20,8 @@
 - [ ] Add subprocess tests proving preview imports list missing variable names without values, complete preview/production/development environments import, and local imports retain only an explicit local JWT fallback.
 - [ ] Add a direct test proving `check_admin_token` returns HTTP 503 when `ADMIN_PASSWORD` is absent.
 - [ ] Run the focused tests and confirm they fail because no validator exists and the admin fallback still authorizes requests.
-- [ ] Implement `REQUIRED_VERCEL_ENV_VARS` with `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `AIRTABLE_PAT`, `AIRTABLE_BASE_ID`, `OPENAI_API_KEY`, `PDL_API_KEY`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `BLOB_PRIVATE_READ_WRITE_TOKEN`, and `BLOB_PUBLIC_READ_WRITE_TOKEN`; raise `RuntimeError` containing only missing names whenever `VERCEL_ENV` is present.
-- [ ] Call the validator during `backend.server` import, use `<redacted>` only outside Vercel, and return HTTP 503 when the admin password is absent.
+- [ ] Implement `REQUIRED_VERCEL_ENV_VARS` with `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `AIRTABLE_PAT`, `AIRTABLE_BASE_ID`, `OPENAI_API_KEY`, `PDL_API_KEY`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `REACT_APP_SUPABASE_URL`, `REACT_APP_SUPABASE_PUBLISHABLE_KEY`, `BLOB_PRIVATE_READ_WRITE_TOKEN`, and `BLOB_PUBLIC_READ_WRITE_TOKEN`; raise `RuntimeError` containing only missing names whenever `VERCEL_ENV` is present.
+- [ ] Call the validator during `backend.server` import, generate a fresh per-process JWT secret only outside Vercel, and return HTTP 503 when the admin password is absent.
 - [ ] Re-run the focused tests and confirm they pass.
 
 ### Task 2: Replace Yarn resolutions with npm overrides

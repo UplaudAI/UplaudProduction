@@ -21,7 +21,10 @@ Install the locked frontend dependencies and start CRA in another terminal:
 
 ```sh
 npm --prefix frontend ci --legacy-peer-deps
-REACT_APP_BACKEND_URL=http://localhost:8000 npm --prefix frontend start
+REACT_APP_BACKEND_URL=http://localhost:8000 \
+REACT_APP_SUPABASE_URL="$REACT_APP_SUPABASE_URL" \
+REACT_APP_SUPABASE_PUBLISHABLE_KEY="$REACT_APP_SUPABASE_PUBLISHABLE_KEY" \
+npm --prefix frontend start
 ```
 
 Run the backend and focused frontend tests with:
@@ -32,10 +35,37 @@ python3.12 -m pytest -q -n 0
 npm --prefix frontend test -- --runInBand --watchAll=false src/lib/api.test.js
 ```
 
-Legacy live integration suites are ignored before import unless both
-`RUN_LIVE_INTEGRATION_TESTS=1` and `REACT_APP_BACKEND_URL` are set explicitly.
-Authenticated live suites read `TEST_PASSWORD` and `TEST_JWT_SECRET` from the
-operator's environment; never store those values in this repository.
+The eight legacy root files are standalone network scripts, not valid pytest
+suites, and pytest always ignores them. Load `TEST_PASSWORD` (and
+`TEST_JWT_SECRET` for the JWT scripts) from an external secret store, choose a
+current non-Emergent target, and invoke a script directly:
+
+```sh
+export RUN_LIVE_INTEGRATION_TESTS=1
+: "${REACT_APP_BACKEND_URL:?load the current target URL from deployment output}"
+: "${TEST_PASSWORD:?load TEST_PASSWORD from the approved secret store}"
+python3.12 comprehensive_backend_test.py
+python3.12 test_business_profile.py
+python3.12 test_sources_airtable.py
+python3.12 test_sources_comprehensive.py
+python3.12 test_www_comprehensive.py
+python3.12 test_www_prefix.py
+
+: "${TEST_JWT_SECRET:?load the test-side JWT copy from the approved secret store}"
+python3.12 backend_test.py
+python3.12 test_work_email_validation.py
+```
+
+The real live pytest modules under `backend/tests` remain gated. With the same
+credentials loaded, collect or run them explicitly:
+
+```sh
+(cd backend && python3.12 -m pytest -m live_integration tests)
+```
+
+`TEST_JWT_SECRET` is a test-side copy of the deployed server's `JWT_SECRET`,
+used only to construct expiry-test tokens. The backend continues to read
+`JWT_SECRET`; never store either value in this repository.
 
 ## Vercel runtime configuration
 
@@ -51,6 +81,8 @@ runtime variable below is configured in the Vercel project:
 - `PDL_API_KEY`
 - `SUPABASE_URL`
 - `SUPABASE_PUBLISHABLE_KEY`
+- `REACT_APP_SUPABASE_URL`
+- `REACT_APP_SUPABASE_PUBLISHABLE_KEY`
 - `BLOB_PRIVATE_READ_WRITE_TOKEN`
 - `BLOB_PUBLIC_READ_WRITE_TOKEN`
 
@@ -58,6 +90,11 @@ Local imports outside Vercel generate a per-process development JWT secret when
 none is configured, so unit tests and local startup do not require production
 credentials. Admin blog endpoints still return HTTP 503 until
 `ADMIN_PASSWORD` is explicitly configured.
+
+The backend uses the unprefixed Supabase names. CRA embeds only the two
+`REACT_APP_SUPABASE_*` names at frontend build time. Configure both pairs with
+the same public Supabase URL and publishable key; missing frontend values stop
+the application with a configuration error instead of selecting a fallback.
 
 ### Mandatory pre-Preview credential rotation gate
 

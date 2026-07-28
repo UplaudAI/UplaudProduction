@@ -12,6 +12,8 @@ import httpx
 from datetime import datetime, timezone, timedelta
 import jwt
 
+from live_test_guard import require_live_script_environment
+
 # Configuration (this module is collected only after explicit live-test opt-in)
 BACKEND_URL = f"{os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')}/api"
 JWT_SECRET = os.environ.get("TEST_JWT_SECRET", "")
@@ -319,6 +321,7 @@ def print_summary():
 
 async def main():
     """Run all authentication tests"""
+    require_live_script_environment(require_jwt_secret=True)
     print("="*80)
     print("UPLAUD CRM - BACKEND AUTHENTICATION TEST SUITE")
     print("SUPABASE-ONLY AUTHENTICATION (ZERO MongoDB DEPENDENCIES)")

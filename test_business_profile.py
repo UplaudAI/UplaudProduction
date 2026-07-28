@@ -9,6 +9,8 @@ import os
 import sys
 import requests
 
+from live_test_guard import require_live_script_environment
+
 # Configuration (this module is collected only after explicit live-test opt-in)
 BACKEND_URL = f"{os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')}/api"
 ADMIN_EMAIL = "dcameron@payrewards.com"
@@ -338,6 +340,7 @@ def verify_no_mongodb_in_code():
         return print_test("Code analysis", False, f"Error: {e}")
 
 def main():
+    require_live_script_environment()
     print("=" * 80)
     print("BUSINESS PROFILE ENDPOINTS TEST SUITE")
     print("Testing POST and GET /api/business/profile")

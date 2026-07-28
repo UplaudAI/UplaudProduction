@@ -1,11 +1,10 @@
-"""Fail-closed collection policy for legacy root-level live test suites."""
+"""Keep legacy standalone network scripts out of pytest collection."""
 
-import os
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent
-LIVE_INTEGRATION_TESTS = frozenset(
+STANDALONE_LIVE_SCRIPTS = frozenset(
     {
         "backend_test.py",
         "comprehensive_backend_test.py",
@@ -19,27 +18,18 @@ LIVE_INTEGRATION_TESTS = frozenset(
 )
 
 
-def _live_integration_enabled() -> bool:
-    return (
-        os.environ.get("RUN_LIVE_INTEGRATION_TESTS") == "1"
-        and bool(os.environ.get("REACT_APP_BACKEND_URL", "").strip())
-    )
-
-
 def pytest_ignore_collect(collection_path, config):
     path = Path(str(collection_path))
     if (
         path.parent == ROOT
-        and path.name in LIVE_INTEGRATION_TESTS
-        and not _live_integration_enabled()
+        and path.name in STANDALONE_LIVE_SCRIPTS
     ):
         return True
     return None
 
 
 def pytest_terminal_summary(terminalreporter):
-    if not _live_integration_enabled():
-        terminalreporter.write_line(
-            "root live integration suites ignored: set "
-            "RUN_LIVE_INTEGRATION_TESTS=1 and REACT_APP_BACKEND_URL explicitly"
-        )
+    terminalreporter.write_line(
+        "legacy root live scripts ignored by pytest; run them directly with "
+        "the documented explicit opt-in environment"
+    )

@@ -12,6 +12,8 @@ import httpx
 from datetime import datetime, timezone
 import tempfile
 
+from live_test_guard import require_live_script_environment
+
 # Configuration (this module is collected only after explicit live-test opt-in)
 BACKEND_URL = f"{os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')}/api"
 
@@ -565,6 +567,7 @@ def print_summary():
 
 async def main():
     """Run all sources Airtable integration tests"""
+    require_live_script_environment()
     print("="*80)
     print("UPLAUD CRM - SOURCES AIRTABLE INTEGRATION TEST SUITE")
     print("VERIFY SOURCES USE AIRTABLE GROWTH_SIGNALS TABLE EXCLUSIVELY")

@@ -21,8 +21,8 @@ available code so the user can see how much progress has been made.
   this sandbox, replacing the blank template.
 - Wired `backend/.env` with real user-provided keys: OPENAI_API_KEY, AIRTABLE_PAT,
   AIRTABLE_BASE_ID (appFUJWWTaoJ3YiWt), PDL_API_KEY, plus JWT_SECRET/ADMIN_EMAIL/ADMIN_PASSWORD
-  (set to match the frontend's hardcoded demo login default: dcameron@payrewards.com /
-  <redacted>, so the pre-filled login form works out of the box).
+  (historical local setup only). The login form no longer prefills either email
+  or password, and credentials must be supplied through external secret stores.
 - Fixed a pip dependency conflict (stray pinned `litellm` wheel unrelated to any code usage,
   removed from requirements.txt) blocking backend startup; installed all deps (yarn + pip).
 - Verified via testing_agent (15/15 backend tests, all 10 dashboard routes, no console/network

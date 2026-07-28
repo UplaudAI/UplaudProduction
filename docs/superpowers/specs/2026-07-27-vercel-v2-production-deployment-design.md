@@ -104,11 +104,16 @@ Configure Vercel Preview and Production environments separately. Required names 
 - `ADMIN_PASSWORD`
 - `SUPABASE_URL`
 - `SUPABASE_PUBLISHABLE_KEY`
+- `REACT_APP_SUPABASE_URL`
+- `REACT_APP_SUPABASE_PUBLISHABLE_KEY`
 - `REACT_APP_BACKEND_URL` or a same-origin frontend configuration
 - `BLOB_PRIVATE_READ_WRITE_TOKEN`, mapped from the connected private Blob store credential
 - `BLOB_PUBLIC_READ_WRITE_TOKEN`, mapped from the connected public Blob store credential
 
-Remove `MONGO_URL` and `DB_NAME`. Secrets must not be committed or printed during verification.
+The backend uses `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY`; the CRA build
+uses the corresponding `REACT_APP_` names. The same public values may be mapped
+to both pairs. Remove `MONGO_URL` and `DB_NAME`. Secrets must not be committed
+or printed during verification.
 
 Connect and map both Blob stores separately in Preview and Production. The environment audit must list names only, verify that both exact scoped names exist in both environments, confirm that the two underlying values are distinct without printing them, and reject generic one-store configuration such as application use of `BLOB_READ_WRITE_TOKEN`.
 

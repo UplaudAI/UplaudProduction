@@ -13,6 +13,8 @@ import requests
 import sys
 import os
 
+from live_test_guard import require_live_script_environment
+
 # Backend URL from environment
 BACKEND_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 API_BASE = f"{BACKEND_URL}/api"
@@ -155,6 +157,7 @@ def test_get_business_profile(token):
     return 1, 0
 
 def main():
+    require_live_script_environment()
     print("=" * 80)
     print("Testing www. prefix handling in business name derivation")
     print("=" * 80)
