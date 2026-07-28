@@ -1,9 +1,12 @@
 import asyncio
+import math
 import os
 import re
 import logging
 from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import Optional
+from urllib.parse import quote
 
 import httpx
 
@@ -24,6 +27,10 @@ TABLE_EVENT_LOG = "Event_Log"
 _RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
 _MAX_ATTEMPTS = 3
 _BACKOFF_SECONDS = 0.1
+_MAX_RETRY_DELAY_SECONDS = 30.0
+_RATE_LIMIT_FALLBACK_SECONDS = 30.0
+_USER_BATCH_MAX_IDS = 100
+_USER_BATCH_MAX_FORMULA_CHARS = 3500
 
 
 def _enabled() -> bool:
@@ -38,56 +45,105 @@ def _escape(v: str) -> str:
     return (v or "").replace('"', '\\"')
 
 
-def _retry_delay(response: httpx.Response, attempt: int) -> float:
+def _retry_delay(
+    response: httpx.Response, attempt: int, *, now: Optional[datetime] = None
+) -> float:
+    if response.status_code != 429:
+        return min(_BACKOFF_SECONDS * (2 ** attempt), _MAX_RETRY_DELAY_SECONDS)
+
     retry_after = response.headers.get("Retry-After")
     if retry_after is not None:
         try:
-            return max(0.0, float(retry_after))
+            delay = float(retry_after)
+            if math.isfinite(delay) and delay >= 0:
+                return min(delay, _MAX_RETRY_DELAY_SECONDS)
         except ValueError:
             pass
-    return _BACKOFF_SECONDS * (2 ** attempt)
+        try:
+            retry_at = parsedate_to_datetime(retry_after)
+            if retry_at.tzinfo is None:
+                retry_at = retry_at.replace(tzinfo=timezone.utc)
+            current_time = now or datetime.now(timezone.utc)
+            delay = max(0.0, (retry_at - current_time).total_seconds())
+            return min(delay, _MAX_RETRY_DELAY_SECONDS)
+        except (TypeError, ValueError, OverflowError):
+            pass
+    return _RATE_LIMIT_FALLBACK_SECONDS
 
 
-async def _request(method: str, url: str, *, allow_not_found: bool = False, **kwargs) -> httpx.Response:
-    async with httpx.AsyncClient(timeout=10.0) as client:
+async def _request(
+    method: str,
+    url: str,
+    *,
+    allow_not_found: bool = False,
+    client: Optional[httpx.AsyncClient] = None,
+    sleep=None,
+    **kwargs,
+) -> httpx.Response:
+    method = method.upper()
+    sleeper = sleep or asyncio.sleep
+
+    async def send(active_client: httpx.AsyncClient) -> httpx.Response:
         for attempt in range(_MAX_ATTEMPTS):
-            response = await client.request(method, url, headers=_headers(), **kwargs)
-            if response.status_code in _RETRYABLE_STATUSES:
+            response = await active_client.request(method, url, headers=_headers(), **kwargs)
+            retryable = response.status_code in _RETRYABLE_STATUSES and (
+                method != "POST" or response.status_code == 429
+            )
+            if retryable:
                 if attempt == _MAX_ATTEMPTS - 1:
                     response.raise_for_status()
-                await asyncio.sleep(_retry_delay(response, attempt))
+                await sleeper(_retry_delay(response, attempt))
                 continue
             if allow_not_found and response.status_code == 404:
                 return response
             response.raise_for_status()
             return response
-    raise RuntimeError("Airtable request retry loop exited unexpectedly")
+        raise RuntimeError("Airtable request retry loop exited unexpectedly")
+
+    if client is not None:
+        return await send(client)
+    async with httpx.AsyncClient(timeout=10.0) as owned_client:
+        return await send(owned_client)
+
+
+def _table_url(table: str) -> str:
+    return f"{AIRTABLE_API_URL}/{quote(table, safe='')}"
+
+
+def _record_url(table: str, record_id: str) -> str:
+    return f"{_table_url(table)}/{quote(record_id, safe='')}"
 
 
 async def _get(table: str, params: Optional[dict] = None) -> dict:
     if not _enabled():
         return {"records": []}
-    response = await _request("GET", f"{AIRTABLE_API_URL}/{table}", params=params or {})
+    response = await _request("GET", _table_url(table), params=params or {})
     return response.json()
 
 
 async def _get_all(table: str, params: Optional[dict] = None) -> list:
+    if not _enabled():
+        return []
     query = dict(params or {})
     records = []
-    while True:
-        data = await _get(table, dict(query))
-        records.extend(data.get("records", []))
-        offset = data.get("offset")
-        if not offset:
-            return records
-        query["offset"] = offset
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        while True:
+            response = await _request(
+                "GET", _table_url(table), client=client, params=dict(query)
+            )
+            data = response.json()
+            records.extend(data.get("records", []))
+            offset = data.get("offset")
+            if not offset:
+                return records
+            query["offset"] = offset
 
 
 async def _get_record(table: str, record_id: str) -> Optional[dict]:
     if not _enabled():
         return None
     response = await _request(
-        "GET", f"{AIRTABLE_API_URL}/{table}/{record_id}", allow_not_found=True
+        "GET", _record_url(table, record_id), allow_not_found=True
     )
     if response.status_code == 404:
         return None
@@ -98,7 +154,7 @@ async def _create(table: str, fields: dict) -> Optional[dict]:
     if not _enabled():
         return None
     response = await _request(
-        "POST", f"{AIRTABLE_API_URL}/{table}", json={"fields": fields}
+        "POST", _table_url(table), json={"fields": fields}
     )
     return response.json()
 
@@ -107,7 +163,7 @@ async def _update(table: str, record_id: str, fields: dict) -> Optional[dict]:
     if not _enabled():
         return None
     response = await _request(
-        "PATCH", f"{AIRTABLE_API_URL}/{table}/{record_id}", json={"fields": fields}
+        "PATCH", _record_url(table, record_id), json={"fields": fields}
     )
     return response.json()
 
@@ -417,6 +473,29 @@ def _circle_to_lead_dict(f: dict, uf: dict, record_id: str, created_time: str = 
     }
 
 
+def _chunk_record_ids(record_ids) -> list:
+    chunks = []
+    current = []
+    current_formula_length = len("OR()")
+    for record_id in sorted(record_ids):
+        clause = f'RECORD_ID()="{_escape(record_id)}"'
+        separator_length = 1 if current else 0
+        projected_length = current_formula_length + separator_length + len(clause)
+        if current and (
+            len(current) >= _USER_BATCH_MAX_IDS
+            or projected_length > _USER_BATCH_MAX_FORMULA_CHARS
+        ):
+            chunks.append(current)
+            current = []
+            current_formula_length = len("OR()")
+            separator_length = 0
+        current.append(record_id)
+        current_formula_length += separator_length + len(clause)
+    if current:
+        chunks.append(current)
+    return chunks
+
+
 async def get_circle_lead(business_name: str, lead_id: str) -> Optional[dict]:
     """Fetch a single Circles row (by Airtable record id) joined with its linked User
     enrichment, scoped to the given business for authorization."""
@@ -451,10 +530,15 @@ async def list_circles_by_business(business_name: str) -> list:
     user_map = {}
     if user_ids:
         try:
-            formula = "OR(" + ",".join(f'RECORD_ID()="{uid}"' for uid in user_ids) + ")"
-            users = await _get_all(TABLE_USER, {"filterByFormula": formula, "pageSize": 100})
-            for u in users:
-                user_map[u["id"]] = u.get("fields", {})
+            for user_id_chunk in _chunk_record_ids(user_ids):
+                formula = "OR(" + ",".join(
+                    f'RECORD_ID()="{_escape(user_id)}"' for user_id in user_id_chunk
+                ) + ")"
+                users = await _get_all(
+                    TABLE_USER, {"filterByFormula": formula, "pageSize": 100}
+                )
+                for user in users:
+                    user_map[user["id"]] = user.get("fields", {})
         except Exception as e:
             logger.warning("Airtable user batch fetch failed: %s", e)
 

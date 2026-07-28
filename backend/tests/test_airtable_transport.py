@@ -1,4 +1,7 @@
 import asyncio
+import re
+from datetime import datetime, timedelta, timezone
+from email.utils import format_datetime
 
 import httpx
 import pytest
@@ -22,6 +25,16 @@ class QueuedAsyncClient:
         return self.responses.pop(0)
 
 
+class CountingClientFactory:
+    def __init__(self, client):
+        self.client = client
+        self.calls = 0
+
+    def __call__(self, **kwargs):
+        self.calls += 1
+        return self.client
+
+
 def response(status_code, payload=None, headers=None):
     request = httpx.Request("GET", "https://api.airtable.com/v0/base/Table")
     return httpx.Response(status_code, json=payload, headers=headers, request=request)
@@ -35,7 +48,8 @@ def enable_airtable(monkeypatch):
 
 def install_client(monkeypatch, responses):
     client = QueuedAsyncClient(responses)
-    monkeypatch.setattr(airtable_client.httpx, "AsyncClient", lambda **kwargs: client)
+    client.factory = CountingClientFactory(client)
+    monkeypatch.setattr(airtable_client.httpx, "AsyncClient", client.factory)
     return client
 
 
@@ -56,6 +70,34 @@ def test_get_all_follows_offsets_and_combines_records_without_mutating_params(mo
     assert params == {"filterByFormula": "{Active}=1", "pageSize": 100}
     assert client.calls[0][2]["params"] == params
     assert client.calls[1][2]["params"] == {**params, "offset": "next-page"}
+    assert client.factory.calls == 1
+
+
+def test_429_without_retry_after_uses_bounded_airtable_fallback():
+    assert airtable_client._retry_delay(response(429), 0) == 30
+
+
+def test_429_with_malformed_retry_after_uses_bounded_airtable_fallback():
+    assert airtable_client._retry_delay(
+        response(429, headers={"Retry-After": "not-a-delay"}), 0
+    ) == 30
+
+
+def test_429_with_huge_numeric_retry_after_is_capped():
+    assert airtable_client._retry_delay(
+        response(429, headers={"Retry-After": "999999"}), 0
+    ) == 30
+
+
+def test_429_with_http_date_retry_after_uses_seconds_until_date():
+    now = datetime(2026, 7, 27, 12, 0, tzinfo=timezone.utc)
+    retry_at = format_datetime(now + timedelta(seconds=12), usegmt=True)
+
+    delay = airtable_client._retry_delay(
+        response(429, headers={"Retry-After": retry_at}), 0, now=now
+    )
+
+    assert delay == 12
 
 
 def test_transient_429_is_retried_then_returns_success(monkeypatch):
@@ -79,6 +121,28 @@ def test_transient_429_is_retried_then_returns_success(monkeypatch):
     assert result == {"records": [{"id": "rec1"}]}
     assert len(client.calls) == 2
     assert sleeps == [0]
+
+
+def test_5xx_retries_use_short_exponential_backoff(monkeypatch):
+    enable_airtable(monkeypatch)
+    client = install_client(
+        monkeypatch,
+        [
+            response(503, {"error": "temporary"}),
+            response(503, {"error": "temporary"}),
+            response(200, {"records": []}),
+        ],
+    )
+    sleeps = []
+
+    async def fake_sleep(delay):
+        sleeps.append(delay)
+
+    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
+
+    assert asyncio.run(airtable_client._get("Table")) == {"records": []}
+    assert len(client.calls) == 3
+    assert sleeps == [0.1, 0.2]
 
 
 @pytest.mark.parametrize("status_code", [429, 500, 502, 503, 504])
@@ -112,6 +176,38 @@ def test_non_retryable_4xx_propagates_without_retry(monkeypatch):
     assert len(client.calls) == 1
 
 
+def test_post_5xx_propagates_without_retry_to_avoid_duplicate_creates(monkeypatch):
+    enable_airtable(monkeypatch)
+    client = install_client(monkeypatch, [response(500, {"error": "ambiguous"})])
+
+    with pytest.raises(httpx.HTTPStatusError) as exc_info:
+        asyncio.run(airtable_client._create("Table", {"Name": "Ada"}))
+
+    assert exc_info.value.response.status_code == 500
+    assert len(client.calls) == 1
+
+
+def test_post_429_is_retried_after_definite_rate_limit(monkeypatch):
+    enable_airtable(monkeypatch)
+    client = install_client(
+        monkeypatch,
+        [
+            response(429, {"error": "rate limited"}, headers={"Retry-After": "0"}),
+            response(200, {"id": "rec1", "fields": {"Name": "Ada"}}),
+        ],
+    )
+
+    async def fake_sleep(delay):
+        return None
+
+    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
+
+    result = asyncio.run(airtable_client._create("Table", {"Name": "Ada"}))
+
+    assert result["id"] == "rec1"
+    assert len(client.calls) == 2
+
+
 def test_get_record_returns_none_on_404_without_retry(monkeypatch):
     enable_airtable(monkeypatch)
     client = install_client(monkeypatch, [response(404, {"error": "not found"})])
@@ -120,6 +216,19 @@ def test_get_record_returns_none_on_404_without_retry(monkeypatch):
 
     assert result is None
     assert len(client.calls) == 1
+
+
+def test_table_and_record_path_segments_are_url_quoted(monkeypatch):
+    enable_airtable(monkeypatch)
+    client = install_client(
+        monkeypatch,
+        [response(200, {"id": "rec/1 ?", "fields": {}})],
+    )
+
+    asyncio.run(airtable_client._get_record("People / Leads", "rec/1 ?"))
+
+    _, url, _ = client.calls[0]
+    assert url == "https://api.airtable.com/v0/test-base/People%20%2F%20Leads/rec%2F1%20%3F"
 
 
 @pytest.mark.parametrize(
@@ -162,3 +271,42 @@ def test_disabled_helpers_preserve_existing_empty_shapes(monkeypatch):
     assert asyncio.run(airtable_client._get_record("Table", "rec1")) is None
     assert asyncio.run(airtable_client._create("Table", {})) is None
     assert asyncio.run(airtable_client._update("Table", "rec1", {})) is None
+
+
+def test_circles_linked_users_are_fetched_in_bounded_complete_batches(monkeypatch):
+    count = 405
+    circle_records = [
+        {
+            "id": f"circle-{index}",
+            "fields": {
+                "Receiver": f"Lead {index}",
+                "UserTable Link": [f"recUser{index:04d}"],
+            },
+        }
+        for index in range(count)
+    ]
+    user_calls = []
+
+    async def fake_get_all(table, params=None):
+        if table == airtable_client.TABLE_CIRCLES:
+            return circle_records
+        assert table == airtable_client.TABLE_USER
+        formula = params["filterByFormula"]
+        user_ids = re.findall(r'RECORD_ID\(\)="([^"]+)"', formula)
+        user_calls.append((formula, user_ids))
+        return [
+            {"id": user_id, "fields": {"Job_Title": f"Title {int(user_id[-4:])}"}}
+            for user_id in user_ids
+        ]
+
+    monkeypatch.setattr(airtable_client, "_get_all", fake_get_all)
+
+    leads = asyncio.run(airtable_client.list_circles_by_business("Acme"))
+
+    assert len(user_calls) > 1
+    assert all(len(user_ids) <= 100 for _, user_ids in user_calls)
+    assert all(len(formula) <= 3500 for formula, _ in user_calls)
+    assert len(leads) == count
+    assert {lead["job_title"] for lead in leads} == {
+        f"Title {index}" for index in range(count)
+    }
