@@ -1,0 +1,11 @@
+{
+  "name": "uplaud-production-vercel",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix frontend run build",
+    "install:frontend": "npm --prefix frontend ci --legacy-peer-deps"
+  },
+  "engines": {
+    "node": "22.x"
+  }
+}
