@@ -75,7 +75,7 @@ runtime variable below is configured in the Vercel project:
 - `JWT_SECRET`
 - `ADMIN_EMAIL`
 - `ADMIN_PASSWORD`
-- `AIRTABLE_PAT`
+- `AIRTABLE_PAT`, falling back to the legacy Vercel name `AIRTABLE_API_KEY`
 - `AIRTABLE_BASE_ID`
 - `OPENAI_API_KEY`
 - `PDL_API_KEY`
@@ -83,8 +83,10 @@ runtime variable below is configured in the Vercel project:
 - `SUPABASE_PUBLISHABLE_KEY`
 - `REACT_APP_SUPABASE_URL`
 - `REACT_APP_SUPABASE_PUBLISHABLE_KEY`
-- `BLOB_PRIVATE_READ_WRITE_TOKEN`
-- `BLOB_PUBLIC_READ_WRITE_TOKEN`
+- Private Blob token: `BLOB_PRIVATE_READ_WRITE_TOKEN`, falling back to Vercel's
+  generated `BLOB_READ_WRITE_TOKEN`
+- Public Blob token: `BLOB_PUBLIC_READ_WRITE_TOKEN`, falling back to the
+  connected store's generated `PUBLIC_READ_WRITE_TOKEN`
 
 Local imports outside Vercel generate a per-process development JWT secret when
 none is configured, so unit tests and local startup do not require production
@@ -95,6 +97,10 @@ The backend uses the unprefixed Supabase names. CRA embeds only the two
 `REACT_APP_SUPABASE_*` names at frontend build time. Configure both pairs with
 the same public Supabase URL and publishable key; missing frontend values stop
 the application with a configuration error instead of selecting a fallback.
+
+Custom scoped Blob names take precedence over platform-generated names. The
+resolved private and public tokens must be distinct; missing or identical
+credentials keep Blob storage unavailable.
 
 ### Mandatory pre-Preview credential rotation gate
 

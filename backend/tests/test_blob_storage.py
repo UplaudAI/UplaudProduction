@@ -127,6 +127,8 @@ def install_client(monkeypatch, client, *, token="blob-token", access="private")
         else "BLOB_PRIVATE_READ_WRITE_TOKEN"
     )
     monkeypatch.delenv(other_name, raising=False)
+    monkeypatch.delenv("BLOB_READ_WRITE_TOKEN", raising=False)
+    monkeypatch.delenv("PUBLIC_READ_WRITE_TOKEN", raising=False)
     monkeypatch.delenv("BLOB_STORAGE_ENABLED", raising=False)
     created_with = []
 
@@ -201,6 +203,7 @@ def test_blob_adapter_rejects_missing_token_or_disabled_storage(
     monkeypatch.delenv("VERCEL_BLOB_READ_WRITE_TOKEN", raising=False)
     monkeypatch.delenv("BLOB_PRIVATE_READ_WRITE_TOKEN", raising=False)
     monkeypatch.delenv("BLOB_PUBLIC_READ_WRITE_TOKEN", raising=False)
+    monkeypatch.delenv("PUBLIC_READ_WRITE_TOKEN", raising=False)
     if enabled is not None:
         monkeypatch.setenv("BLOB_STORAGE_ENABLED", enabled)
 
@@ -218,6 +221,7 @@ def test_blob_adapter_requires_distinct_access_scoped_store_tokens(monkeypatch):
 
     monkeypatch.setattr(blob_storage, "AsyncBlobClient", factory)
     monkeypatch.setenv("BLOB_READ_WRITE_TOKEN", "single-fixed-access-store")
+    monkeypatch.setenv("PUBLIC_READ_WRITE_TOKEN", "single-fixed-access-store")
     monkeypatch.delenv("BLOB_PRIVATE_READ_WRITE_TOKEN", raising=False)
     monkeypatch.delenv("BLOB_PUBLIC_READ_WRITE_TOKEN", raising=False)
 
@@ -230,6 +234,64 @@ def test_blob_adapter_requires_distinct_access_scoped_store_tokens(monkeypatch):
     run(blob_storage.store_blog_image("hero.png", b"x", "image/png"))
 
     assert created_with == ["private-store-token", "public-store-token"]
+
+
+def test_blob_adapter_accepts_vercel_platform_generated_token_names(monkeypatch):
+    client = RecordingClient()
+    created_with = []
+
+    def factory(*, token):
+        created_with.append(token)
+        return client
+
+    monkeypatch.setattr(blob_storage, "AsyncBlobClient", factory)
+    monkeypatch.delenv("BLOB_PRIVATE_READ_WRITE_TOKEN", raising=False)
+    monkeypatch.delenv("BLOB_PUBLIC_READ_WRITE_TOKEN", raising=False)
+    monkeypatch.setenv("BLOB_READ_WRITE_TOKEN", "platform-private-token")
+    monkeypatch.setenv("PUBLIC_READ_WRITE_TOKEN", "platform-public-token")
+
+    run(blob_storage.store_source("source-1", "call.txt", b"x", "text/plain"))
+    run(blob_storage.store_blog_image("hero.png", b"x", "image/png"))
+
+    assert created_with == ["platform-private-token", "platform-public-token"]
+
+
+def test_blob_adapter_ignores_blank_custom_names_and_uses_platform_fallbacks(
+    monkeypatch,
+):
+    monkeypatch.setenv("BLOB_PRIVATE_READ_WRITE_TOKEN", "  ")
+    monkeypatch.setenv("BLOB_PUBLIC_READ_WRITE_TOKEN", "\t")
+    monkeypatch.setenv("BLOB_READ_WRITE_TOKEN", "platform-private")
+    monkeypatch.setenv("PUBLIC_READ_WRITE_TOKEN", "platform-public")
+
+    assert blob_storage._token_for("private") == "platform-private"
+    assert blob_storage._token_for("public") == "platform-public"
+
+
+def test_blob_adapter_prefers_custom_scoped_names_over_platform_fallbacks(
+    monkeypatch,
+):
+    monkeypatch.setenv("BLOB_PRIVATE_READ_WRITE_TOKEN", "custom-private")
+    monkeypatch.setenv("BLOB_PUBLIC_READ_WRITE_TOKEN", "custom-public")
+    monkeypatch.setenv("BLOB_READ_WRITE_TOKEN", "platform-private")
+    monkeypatch.setenv("PUBLIC_READ_WRITE_TOKEN", "platform-public")
+
+    assert blob_storage._token_for("private") == "custom-private"
+    assert blob_storage._token_for("public") == "custom-public"
+
+
+def test_blob_adapter_rejects_same_effective_platform_token_for_both_stores(
+    monkeypatch,
+):
+    monkeypatch.delenv("BLOB_PRIVATE_READ_WRITE_TOKEN", raising=False)
+    monkeypatch.delenv("BLOB_PUBLIC_READ_WRITE_TOKEN", raising=False)
+    monkeypatch.setenv("BLOB_READ_WRITE_TOKEN", "shared-token")
+    monkeypatch.setenv("PUBLIC_READ_WRITE_TOKEN", "shared-token")
+
+    with pytest.raises(blob_storage.BlobStorageUnavailable):
+        blob_storage._token_for("private")
+    with pytest.raises(blob_storage.BlobStorageUnavailable):
+        blob_storage._token_for("public")
 
 
 def test_backend_declares_official_vercel_sdk_dependency():

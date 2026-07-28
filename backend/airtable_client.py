@@ -10,6 +10,11 @@ from urllib.parse import quote
 
 import httpx
 
+if __package__:
+    from .runtime_config import resolve_env_var
+else:
+    from runtime_config import resolve_env_var
+
 logger = logging.getLogger("uplaud.airtable")
 
 
@@ -28,7 +33,7 @@ class AirtableSourceCollisionError(AirtableSourceLookupError):
 class AirtableSourceConflictError(RuntimeError):
     """A source mutation conflicts with its current immutable state."""
 
-AIRTABLE_PAT = os.environ.get("AIRTABLE_PAT", "")
+AIRTABLE_PAT = resolve_env_var("AIRTABLE_PAT")
 AIRTABLE_BASE_ID = os.environ.get("AIRTABLE_BASE_ID", "")
 AIRTABLE_API_URL = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}"
 PDL_API_KEY = os.environ.get("PDL_API_KEY", "")

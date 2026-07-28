@@ -27,7 +27,7 @@ Vercel exposes the FastAPI application as one Python Function using Fluid Comput
 
 - Airtable is the sole structured datastore.
 - Two separate Vercel Blob stores preserve the access boundary: a private store holds uploaded source files and approval receipts, and a public store holds blog images.
-- The private store credential is exposed to the application only as `BLOB_PRIVATE_READ_WRITE_TOKEN`; the public store credential is exposed only as `BLOB_PUBLIC_READ_WRITE_TOKEN`. The values must be distinct.
+- The private store credential resolves from `BLOB_PRIVATE_READ_WRITE_TOKEN` with Vercel's generated `BLOB_READ_WRITE_TOKEN` as fallback; the public credential resolves from `BLOB_PUBLIC_READ_WRITE_TOKEN` with generated `PUBLIC_READ_WRITE_TOKEN` as fallback. The resolved values must be distinct.
 - Extracted transcript text and source metadata are persisted before analysis; no workflow depends on process memory.
 - Temporary parsing files may use `/tmp`, but no durable state relies on the function filesystem.
 
@@ -95,7 +95,7 @@ Admin uploads go to the public Vercel Blob store rather than a local `uploads/` 
 
 Configure Vercel Preview and Production environments separately. Required names include:
 
-- `AIRTABLE_PAT`
+- `AIRTABLE_PAT` or legacy `AIRTABLE_API_KEY` (canonical name takes precedence)
 - `AIRTABLE_BASE_ID`
 - `OPENAI_API_KEY`
 - `PDL_API_KEY`
@@ -107,15 +107,15 @@ Configure Vercel Preview and Production environments separately. Required names 
 - `REACT_APP_SUPABASE_URL`
 - `REACT_APP_SUPABASE_PUBLISHABLE_KEY`
 - `REACT_APP_BACKEND_URL` or a same-origin frontend configuration
-- `BLOB_PRIVATE_READ_WRITE_TOKEN`, mapped from the connected private Blob store credential
-- `BLOB_PUBLIC_READ_WRITE_TOKEN`, mapped from the connected public Blob store credential
+- `BLOB_PRIVATE_READ_WRITE_TOKEN` or generated `BLOB_READ_WRITE_TOKEN` for the private store
+- `BLOB_PUBLIC_READ_WRITE_TOKEN` or generated `PUBLIC_READ_WRITE_TOKEN` for the public store
 
 The backend uses `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY`; the CRA build
 uses the corresponding `REACT_APP_` names. The same public values may be mapped
 to both pairs. Remove `MONGO_URL` and `DB_NAME`. Secrets must not be committed
 or printed during verification.
 
-Connect and map both Blob stores separately in Preview and Production. The environment audit must list names only, verify that both exact scoped names exist in both environments, confirm that the two underlying values are distinct without printing them, and reject generic one-store configuration such as application use of `BLOB_READ_WRITE_TOKEN`.
+Connect both Blob stores separately in Preview and Production. The environment audit must list names only, accept either each custom scoped name or its platform-generated fallback, and confirm that the resolved private and public values are distinct without printing them.
 
 The preview environment may use the live Airtable base as approved. Test records must use a unique deployment/test prefix and be removed after verification when safe.
 

@@ -4,7 +4,7 @@
 
 **Goal:** Deploy Uplaud V2 to Vercel with FastAPI, Airtable, and Vercel Blob while preserving functionality, removing MongoDB, and retaining a verified rollback path.
 
-**Architecture:** Vercel serves the CRA frontend and exposes the FastAPI application as one Python Function. Airtable becomes the only structured datastore. Two distinct Vercel Blob stores preserve access separation: one private store for source binaries and approval receipts, and one public store for blog images. Their injected credentials map to `BLOB_PRIVATE_READ_WRITE_TOKEN` and `BLOB_PUBLIC_READ_WRITE_TOKEN`, respectively. All production promotion happens only after a Preview deployment passes persistence, tenancy, browser, and performance gates.
+**Architecture:** Vercel serves the CRA frontend and exposes the FastAPI application as one Python Function. Airtable becomes the only structured datastore. Two distinct Vercel Blob stores preserve access separation: one private store for source binaries and approval receipts, and one public store for blog images. Custom credentials use `BLOB_PRIVATE_READ_WRITE_TOKEN` and `BLOB_PUBLIC_READ_WRITE_TOKEN`; Vercel-generated `BLOB_READ_WRITE_TOKEN` and `PUBLIC_READ_WRITE_TOKEN` are accepted fallbacks. All production promotion happens only after a Preview deployment passes persistence, tenancy, browser, and performance gates.
 
 **Tech Stack:** React 19, CRA/Craco, FastAPI, Vercel Python Runtime/Fluid Compute, Airtable REST API, Vercel Blob Python SDK, Supabase Auth, OpenAI, pytest, Vercel CLI
 
@@ -657,11 +657,11 @@ Expected: `.vercel/project.json` points to `prj_fhmackrdzjoBAOP4HuYpohXQ9m9C`; `
 
 Run: `vercel env ls`
 
-Expected: Preview and Production contain Airtable, OpenAI, PDL, Supabase, admin/JWT, `BLOB_PRIVATE_READ_WRITE_TOKEN`, and `BLOB_PUBLIC_READ_WRITE_TOKEN` names; Mongo variables and generic application use of `BLOB_READ_WRITE_TOKEN` are not required. Record names and scopes only—never values.
+Expected: Preview and Production contain Airtable (`AIRTABLE_PAT` or legacy `AIRTABLE_API_KEY`), OpenAI, PDL, Supabase, admin/JWT, and a private/public Blob pair using either custom scoped names or generated `BLOB_READ_WRITE_TOKEN` and `PUBLIC_READ_WRITE_TOKEN`. Record names and scopes only—never values.
 
 - [ ] **Step 4: Create and connect two access-scoped Vercel Blob stores**
 
-Create a private Blob store for source binaries and approval receipts and a separate public Blob store for blog images in the selected region. Connect both to `uplaud-production`. In both Preview and Production, map the private store's injected credential to `BLOB_PRIVATE_READ_WRITE_TOKEN` and the public store's injected credential to `BLOB_PUBLIC_READ_WRITE_TOKEN`; verify the underlying values are distinct without displaying them. Audit with `vercel env ls` and record only variable names and environment scopes. This is an external billable resource action and requires explicit user approval at execution time.
+Create a private Blob store for source binaries and approval receipts and a separate public Blob store for blog images in the selected region. Connect both to `uplaud-production`. In both Preview and Production, retain the generated private `BLOB_READ_WRITE_TOKEN` and public `PUBLIC_READ_WRITE_TOKEN`, or map them to the corresponding custom scoped names; verify the underlying values are distinct without displaying them. Audit with `vercel env ls` and record only variable names and environment scopes. This is an external billable resource action and requires explicit user approval at execution time.
 
 - [ ] **Step 5: Verify additive Airtable fields**
 
@@ -749,5 +749,5 @@ Record the production deployment ID, commit SHA, promotion time, smoke-test resu
 - Frontend API calls work same-origin on Vercel.
 - Preview uses live Airtable only with uniquely identified records.
 - Creation of both access-scoped Blob stores, Airtable schema changes, and production promotion require explicit approval.
-- Preview and Production expose distinct private/public Blob credentials only through `BLOB_PRIVATE_READ_WRITE_TOKEN` and `BLOB_PUBLIC_READ_WRITE_TOKEN`; environment audits never print values.
+- Preview and Production expose distinct private/public Blob credentials through custom scoped names or the generated `BLOB_READ_WRITE_TOKEN`/`PUBLIC_READ_WRITE_TOKEN` pair; environment audits never print values.
 - Production promotion uses the exact verified deployment and has an identified rollback target.

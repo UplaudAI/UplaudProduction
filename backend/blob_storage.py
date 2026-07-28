@@ -12,6 +12,11 @@ from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlsplit
 
+if __package__:
+    from .runtime_config import resolve_env_var
+else:
+    from runtime_config import resolve_env_var
+
 try:
     from vercel.blob import AsyncBlobClient
 except ImportError:  # The dependency is installed in deployed environments.
@@ -25,6 +30,10 @@ _RECEIPT_KEYS = {"share_id", "source_id", "testimonial", "approved_at"}
 _RECEIPT_ID = re.compile(r"[A-Za-z0-9_-]{1,256}\Z")
 MAX_APPROVAL_RECEIPT_BYTES = 64 * 1024
 MAX_SOURCE_BLOB_BYTES = 5 * 1024 * 1024
+_TOKEN_ENV_NAMES = {
+    "private": "BLOB_PRIVATE_READ_WRITE_TOKEN",
+    "public": "BLOB_PUBLIC_READ_WRITE_TOKEN",
+}
 
 
 class BlobStorageError(RuntimeError):
@@ -47,20 +56,15 @@ def _storage_enabled() -> bool:
 def _token_for(access: str) -> str:
     if not _storage_enabled():
         raise BlobStorageUnavailable("Blob storage is unavailable.")
-    scoped_name = (
-        "BLOB_PRIVATE_READ_WRITE_TOKEN"
-        if access == "private"
-        else "BLOB_PUBLIC_READ_WRITE_TOKEN"
-    )
-    other_name = (
-        "BLOB_PUBLIC_READ_WRITE_TOKEN"
-        if access == "private"
-        else "BLOB_PRIVATE_READ_WRITE_TOKEN"
-    )
-    token = os.environ.get(scoped_name)
+    names = _TOKEN_ENV_NAMES.get(access)
+    if names is None:
+        raise BlobStorageUnavailable("Blob storage is unavailable.")
+    other_access = "public" if access == "private" else "private"
+    token = resolve_env_var(names)
+    other_token = resolve_env_var(_TOKEN_ENV_NAMES[other_access])
     if not token:
         raise BlobStorageUnavailable("Blob storage is unavailable.")
-    if token == os.environ.get(other_name):
+    if token == other_token:
         raise BlobStorageUnavailable("Blob storage is unavailable.")
     return token
 

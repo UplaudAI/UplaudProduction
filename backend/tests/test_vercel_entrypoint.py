@@ -40,6 +40,12 @@ def run_entrypoint_import(env, statement="from api.index import app; print(app.t
 
 def runtime_env(vercel_env=None, value_prefix="configured-value"):
     env = os.environ.copy()
+    for fallback_name in (
+        "AIRTABLE_API_KEY",
+        "BLOB_READ_WRITE_TOKEN",
+        "PUBLIC_READ_WRITE_TOKEN",
+    ):
+        env.pop(fallback_name, None)
     if vercel_env is None:
         env.pop("VERCEL_ENV", None)
     else:
@@ -112,6 +118,110 @@ def test_vercel_entrypoint_imports_with_complete_vercel_runtime_config():
 
         assert result.returncode == 0, result.stderr
         assert result.stdout.strip() == "Uplaud Growth Engine API"
+
+
+def test_vercel_entrypoint_accepts_platform_generated_blob_token_names():
+    env = runtime_env("preview")
+    env.pop("BLOB_PRIVATE_READ_WRITE_TOKEN")
+    env.pop("BLOB_PUBLIC_READ_WRITE_TOKEN")
+    env["BLOB_READ_WRITE_TOKEN"] = "platform-private-token"
+    env["PUBLIC_READ_WRITE_TOKEN"] = "platform-public-token"
+
+    result = run_entrypoint_import(env)
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "Uplaud Growth Engine API"
+
+
+def test_vercel_entrypoint_accepts_legacy_airtable_api_key_name():
+    env = runtime_env("preview")
+    env.pop("AIRTABLE_PAT")
+    env["AIRTABLE_API_KEY"] = "legacy-airtable-token"
+
+    result = run_entrypoint_import(env)
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "Uplaud Growth Engine API"
+
+
+def test_vercel_entrypoint_uses_fallbacks_for_blank_canonical_values():
+    env = runtime_env("preview")
+    env["AIRTABLE_PAT"] = "   "
+    env["AIRTABLE_API_KEY"] = "legacy-airtable-token"
+    env["BLOB_PRIVATE_READ_WRITE_TOKEN"] = "\t"
+    env["BLOB_READ_WRITE_TOKEN"] = "platform-private-token"
+    env["BLOB_PUBLIC_READ_WRITE_TOKEN"] = "  "
+    env["PUBLIC_READ_WRITE_TOKEN"] = "platform-public-token"
+
+    result = run_entrypoint_import(env)
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_vercel_entrypoint_rejects_identical_effective_blob_tokens():
+    env = runtime_env("preview")
+    env["BLOB_PRIVATE_READ_WRITE_TOKEN"] = "same-token"
+    env["BLOB_PUBLIC_READ_WRITE_TOKEN"] = "same-token"
+
+    result = run_entrypoint_import(env)
+
+    assert result.returncode != 0
+    assert "must be distinct" in result.stderr
+
+
+def test_airtable_client_prefers_pat_then_falls_back_to_legacy_api_key():
+    statement = "from backend.airtable_client import AIRTABLE_PAT; print(AIRTABLE_PAT)"
+    env = os.environ.copy()
+    env["AIRTABLE_PAT"] = "canonical-token"
+    env["AIRTABLE_API_KEY"] = "legacy-token"
+    preferred = run_entrypoint_import(env, statement)
+
+    env.pop("AIRTABLE_PAT")
+    fallback = run_entrypoint_import(env, statement)
+
+    assert preferred.returncode == 0, preferred.stderr
+    assert preferred.stdout.strip() == "canonical-token"
+    assert fallback.returncode == 0, fallback.stderr
+    assert fallback.stdout.strip() == "legacy-token"
+
+
+def test_airtable_client_ignores_blank_pat_when_legacy_key_exists():
+    statement = "from backend.airtable_client import AIRTABLE_PAT; print(AIRTABLE_PAT)"
+    env = os.environ.copy()
+    env["AIRTABLE_PAT"] = "   "
+    env["AIRTABLE_API_KEY"] = "legacy-token"
+
+    result = run_entrypoint_import(env, statement)
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "legacy-token"
+
+
+def test_backend_modules_import_from_backend_working_directory():
+    result = subprocess.run(
+        [sys.executable, "-c", "import airtable_client, blob_storage, server"],
+        cwd=REPO_ROOT / "backend",
+        env=runtime_env(),
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_blob_token_documentation_lists_custom_and_platform_names():
+    readme = (REPO_ROOT / "README.md").read_text()
+
+    for name in (
+        "BLOB_PRIVATE_READ_WRITE_TOKEN",
+        "BLOB_READ_WRITE_TOKEN",
+        "BLOB_PUBLIC_READ_WRITE_TOKEN",
+        "PUBLIC_READ_WRITE_TOKEN",
+    ):
+        assert f"`{name}`" in readme
+    assert "`AIRTABLE_PAT`" in readme
+    assert "`AIRTABLE_API_KEY`" in readme
 
 
 def test_admin_token_returns_503_when_admin_password_is_unset(monkeypatch):
