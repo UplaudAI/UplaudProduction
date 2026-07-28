@@ -20,6 +20,7 @@ logger = logging.getLogger("uplaud.blob")
 _FALSE_VALUES = {"0", "false", "no", "off"}
 _RECEIPT_KEYS = {"share_id", "source_id", "testimonial", "approved_at"}
 _RECEIPT_ID = re.compile(r"[A-Za-z0-9_-]{1,256}\Z")
+MAX_APPROVAL_RECEIPT_BYTES = 64 * 1024
 
 
 class BlobStorageError(RuntimeError):
@@ -88,6 +89,8 @@ def _safe_component(value: str, fallback: str) -> str:
 
 def _mapped_error(exc: Exception) -> BlobStorageError:
     unavailable_names = {
+        "BlobAccessError",
+        "BlobClientTokenExpiredError",
         "BlobNoTokenProvidedError",
         "BlobServiceNotAvailable",
         "BlobServiceRateLimited",
@@ -136,16 +139,53 @@ async def store_source(
     content: bytes,
     content_type: str,
 ) -> str:
-    """Store an original uploaded source as a private, uniquely named Blob."""
+    """Create a private source Blob once and reconcile safe same-ID retries."""
     safe_source_id = _safe_component(source_id, "source")
     safe_filename = _safe_component(filename, "upload.bin")
-    return await _store(
-        f"sources/{safe_source_id}/{safe_filename}",
-        content,
-        access="private",
-        content_type=content_type or "application/octet-stream",
-        add_random_suffix=True,
-    )
+    pathname = f"sources/{safe_source_id}/{safe_filename}"
+    client = _new_client("private")
+    try:
+        try:
+            result = await client.put(
+                pathname,
+                content,
+                access="private",
+                content_type=content_type or "application/octet-stream",
+                add_random_suffix=False,
+                overwrite=False,
+            )
+        except Exception as put_error:
+            # A conflict or lost response is safe to reconcile because source IDs
+            # have deterministic create-once paths. Size/path checks prevent a
+            # different object from being silently adopted.
+            try:
+                existing = await client.head(pathname)
+            except Exception:
+                logger.warning("Vercel Blob source create failed")
+                raise _mapped_error(put_error) from None
+            existing_path = getattr(existing, "pathname", "")
+            existing_size = getattr(existing, "size", None)
+            existing_url = getattr(existing, "url", "")
+            if (
+                existing_path != pathname
+                or existing_size != len(content)
+                or not isinstance(existing_url, str)
+                or not existing_url
+            ):
+                logger.warning("Vercel Blob source reconciliation failed")
+                raise BlobStorageError("Blob operation failed.") from None
+            return existing_url
+        url = getattr(result, "url", "")
+        if not isinstance(url, str) or not url:
+            raise BlobStorageError("Blob upload returned an invalid result.")
+        return url
+    except BlobStorageError:
+        raise
+    except Exception as exc:
+        logger.warning("Vercel Blob source upload failed")
+        raise _mapped_error(exc) from None
+    finally:
+        await _close_client(client)
 
 
 async def store_blog_image(
@@ -162,24 +202,6 @@ async def store_blog_image(
         content_type=content_type or "application/octet-stream",
         add_random_suffix=True,
     )
-
-
-async def delete_blob(url_or_path: str) -> bool:
-    """Best-effort compensation for a Blob whose database write failed."""
-    if not url_or_path:
-        return False
-    try:
-        client = _new_client("private")
-    except BlobStorageError:
-        return False
-    try:
-        await client.delete(url_or_path)
-        return True
-    except Exception:
-        logger.warning("Vercel Blob compensation delete failed")
-        return False
-    finally:
-        await _close_client(client)
 
 
 def _validate_timestamp(value: Any) -> bool:
@@ -209,16 +231,30 @@ def _validate_receipt(
 
 
 async def _receipt_content(result: Any) -> bytes:
+    declared_size = getattr(result, "size", None)
+    if isinstance(declared_size, int) and declared_size > MAX_APPROVAL_RECEIPT_BYTES:
+        raise InvalidApprovalReceipt("Approval receipt is invalid.")
     content = getattr(result, "content", None)
     if isinstance(content, str):
-        return content.encode("utf-8")
+        encoded = content.encode("utf-8")
+        if len(encoded) > MAX_APPROVAL_RECEIPT_BYTES:
+            raise InvalidApprovalReceipt("Approval receipt is invalid.")
+        return encoded
     if isinstance(content, (bytes, bytearray, memoryview)):
-        return bytes(content)
+        encoded = bytes(content)
+        if len(encoded) > MAX_APPROVAL_RECEIPT_BYTES:
+            raise InvalidApprovalReceipt("Approval receipt is invalid.")
+        return encoded
     stream = getattr(result, "stream", None)
     if stream is not None:
         chunks = []
+        size = 0
         async for chunk in stream:
-            chunks.append(bytes(chunk))
+            encoded = bytes(chunk)
+            size += len(encoded)
+            if size > MAX_APPROVAL_RECEIPT_BYTES:
+                raise InvalidApprovalReceipt("Approval receipt is invalid.")
+            chunks.append(encoded)
         return b"".join(chunks)
     raise InvalidApprovalReceipt("Approval receipt is invalid.")
 
@@ -280,6 +316,8 @@ async def get_or_create_approval_receipt(
     )
     pathname = f"approvals/{share_id}.json"
     body = json.dumps(candidate, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    if len(body) > MAX_APPROVAL_RECEIPT_BYTES:
+        raise InvalidApprovalReceipt("Approval receipt is invalid.")
     client = _new_client("private")
     try:
         try:

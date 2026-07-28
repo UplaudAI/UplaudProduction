@@ -961,7 +961,7 @@ async def _current_business_name(current: dict) -> str:
 
 def _record_source_status(fields: dict) -> str:
     explicit_status = (fields.get("Source_Status") or "").strip().lower()
-    if explicit_status in {"uploaded", "analyzed"}:
+    if explicit_status in {"uploading", "upload_failed", "uploaded", "analyzed"}:
         return explicit_status
     legacy_analysis_fields = (
         "Person",
@@ -985,6 +985,8 @@ def _testimonial_status(fields: dict) -> str:
 def _source_lifecycle_state(fields: dict) -> str:
     source_status = _record_source_status(fields)
     testimonial_status = _testimonial_status(fields)
+    if source_status in {"uploading", "upload_failed"}:
+        return source_status if testimonial_status == "draft" else "invalid"
     if source_status == "uploaded" and testimonial_status == "draft":
         return "uploaded"
     if source_status == "analyzed" and testimonial_status in {
@@ -1184,22 +1186,7 @@ async def upload_source(file: UploadFile = File(...), current=Depends(get_curren
             status_code=503, detail="Source storage is temporarily unavailable."
         ) from None
     try:
-        blob_url = await blob_storage.store_source(
-            source_id,
-            filename,
-            content,
-            file.content_type or "application/octet-stream",
-        )
-    except blob_storage.BlobStorageUnavailable:
-        raise HTTPException(
-            status_code=503, detail="File storage is temporarily unavailable."
-        ) from None
-    except blob_storage.BlobStorageError:
-        raise HTTPException(
-            status_code=502, detail="Could not persist the uploaded file."
-        ) from None
-    try:
-        rec = await airtable_client.create_uploaded_source(
+        rec = await airtable_client.upsert_uploading_source(
             source_id=source_id,
             business_name=business_name,
             owner_id=current["id"],
@@ -1209,14 +1196,77 @@ async def upload_source(file: UploadFile = File(...), current=Depends(get_curren
             word_count=word_count,
             share_id=share_id,
             created_at=datetime.now(timezone.utc).isoformat(),
-            blob_url=blob_url,
         )
     except Exception as exc:
-        logger.warning("Source upload persistence failed: %s", exc)
-        await blob_storage.delete_blob(blob_url)
+        logger.warning("Source upload metadata persistence failed: %s", exc)
         raise HTTPException(
             status_code=502, detail="Could not persist the uploaded source."
         ) from None
+    try:
+        blob_url = await blob_storage.store_source(
+            source_id,
+            filename,
+            content,
+            file.content_type or "application/octet-stream",
+        )
+    except (blob_storage.BlobStorageUnavailable, blob_storage.BlobStorageError) as exc:
+        try:
+            await airtable_client.update_source_by_id(
+                source_id,
+                business_name,
+                {"Source_Status": "upload_failed"},
+                owner_id=current["id"],
+            )
+        except Exception:
+            logger.warning("Could not mark failed source Blob upload for reconciliation")
+        if isinstance(exc, blob_storage.BlobStorageUnavailable):
+            raise HTTPException(
+                status_code=503, detail="File storage is temporarily unavailable."
+            ) from None
+        raise HTTPException(
+            status_code=502, detail="Could not persist the uploaded file."
+        ) from None
+    final_fields = {"Blob_Url": blob_url, "Source_Status": "uploaded"}
+
+    def is_finalized(record: Optional[dict]) -> bool:
+        fields = (record or {}).get("fields", {})
+        return (
+            fields.get("Source_Id") == source_id
+            and fields.get("Business_Name") == business_name
+            and fields.get("Owner_Id") == current["id"]
+            and fields.get("Blob_Url") == blob_url
+            and (fields.get("Source_Status") or "").strip().lower()
+            == "uploaded"
+        )
+
+    try:
+        finalized = await airtable_client.update_source_by_id(
+            source_id,
+            business_name,
+            final_fields,
+            owner_id=current["id"],
+        )
+    except Exception as exc:
+        logger.warning("Source upload finalization response failed: %s", exc)
+        finalized = None
+    if not is_finalized(finalized):
+        try:
+            reconciled = await airtable_client.get_source_by_id(
+                source_id, business_name, owner_id=current["id"]
+            )
+        except Exception:
+            reconciled = None
+        if is_finalized(reconciled):
+            finalized = reconciled
+        else:
+            finalized = None
+    if finalized is None:
+        # The deterministic Blob and canonical source row are deliberately left
+        # intact so a retry or reconciliation worker can safely finish the write.
+        raise HTTPException(
+            status_code=502, detail="Could not finalize the uploaded source."
+        )
+    rec = finalized
     try:
         rec = await _verify_persisted_source_share_id(
             rec, business_name=business_name, owner_id=current["id"]
@@ -1310,6 +1360,10 @@ async def analyze_source(source_id: str, request: Request, regenerate: bool = Fa
     lifecycle_state = _source_lifecycle_state(fields)
     if lifecycle_state == "invalid":
         raise HTTPException(status_code=409, detail="Source lifecycle state is invalid.")
+    if lifecycle_state in {"uploading", "upload_failed"}:
+        raise HTTPException(
+            status_code=409, detail="Source upload is not ready for analysis."
+        )
     if regenerate and lifecycle_state in {"sent", "approved"}:
         raise HTTPException(
             status_code=409,

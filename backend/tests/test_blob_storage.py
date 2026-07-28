@@ -2,6 +2,8 @@
 
 import asyncio
 import io
+import importlib.metadata
+import inspect
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -72,14 +74,18 @@ def png_bytes():
 
 
 class RecordingClient:
-    def __init__(self, *, put_result=None, put_error=None, get_result=None):
+    def __init__(
+        self, *, put_result=None, put_error=None, get_result=None, head_result=None
+    ):
         self.put_result = put_result or SimpleNamespace(
             url="https://blob.example/file", pathname="stored/file"
         )
         self.put_error = put_error
         self.get_result = get_result
+        self.head_result = head_result
         self.put_calls = []
         self.get_calls = []
+        self.head_calls = []
         self.delete_calls = []
         self.closed = 0
 
@@ -94,6 +100,12 @@ class RecordingClient:
         if isinstance(self.get_result, Exception):
             raise self.get_result
         return self.get_result
+
+    async def head(self, pathname, **kwargs):
+        self.head_calls.append((pathname, kwargs))
+        if isinstance(self.head_result, Exception):
+            raise self.head_result
+        return self.head_result
 
     async def delete(self, url_or_path):
         self.delete_calls.append(url_or_path)
@@ -126,7 +138,7 @@ def install_client(monkeypatch, client, *, token="blob-token", access="private")
     return created_with
 
 
-def test_store_source_uses_private_unique_safe_path_and_content_type(monkeypatch):
+def test_store_source_uses_private_deterministic_safe_path_and_content_type(monkeypatch):
     client = RecordingClient()
     created_with = install_client(monkeypatch, client)
 
@@ -149,7 +161,7 @@ def test_store_source_uses_private_unique_safe_path_and_content_type(monkeypatch
     assert options == {
         "access": "private",
         "content_type": "text/plain",
-        "add_random_suffix": True,
+        "add_random_suffix": False,
         "overwrite": False,
     }
     assert client.closed == 1
@@ -223,7 +235,34 @@ def test_blob_adapter_requires_distinct_access_scoped_store_tokens(monkeypatch):
 def test_backend_declares_official_vercel_sdk_dependency():
     requirements = (BACKEND_DIR / "requirements.txt").read_text()
 
-    assert "vercel>=0.5.0" in requirements.splitlines()
+    assert "vercel==0.7.2" in requirements.splitlines()
+
+
+def test_official_vercel_sdk_async_client_api_contract():
+    sdk = pytest.importorskip("vercel.blob")
+    client = sdk.AsyncBlobClient
+
+    assert importlib.metadata.version("vercel") == "0.7.2"
+    assert {"path", "body", "access", "content_type", "add_random_suffix", "overwrite"} <= set(
+        inspect.signature(client.put).parameters
+    )
+    assert {"url_or_path", "access", "use_cache"} <= set(
+        inspect.signature(client.get).parameters
+    )
+    assert "url_or_path" in inspect.signature(client.head).parameters
+    assert "url_or_path" in inspect.signature(client.delete).parameters
+    assert inspect.iscoroutinefunction(client.aclose)
+
+
+def test_expired_blob_credential_maps_to_sanitized_unavailable(monkeypatch):
+    Expired = type("BlobClientTokenExpiredError", (RuntimeError,), {})
+    client = RecordingClient(put_error=Expired("secret expired token detail"))
+    install_client(monkeypatch, client, access="public")
+
+    with pytest.raises(blob_storage.BlobStorageUnavailable) as exc_info:
+        run(blob_storage.store_blog_image("hero.png", b"x", "image/png"))
+
+    assert str(exc_info.value) == "Blob storage is unavailable."
 
 
 def test_blob_errors_are_sanitized_and_never_log_token(monkeypatch, caplog):
@@ -236,20 +275,6 @@ def test_blob_errors_are_sanitized_and_never_log_token(monkeypatch, caplog):
 
     assert token not in str(exc_info.value)
     assert token not in caplog.text
-
-
-def test_delete_blob_is_best_effort(monkeypatch):
-    client = RecordingClient()
-    install_client(monkeypatch, client)
-
-    assert run(blob_storage.delete_blob("https://blob.example/file")) is True
-    assert client.delete_calls == ["https://blob.example/file"]
-
-    async def failed_delete(url_or_path):
-        raise RuntimeError("delete transport failed")
-
-    client.delete = failed_delete
-    assert run(blob_storage.delete_blob("https://blob.example/other")) is False
 
 
 class AtomicFakeStore:
@@ -282,6 +307,16 @@ class AtomicFakeStore:
                     raise RuntimeError("not_found")
                 return SimpleNamespace(content=body, status_code=200)
 
+            async def head(self, pathname, **kwargs):
+                body = store.objects.get(pathname)
+                if body is None:
+                    raise RuntimeError("not_found")
+                return SimpleNamespace(
+                    url=f"https://private.blob.example/{pathname}",
+                    pathname=pathname,
+                    size=len(body),
+                )
+
             async def delete(self, url_or_path):
                 return None
 
@@ -289,6 +324,52 @@ class AtomicFakeStore:
                 return None
 
         return Client()
+
+
+def test_source_retry_reuses_deterministic_create_once_blob(monkeypatch):
+    store = AtomicFakeStore()
+    monkeypatch.setenv("BLOB_PRIVATE_READ_WRITE_TOKEN", "blob-token")
+    monkeypatch.setattr(blob_storage, "AsyncBlobClient", store.client)
+
+    first = run(
+        blob_storage.store_source(
+            "source-1", "call.txt", b"same content", "text/plain"
+        )
+    )
+    second = run(
+        blob_storage.store_source(
+            "source-1", "call.txt", b"same content", "text/plain"
+        )
+    )
+
+    assert first == second == "https://private.blob.example/sources/source-1/call.txt"
+    assert list(store.objects) == ["sources/source-1/call.txt"]
+    assert all(call[2]["add_random_suffix"] is False for call in store.put_calls)
+
+
+def test_approval_receipt_read_rejects_payload_over_64_kib():
+    oversized = SimpleNamespace(size=64 * 1024 + 1, content=b"{}")
+
+    with pytest.raises(blob_storage.InvalidApprovalReceipt):
+        run(blob_storage._receipt_content(oversized))
+
+
+def test_approval_receipt_rejects_oversize_candidate_before_blob_write(monkeypatch):
+    store = AtomicFakeStore()
+    monkeypatch.setenv("BLOB_PRIVATE_READ_WRITE_TOKEN", "blob-token")
+    monkeypatch.setattr(blob_storage, "AsyncBlobClient", store.client)
+
+    with pytest.raises(blob_storage.InvalidApprovalReceipt):
+        run(
+            blob_storage.get_or_create_approval_receipt(
+                share_id="share-1",
+                source_id="source-1",
+                testimonial="x" * blob_storage.MAX_APPROVAL_RECEIPT_BYTES,
+                approved_at="2026-07-28T12:30:00+00:00",
+            )
+        )
+
+    assert store.put_calls == []
 
 
 def test_approval_receipt_is_private_deterministic_create_once_json(monkeypatch):
@@ -375,7 +456,7 @@ def test_mismatched_existing_approval_receipt_fails_closed(monkeypatch):
         )
 
 
-def test_source_upload_stores_private_blob_before_airtable_and_persists_url(
+def test_source_upload_persists_uploading_row_before_blob_then_finalizes(
     monkeypatch,
 ):
     events = []
@@ -389,22 +470,28 @@ def test_source_upload_stores_private_blob_before_airtable_and_persists_url(
             return persisted
         return None
 
-    async def fake_store(source_id, filename, content, content_type):
-        events.append(("blob", source_id, filename, content, content_type))
-        return "https://private.blob.example/source"
-
-    async def fake_create(**kwargs):
+    async def fake_upsert(**kwargs):
         nonlocal persisted
-        events.append(("airtable", dict(kwargs)))
+        events.append(("airtable-uploading", dict(kwargs)))
         persisted = source_record(status="draft")
         persisted["fields"].update(
             {
                 "Source_Id": kwargs["source_id"],
                 "Share_Id": kwargs["share_id"],
-                "Source_Status": "uploaded",
+                "Source_Status": "uploading",
                 "Testimonial_Status": "draft",
             }
         )
+        persisted["fields"].pop("Blob_Url", None)
+        return persisted
+
+    async def fake_store(source_id, filename, content, content_type):
+        events.append(("blob", source_id, filename, content, content_type))
+        return "https://private.blob.example/source"
+
+    async def fake_update(source_id, business_name, fields, owner_id=None):
+        events.append(("airtable-uploaded", source_id, dict(fields)))
+        persisted["fields"].update(fields)
         return persisted
 
     monkeypatch.setattr(
@@ -415,8 +502,11 @@ def test_source_upload_stores_private_blob_before_airtable_and_persists_url(
     monkeypatch.setattr(
         server.airtable_client, "get_growth_signal_by_share_id", fake_lookup
     )
+    monkeypatch.setattr(
+        server.airtable_client, "upsert_uploading_source", fake_upsert
+    )
     monkeypatch.setattr(server.blob_storage, "store_source", fake_store)
-    monkeypatch.setattr(server.airtable_client, "create_uploaded_source", fake_create)
+    monkeypatch.setattr(server.airtable_client, "update_source_by_id", fake_update)
     upload = UploadFile(
         filename="call.txt",
         file=io.BytesIO(b"Customer says this saves the team hours."),
@@ -425,18 +515,28 @@ def test_source_upload_stores_private_blob_before_airtable_and_persists_url(
 
     result = run(server.upload_source(upload, current=USER))
 
-    assert [event[0] for event in events] == ["blob", "airtable"]
-    assert events[0][2:] == (
+    assert [event[0] for event in events] == [
+        "airtable-uploading",
+        "blob",
+        "airtable-uploaded",
+    ]
+    assert events[0][1]["source_id"] == events[1][1]
+    assert "blob_url" not in events[0][1]
+    assert events[1][2:] == (
         "call.txt",
         b"Customer says this saves the team hours.",
         "text/plain",
     )
-    assert events[1][1]["blob_url"] == "https://private.blob.example/source"
+    assert events[2][2] == {
+        "Blob_Url": "https://private.blob.example/source",
+        "Source_Status": "uploaded",
+    }
     assert result.status == "uploaded"
 
 
-def test_source_blob_failure_never_creates_airtable_record(monkeypatch):
-    writes = []
+def test_source_blob_failure_marks_canonical_row_upload_failed(monkeypatch):
+    persisted = None
+    updates = []
 
     async def fake_business(email):
         return BUSINESS
@@ -444,11 +544,26 @@ def test_source_blob_failure_never_creates_airtable_record(monkeypatch):
     async def fake_lookup(share_id):
         return None
 
+    async def fake_upsert(**kwargs):
+        nonlocal persisted
+        persisted = source_record(status="draft")
+        persisted["fields"].update(
+            {
+                "Source_Id": kwargs["source_id"],
+                "Share_Id": kwargs["share_id"],
+                "Source_Status": "uploading",
+                "Testimonial_Status": "draft",
+            }
+        )
+        return persisted
+
     async def failed_store(*args, **kwargs):
         raise blob_storage.BlobStorageError("secret SDK transport detail")
 
-    async def unexpected_create(**kwargs):
-        writes.append(kwargs)
+    async def fake_update(source_id, business_name, fields, owner_id=None):
+        updates.append((source_id, business_name, dict(fields), owner_id))
+        persisted["fields"].update(fields)
+        return persisted
 
     monkeypatch.setattr(
         server.airtable_client,
@@ -458,10 +573,11 @@ def test_source_blob_failure_never_creates_airtable_record(monkeypatch):
     monkeypatch.setattr(
         server.airtable_client, "get_growth_signal_by_share_id", fake_lookup
     )
-    monkeypatch.setattr(server.blob_storage, "store_source", failed_store)
     monkeypatch.setattr(
-        server.airtable_client, "create_uploaded_source", unexpected_create
+        server.airtable_client, "upsert_uploading_source", fake_upsert
     )
+    monkeypatch.setattr(server.blob_storage, "store_source", failed_store)
+    monkeypatch.setattr(server.airtable_client, "update_source_by_id", fake_update)
     upload = UploadFile(filename="call.txt", file=io.BytesIO(b"usable transcript"))
 
     with pytest.raises(HTTPException) as exc_info:
@@ -469,11 +585,22 @@ def test_source_blob_failure_never_creates_airtable_record(monkeypatch):
 
     assert exc_info.value.status_code == 502
     assert "secret SDK transport detail" not in exc_info.value.detail
-    assert writes == []
+    assert updates == [
+        (
+            persisted["fields"]["Source_Id"],
+            BUSINESS,
+            {"Source_Status": "upload_failed"},
+            "user-1",
+        )
+    ]
+    assert persisted["fields"]["Source_Status"] == "upload_failed"
+    assert "Blob_Url" not in persisted["fields"]
 
 
-def test_source_airtable_failure_compensates_new_blob(monkeypatch):
-    deletes = []
+def test_source_final_update_ambiguous_failure_keeps_tracked_blob_for_retry(
+    monkeypatch,
+):
+    persisted = None
 
     async def fake_business(email):
         return BUSINESS
@@ -481,15 +608,27 @@ def test_source_airtable_failure_compensates_new_blob(monkeypatch):
     async def fake_lookup(share_id):
         return None
 
+    async def fake_upsert(**kwargs):
+        nonlocal persisted
+        persisted = source_record(status="draft")
+        persisted["fields"].update(
+            {
+                "Source_Id": kwargs["source_id"],
+                "Share_Id": kwargs["share_id"],
+                "Source_Status": "uploading",
+                "Testimonial_Status": "draft",
+            }
+        )
+        return persisted
+
     async def fake_store(*args, **kwargs):
-        return "https://private.blob.example/orphan"
+        return "https://private.blob.example/sources/source-1/call.txt"
 
-    async def failed_create(**kwargs):
-        raise RuntimeError("Airtable unavailable")
+    async def failed_update(*args, **kwargs):
+        raise RuntimeError("ambiguous Airtable response")
 
-    async def fake_delete(url):
-        deletes.append(url)
-        return True
+    async def fake_get(*args, **kwargs):
+        return persisted
 
     monkeypatch.setattr(
         server.airtable_client,
@@ -499,16 +638,85 @@ def test_source_airtable_failure_compensates_new_blob(monkeypatch):
     monkeypatch.setattr(
         server.airtable_client, "get_growth_signal_by_share_id", fake_lookup
     )
+    monkeypatch.setattr(
+        server.airtable_client, "upsert_uploading_source", fake_upsert
+    )
     monkeypatch.setattr(server.blob_storage, "store_source", fake_store)
-    monkeypatch.setattr(server.blob_storage, "delete_blob", fake_delete)
-    monkeypatch.setattr(server.airtable_client, "create_uploaded_source", failed_create)
+    monkeypatch.setattr(server.airtable_client, "update_source_by_id", failed_update)
+    monkeypatch.setattr(server.airtable_client, "get_source_by_id", fake_get)
     upload = UploadFile(filename="call.txt", file=io.BytesIO(b"usable transcript"))
 
     with pytest.raises(HTTPException) as exc_info:
         run(server.upload_source(upload, current=USER))
 
     assert exc_info.value.status_code == 502
-    assert deletes == ["https://private.blob.example/orphan"]
+    assert not hasattr(server.blob_storage, "delete_blob")
+    assert persisted["fields"]["Source_Status"] == "uploading"
+    assert "Blob_Url" not in persisted["fields"]
+
+
+def test_source_final_update_lost_response_reconciles_to_success(monkeypatch):
+    persisted = None
+
+    async def fake_business(email):
+        return BUSINESS
+
+    async def fake_lookup(share_id):
+        if persisted and persisted["fields"].get("Share_Id") == share_id:
+            return persisted
+        return None
+
+    async def fake_upsert(**kwargs):
+        nonlocal persisted
+        persisted = source_record(status="draft")
+        persisted["fields"].update(
+            {
+                "Source_Id": kwargs["source_id"],
+                "Share_Id": kwargs["share_id"],
+                "Source_Status": "uploading",
+                "Testimonial_Status": "draft",
+            }
+        )
+        return persisted
+
+    async def fake_store(*args, **kwargs):
+        return "https://private.blob.example/sources/source-1/call.txt"
+
+    async def committed_then_timeout(source_id, business_name, fields, owner_id=None):
+        persisted["fields"].update(fields)
+        raise TimeoutError("response lost after commit")
+
+    async def fake_get(*args, **kwargs):
+        return persisted
+
+    monkeypatch.setattr(
+        server.airtable_client,
+        "get_source_business_name_by_email_domain",
+        fake_business,
+    )
+    monkeypatch.setattr(
+        server.airtable_client, "get_growth_signal_by_share_id", fake_lookup
+    )
+    monkeypatch.setattr(
+        server.airtable_client, "upsert_uploading_source", fake_upsert
+    )
+    monkeypatch.setattr(server.blob_storage, "store_source", fake_store)
+    monkeypatch.setattr(
+        server.airtable_client, "update_source_by_id", committed_then_timeout
+    )
+    monkeypatch.setattr(server.airtable_client, "get_source_by_id", fake_get)
+
+    result = run(
+        server.upload_source(
+            UploadFile(filename="call.txt", file=io.BytesIO(b"usable transcript")),
+            current=USER,
+        )
+    )
+
+    assert result.status == "uploaded"
+    assert persisted["fields"]["Blob_Url"].endswith(
+        "/sources/source-1/call.txt"
+    )
 
 
 def test_admin_upload_returns_durable_public_blob_url(monkeypatch):

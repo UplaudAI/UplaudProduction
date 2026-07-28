@@ -26,7 +26,8 @@ Vercel exposes the FastAPI application as one Python Function using Fluid Comput
 ### Persistent storage
 
 - Airtable is the sole structured datastore.
-- Vercel Blob stores uploaded source files and blog images when the original binary must remain available.
+- Two separate Vercel Blob stores preserve the access boundary: a private store holds uploaded source files and approval receipts, and a public store holds blog images.
+- The private store credential is exposed to the application only as `BLOB_PRIVATE_READ_WRITE_TOKEN`; the public store credential is exposed only as `BLOB_PUBLIC_READ_WRITE_TOKEN`. The values must be distinct.
 - Extracted transcript text and source metadata are persisted before analysis; no workflow depends on process memory.
 - Temporary parsing files may use `/tmp`, but no durable state relies on the function filesystem.
 
@@ -76,16 +77,18 @@ Remove Motor, `MONGO_URL`, `DB_NAME`, Mongo client initialization, shutdown hand
 
 1. The browser uploads a supported transcript.
 2. The backend validates size and file type.
-3. The original file is stored in Vercel Blob when retention is required.
-4. Extracted text and source metadata are persisted to Airtable before returning success.
-5. Analysis retrieves persisted transcript text, calls OpenAI, and upserts the resulting `Growth_Signals` record.
-6. Regeneration and public testimonial flows operate entirely from persisted records.
+3. Before any Blob write, the backend uses Airtable `performUpsert`, keyed by `Source_Id`, to persist the canonical owner-scoped metadata and transcript with `Source_Status="uploading"` and no `Blob_Url`.
+4. The original file is created once in the private Blob store at a deterministic, sanitized source-ID pathname. A retry reconciles an existing object instead of creating a duplicate.
+5. The same Airtable source is strictly updated with the matching `Blob_Url` and `Source_Status="uploaded"`. If the update response is lost, the backend re-reads that canonical source and returns success only when both values match.
+6. A Blob failure is best-effort marked `upload_failed`. A final Airtable failure leaves the deterministic Blob and canonical source row intact for retry or reconciliation; it never performs a destructive compensation delete after an ambiguous response.
+7. Analysis retrieves persisted transcript text only from an `uploaded` source, calls OpenAI, and updates that same `Growth_Signals` record to `analyzed` after successful insight persistence.
+8. Regeneration and public testimonial flows operate entirely from persisted records. Approval receipts use deterministic create-once objects in the private Blob store.
 
 This replaces `TEMP_SOURCES`, ensuring uploads survive cold starts, concurrent instances, and deployments.
 
 ## Blog Upload Flow
 
-Admin uploads go to Vercel Blob rather than a local `uploads/` directory. Airtable blog records store the resulting durable URL. Existing public blog routes retain their response formats.
+Admin uploads go to the public Vercel Blob store rather than a local `uploads/` directory. Airtable blog records store the resulting durable URL. Existing public blog routes retain their response formats.
 
 ## Environment Configuration
 
@@ -101,9 +104,12 @@ Configure Vercel Preview and Production environments separately. Required names 
 - `SUPABASE_URL`
 - `SUPABASE_PUBLISHABLE_KEY`
 - `REACT_APP_BACKEND_URL` or a same-origin frontend configuration
-- Vercel Blob credentials supplied through the Vercel integration
+- `BLOB_PRIVATE_READ_WRITE_TOKEN`, mapped from the connected private Blob store credential
+- `BLOB_PUBLIC_READ_WRITE_TOKEN`, mapped from the connected public Blob store credential
 
 Remove `MONGO_URL` and `DB_NAME`. Secrets must not be committed or printed during verification.
+
+Connect and map both Blob stores separately in Preview and Production. The environment audit must list names only, verify that both exact scoped names exist in both environments, confirm that the two underlying values are distinct without printing them, and reject generic one-store configuration such as application use of `BLOB_READ_WRITE_TOKEN`.
 
 The preview environment may use the live Airtable base as approved. Test records must use a unique deployment/test prefix and be removed after verification when safe.
 

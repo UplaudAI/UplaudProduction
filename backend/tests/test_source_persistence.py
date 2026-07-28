@@ -101,18 +101,18 @@ def install_blob_boundary(monkeypatch):
     )
 
 
-def test_create_uploaded_source_writes_exact_growth_signal_fields(monkeypatch):
+def test_upsert_uploading_source_writes_exact_growth_signal_fields(monkeypatch):
     calls = []
 
-    async def fake_create(table, fields):
-        calls.append((table, fields))
+    async def fake_upsert(table, fields, merge_fields):
+        calls.append((table, fields, merge_fields))
         return {"id": "rec-source-1", "fields": fields}
 
     monkeypatch.setattr(airtable_client, "_enabled", lambda: True)
-    monkeypatch.setattr(airtable_client, "_create", fake_create)
+    monkeypatch.setattr(airtable_client, "_upsert_by_fields", fake_upsert)
 
     result = run(
-        airtable_client.create_uploaded_source(
+        airtable_client.upsert_uploading_source(
             source_id="source-1",
             business_name=BUSINESS,
             owner_id="user-1",
@@ -133,26 +133,36 @@ def test_create_uploaded_source_writes_exact_growth_signal_fields(monkeypatch):
         "File_Type": "txt",
         "Transcript_Text": "A durable transcript.",
         "Word_Count": 3,
-        "Source_Status": "uploaded",
+        "Source_Status": "uploading",
         "Share_Id": "share-1",
         "Created_At": "2026-07-28T12:00:00+00:00",
     }
-    assert calls == [(airtable_client.TABLE_GROWTH_SIGNALS, expected_fields)]
+    assert calls == [
+        (airtable_client.TABLE_GROWTH_SIGNALS, expected_fields, ["Source_Id"])
+    ]
     assert result == {"id": "rec-source-1", "fields": expected_fields}
 
 
-def test_create_uploaded_source_includes_blob_url_only_when_provided(monkeypatch):
-    writes = []
+def test_upsert_uploading_source_reconciles_committed_then_timeout(monkeypatch):
+    persisted = record(status="uploading", transcript="hello")
+    reads = []
 
-    async def fake_create(table, fields):
-        writes.append(fields)
-        return {"id": "rec-source-1", "fields": fields}
+    async def committed_then_timeout(table, fields, merge_fields):
+        persisted["fields"].update(fields)
+        raise TimeoutError("response lost after commit")
+
+    async def fake_get(source_id, business_name, *, owner_id=None):
+        reads.append((source_id, business_name, owner_id))
+        return persisted
 
     monkeypatch.setattr(airtable_client, "_enabled", lambda: True)
-    monkeypatch.setattr(airtable_client, "_create", fake_create)
+    monkeypatch.setattr(
+        airtable_client, "_upsert_by_fields", committed_then_timeout
+    )
+    monkeypatch.setattr(airtable_client, "get_source_by_id", fake_get)
 
-    run(
-        airtable_client.create_uploaded_source(
+    result = run(
+        airtable_client.upsert_uploading_source(
             source_id="source-1",
             business_name=BUSINESS,
             owner_id="user-1",
@@ -162,25 +172,27 @@ def test_create_uploaded_source_includes_blob_url_only_when_provided(monkeypatch
             word_count=1,
             share_id="share-1",
             created_at="now",
-            blob_url="https://blob.example/source-1",
         )
     )
 
-    assert writes[0]["Blob_Url"] == "https://blob.example/source-1"
+    assert result is persisted
+    assert result["fields"]["Source_Status"] == "uploading"
+    assert "Blob_Url" not in result["fields"]
+    assert reads == [("source-1", BUSINESS, "user-1")]
 
 
-def test_create_uploaded_source_requires_nonblank_owner(monkeypatch):
+def test_upsert_uploading_source_requires_nonblank_owner(monkeypatch):
     writes = []
 
-    async def fake_create(table, fields):
-        writes.append((table, fields))
+    async def fake_upsert(table, fields, merge_fields):
+        writes.append((table, fields, merge_fields))
 
     monkeypatch.setattr(airtable_client, "_enabled", lambda: True)
-    monkeypatch.setattr(airtable_client, "_create", fake_create)
+    monkeypatch.setattr(airtable_client, "_upsert_by_fields", fake_upsert)
 
     with pytest.raises(RuntimeError, match="owner"):
         run(
-            airtable_client.create_uploaded_source(
+            airtable_client.upsert_uploading_source(
                 source_id="source-1",
                 business_name=BUSINESS,
                 owner_id=" ",
@@ -658,7 +670,7 @@ def test_source_writes_fail_strictly_when_airtable_is_disabled(monkeypatch, oper
     monkeypatch.setattr(airtable_client, "_enabled", lambda: False)
 
     if operation == "create":
-        coroutine = airtable_client.create_uploaded_source(
+        coroutine = airtable_client.upsert_uploading_source(
             source_id="source-1",
             business_name=BUSINESS,
             owner_id="user-1",
@@ -683,12 +695,16 @@ def test_upload_persists_transcript_before_returning_success(monkeypatch):
     writes = []
     persisted = None
 
-    async def fake_create(**kwargs):
+    async def fake_upsert(**kwargs):
         nonlocal persisted
         writes.append(kwargs)
-        persisted = record(transcript=kwargs["transcript_text"])
+        persisted = record(status="uploading", transcript=kwargs["transcript_text"])
         persisted["fields"]["Source_Id"] = kwargs["source_id"]
         persisted["fields"]["Share_Id"] = kwargs["share_id"]
+        return persisted
+
+    async def fake_update(source_id, business_name, fields, owner_id=None):
+        persisted["fields"].update(fields)
         return persisted
 
     async def fake_share_lookup(share_id):
@@ -696,7 +712,8 @@ def test_upload_persists_transcript_before_returning_success(monkeypatch):
             return persisted
         return None
 
-    monkeypatch.setattr(server.airtable_client, "create_uploaded_source", fake_create)
+    monkeypatch.setattr(server.airtable_client, "upsert_uploading_source", fake_upsert)
+    monkeypatch.setattr(server.airtable_client, "update_source_by_id", fake_update)
     monkeypatch.setattr(
         server.airtable_client, "get_growth_signal_by_share_id", fake_share_lookup
     )
@@ -718,13 +735,15 @@ def test_upload_persists_transcript_before_returning_success(monkeypatch):
 def test_upload_failure_is_sanitized_and_never_returns_success(monkeypatch):
     install_business(monkeypatch)
 
-    async def failed_create(**kwargs):
+    async def failed_upsert(**kwargs):
         raise RuntimeError("secret Airtable transport detail")
 
     async def fake_share_lookup(share_id):
         return None
 
-    monkeypatch.setattr(server.airtable_client, "create_uploaded_source", failed_create)
+    monkeypatch.setattr(
+        server.airtable_client, "upsert_uploading_source", failed_upsert
+    )
     monkeypatch.setattr(
         server.airtable_client, "get_growth_signal_by_share_id", fake_share_lookup
     )
@@ -741,10 +760,10 @@ def test_upload_rejects_transcript_over_safe_airtable_limit_before_write(monkeyp
     install_business(monkeypatch)
     writes = []
 
-    async def fake_create(**kwargs):
+    async def fake_upsert(**kwargs):
         writes.append(kwargs)
 
-    monkeypatch.setattr(server.airtable_client, "create_uploaded_source", fake_create)
+    monkeypatch.setattr(server.airtable_client, "upsert_uploading_source", fake_upsert)
     upload = UploadFile(
         filename="too-large.txt",
         file=io.BytesIO(b"x" * (server.MAX_AIRTABLE_TRANSCRIPT_CHARS + 1)),
@@ -1160,7 +1179,7 @@ def test_upload_then_analyze_survives_independent_route_invocations(monkeypatch)
                 None,
             )
 
-        async def create_uploaded_source(self, **kwargs):
+        async def upsert_uploading_source(self, **kwargs):
             rec = {
                 "id": "rec-independent",
                 "fields": {
@@ -1171,12 +1190,21 @@ def test_upload_then_analyze_survives_independent_route_invocations(monkeypatch)
                     "File_Type": kwargs["file_type"],
                     "Transcript_Text": kwargs["transcript_text"],
                     "Word_Count": kwargs["word_count"],
-                    "Source_Status": "uploaded",
+                    "Source_Status": "uploading",
                     "Share_Id": kwargs["share_id"],
                     "Created_At": kwargs["created_at"],
                 },
             }
             self.boundary.records[kwargs["source_id"]] = rec
+            return rec
+
+        async def update_source_by_id(
+            self, source_id, business_name, fields, owner_id=None
+        ):
+            rec = self.boundary.records.get(source_id)
+            if not rec:
+                return None
+            rec["fields"].update(fields)
             return rec
 
     class AnalysisRepositoryClient:

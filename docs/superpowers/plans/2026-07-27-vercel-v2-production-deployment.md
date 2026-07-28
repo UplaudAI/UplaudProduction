@@ -4,7 +4,7 @@
 
 **Goal:** Deploy Uplaud V2 to Vercel with FastAPI, Airtable, and Vercel Blob while preserving functionality, removing MongoDB, and retaining a verified rollback path.
 
-**Architecture:** Vercel serves the CRA frontend and exposes the FastAPI application as one Python Function. Airtable becomes the only structured datastore; Vercel Blob provides durable private source storage and public blog-image storage. All production promotion happens only after a Preview deployment passes persistence, tenancy, browser, and performance gates.
+**Architecture:** Vercel serves the CRA frontend and exposes the FastAPI application as one Python Function. Airtable becomes the only structured datastore. Two distinct Vercel Blob stores preserve access separation: one private store for source binaries and approval receipts, and one public store for blog images. Their injected credentials map to `BLOB_PRIVATE_READ_WRITE_TOKEN` and `BLOB_PUBLIC_READ_WRITE_TOKEN`, respectively. All production promotion happens only after a Preview deployment passes persistence, tenancy, browser, and performance gates.
 
 **Tech Stack:** React 19, CRA/Craco, FastAPI, Vercel Python Runtime/Fluid Compute, Airtable REST API, Vercel Blob Python SDK, Supabase Auth, OpenAI, pytest, Vercel CLI
 
@@ -350,26 +350,28 @@ import airtable_client
 
 
 @pytest.mark.asyncio
-async def test_create_uploaded_source_round_trips(monkeypatch):
+async def test_upsert_uploading_source_round_trips(monkeypatch):
     stored = {}
 
-    async def create(table, fields):
+    async def upsert(table, fields, merge_fields):
+        assert merge_fields == ["Source_Id"]
         stored.update(fields)
         return {"id": "recSource", "fields": fields}
 
-    monkeypatch.setattr(airtable_client, "_create", create)
-    record = await airtable_client.create_uploaded_source(
+    monkeypatch.setattr(airtable_client, "_upsert_by_fields", upsert)
+    record = await airtable_client.upsert_uploading_source(
         source_id="src-1",
         business_name="Acme",
         owner_id="user-1",
         filename="call.txt",
         file_type="txt",
-        transcript="Customer transcript",
+        transcript_text="Customer transcript",
         word_count=2,
         share_id="share-1",
-        blob_url="https://blob.example/source",
+        created_at="2026-07-28T12:00:00+00:00",
     )
-    assert record["fields"]["Source_Status"] == "uploaded"
+    assert record["fields"]["Source_Status"] == "uploading"
+    assert "Blob_Url" not in record["fields"]
     assert stored["Transcript_Text"] == "Customer transcript"
 ```
 
@@ -377,7 +379,7 @@ async def test_create_uploaded_source_round_trips(monkeypatch):
 
 Run: `PYTHONPATH=backend python -m pytest backend/tests/test_source_persistence.py -v`
 
-Expected: FAIL because `create_uploaded_source` does not exist.
+Expected: FAIL because `upsert_uploading_source` does not exist.
 
 - [ ] **Step 3: Add additive `Growth_Signals` source fields**
 
@@ -385,11 +387,11 @@ Before code deployment, verify or create these Airtable fields through the Airta
 
 - [ ] **Step 4: Implement the Airtable source repository**
 
-Add `create_uploaded_source`, `get_source_by_id`, and `update_source_by_id` to `airtable_client.py`. Scope reads by both `Source_Id` and `Business_Name`; store status as `uploaded` before analysis and `analyzed` only after successful insight persistence.
+Add `upsert_uploading_source`, `get_source_by_id`, and `update_source_by_id` to `airtable_client.py`. The initial source write must use Airtable `performUpsert` keyed by `Source_Id`, persist canonical metadata/transcript with status `uploading`, and omit `Blob_Url`. Re-read and validate the canonical row after an ambiguous upsert response. Scope reads by both `Source_Id` and `Business_Name`; permit strict transitions through `uploading`/`upload_failed`/`uploaded`, and store `analyzed` only after successful insight persistence.
 
 - [ ] **Step 5: Rewrite source routes to use persisted records**
 
-Remove `TEMP_SOURCES`. `POST /sources` creates the Airtable record before returning. `GET /sources/{id}` reads Airtable. `POST /sources/{id}/analyze` retrieves `Transcript_Text`, performs analysis, and updates the same source record idempotently.
+Remove `TEMP_SOURCES`. `POST /sources` creates/upserts the Airtable `uploading` row before any Blob write and returns only after strict finalization to `uploaded`. `GET /sources/{id}` reads Airtable. `POST /sources/{id}/analyze` rejects incomplete uploads, retrieves `Transcript_Text`, performs analysis, and updates the same source record idempotently.
 
 - [ ] **Step 6: Verify independent-request persistence**
 
@@ -414,6 +416,7 @@ git commit -m "feat: persist uploaded sources in Airtable"
 - Create: `backend/blob_storage.py`
 - Create: `backend/tests/test_blob_storage.py`
 - Modify: `backend/server.py`
+- Modify: `backend/airtable_client.py`
 - Modify: `backend/requirements.txt`
 
 - [ ] **Step 1: Write Blob adapter tests**
@@ -425,18 +428,27 @@ import blob_storage
 
 
 @pytest.mark.asyncio
-async def test_store_source_uses_private_blob(monkeypatch):
+async def test_store_source_uses_deterministic_private_blob(monkeypatch):
     calls = []
 
     class FakeClient:
+        def __init__(self, *, token):
+            assert token == "private-token"
+
         async def put(self, pathname, body, **options):
             calls.append((pathname, body, options))
             return type("Blob", (), {"url": "https://blob/source", "pathname": pathname})()
 
+        async def aclose(self):
+            pass
+
+    monkeypatch.setenv("BLOB_PRIVATE_READ_WRITE_TOKEN", "private-token")
     monkeypatch.setattr(blob_storage, "AsyncBlobClient", FakeClient)
     result = await blob_storage.store_source("src-1", "call.txt", b"hello", "text/plain")
-    assert result.url == "https://blob/source"
+    assert result == "https://blob/source"
     assert calls[0][2]["access"] == "private"
+    assert calls[0][2]["add_random_suffix"] is False
+    assert calls[0][2]["overwrite"] is False
 
 
 @pytest.mark.asyncio
@@ -444,29 +456,38 @@ async def test_store_blog_image_uses_public_blob(monkeypatch):
     calls = []
 
     class FakeClient:
+        def __init__(self, *, token):
+            assert token == "public-token"
+
         async def put(self, pathname, body, **options):
             calls.append(options)
             return type("Blob", (), {"url": "https://blob/image.png", "pathname": pathname})()
 
+        async def aclose(self):
+            pass
+
+    monkeypatch.setenv("BLOB_PUBLIC_READ_WRITE_TOKEN", "public-token")
     monkeypatch.setattr(blob_storage, "AsyncBlobClient", FakeClient)
     result = await blob_storage.store_blog_image("image.png", b"png", "image/png")
-    assert result.url.endswith("image.png")
+    assert result.endswith("image.png")
     assert calls[0]["access"] == "public"
 ```
 
 - [ ] **Step 2: Add the Vercel SDK and adapter**
 
-Add `vercel>=0.5.0` to `backend/requirements.txt`. Implement `store_source` and `store_blog_image` with `vercel.blob.AsyncBlobClient`, unique UUID pathnames, explicit content types, and random suffixes.
+Pin `vercel==0.7.2` in `backend/requirements.txt`. Add an import/signature contract for `AsyncBlobClient.put`, `get`, `head`, `delete`, and `aclose` (skip only when the SDK is unavailable in the local test environment). Implement source, blog-image, and approval-receipt operations with `vercel.blob.AsyncBlobClient`. Source pathnames must be deterministic and sanitized under `sources/{source_id}/`, with `overwrite=False` and no random suffix; after a failed put, reconcile the same pathname with `head` and validate its path and size. Blog images remain public and collision-resistant. Cap approval-receipt reads at 64 KiB before decoding JSON. Map access, missing-token, and expired-token SDK errors to a sanitized storage-unavailable error.
 
 - [ ] **Step 3: Integrate source and admin uploads**
 
-Upload source binaries through `store_source` and persist their Blob URL with the Airtable source record. Replace `open(filepath, "wb")` in `/admin/upload` with `store_blog_image` and return the public Blob URL.
+Implement the controlling source-first state machine: upsert canonical Airtable metadata/transcript as `uploading` with no Blob URL; create the deterministic private Blob; then strictly update that same row with `Blob_Url` and `uploaded`. On Blob failure, best-effort mark `upload_failed` and return a sanitized dependency error. On an ambiguous final Airtable response, re-read and accept only the exact URL/`uploaded` state; otherwise retain both the deterministic Blob and tracked source row for retry or reconciliation. Never delete the Blob as compensation for an ambiguous Airtable result. Replace `open(filepath, "wb")` in `/admin/upload` with public-store `store_blog_image` and return the public Blob URL.
+
+Add local mocked tests for committed-then-timeout initial upserts, lost final-update responses, Blob failure status, ambiguous final updates without deletion, same-source Blob retries, receipt-size limits, and credential-expiry mapping. Preserve deterministic first-writer approval behavior.
 
 - [ ] **Step 4: Run Blob and blog tests**
 
-Run: `PYTHONPATH=backend python -m pytest backend/tests/test_blob_storage.py backend/tests/test_blog.py backend/tests/test_source_persistence.py -v`
+Run: `PYTHONPATH=backend python -m pytest backend/tests/test_blob_storage.py backend/tests/test_source_persistence.py backend/tests/test_source_state_security.py -v`
 
-Expected: PASS and `rg 'open\(filepath|uploads_dir|os\.makedirs' backend/server.py` returns no durable-upload implementation.
+Expected: PASS with only local/mocked Blob coverage, and `rg 'open\(filepath|uploads_dir|os\.makedirs' backend/server.py` returns no durable-upload implementation.
 
 - [ ] **Step 5: Commit Blob persistence**
 
@@ -629,11 +650,11 @@ Expected: `.vercel/project.json` points to `prj_fhmackrdzjoBAOP4HuYpohXQ9m9C`; `
 
 Run: `vercel env ls`
 
-Expected: Preview and Production contain Airtable, OpenAI, PDL, Supabase, admin/JWT, and Blob variable names; Mongo variables are not required.
+Expected: Preview and Production contain Airtable, OpenAI, PDL, Supabase, admin/JWT, `BLOB_PRIVATE_READ_WRITE_TOKEN`, and `BLOB_PUBLIC_READ_WRITE_TOKEN` names; Mongo variables and generic application use of `BLOB_READ_WRITE_TOKEN` are not required. Record names and scopes only—never values.
 
-- [ ] **Step 4: Create and connect Vercel Blob**
+- [ ] **Step 4: Create and connect two access-scoped Vercel Blob stores**
 
-Create one Blob store in the selected region, connect it to `uplaud-production`, and confirm Vercel injects the Blob credential into Preview and Production. This is an external billable resource action and requires explicit user approval at execution time.
+Create a private Blob store for source binaries and approval receipts and a separate public Blob store for blog images in the selected region. Connect both to `uplaud-production`. In both Preview and Production, map the private store's injected credential to `BLOB_PRIVATE_READ_WRITE_TOKEN` and the public store's injected credential to `BLOB_PUBLIC_READ_WRITE_TOKEN`; verify the underlying values are distinct without displaying them. Audit with `vercel env ls` and record only variable names and environment scopes. This is an external billable resource action and requires explicit user approval at execution time.
 
 - [ ] **Step 5: Verify additive Airtable fields**
 
@@ -720,5 +741,6 @@ Record the production deployment ID, commit SHA, promotion time, smoke-test resu
 - Source and blog persistence no longer depend on process memory or local filesystem.
 - Frontend API calls work same-origin on Vercel.
 - Preview uses live Airtable only with uniquely identified records.
-- Blob creation, Airtable schema changes, and production promotion require explicit approval.
+- Creation of both access-scoped Blob stores, Airtable schema changes, and production promotion require explicit approval.
+- Preview and Production expose distinct private/public Blob credentials only through `BLOB_PRIVATE_READ_WRITE_TOKEN` and `BLOB_PUBLIC_READ_WRITE_TOKEN`; environment audits never print values.
 - Production promotion uses the exact verified deployment and has an identified rollback target.

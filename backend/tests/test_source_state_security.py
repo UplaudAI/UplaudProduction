@@ -186,20 +186,25 @@ def test_upload_retries_global_token_collision_and_uses_strong_token(monkeypatch
             return persisted
         return None
 
-    async def fake_create(**kwargs):
+    async def fake_upsert(**kwargs):
         nonlocal persisted
         created.append(kwargs)
         persisted = source_record(
-            source_status="uploaded", share_id=kwargs["share_id"]
+            source_status="uploading", share_id=kwargs["share_id"]
         )
         persisted["fields"]["Source_Id"] = kwargs["source_id"]
+        return persisted
+
+    async def fake_update(source_id, business_name, fields, owner_id=None):
+        persisted["fields"].update(fields)
         return persisted
 
     monkeypatch.setattr(server.secrets, "token_urlsafe", lambda size: next(candidates))
     monkeypatch.setattr(
         server.airtable_client, "get_growth_signal_by_share_id", fake_lookup
     )
-    monkeypatch.setattr(server.airtable_client, "create_uploaded_source", fake_create)
+    monkeypatch.setattr(server.airtable_client, "upsert_uploading_source", fake_upsert)
+    monkeypatch.setattr(server.airtable_client, "update_source_by_id", fake_update)
     upload = UploadFile(filename="call.txt", file=io.BytesIO(b"usable transcript"))
 
     result = run(server.upload_source(upload, current=USER))
@@ -226,10 +231,10 @@ def test_upload_repairs_collision_detected_only_after_create(monkeypatch):
             return persisted
         return None
 
-    async def fake_create(**kwargs):
+    async def fake_upsert(**kwargs):
         nonlocal persisted
         persisted = source_record(
-            source_status="uploaded", share_id=kwargs["share_id"]
+            source_status="uploading", share_id=kwargs["share_id"]
         )
         persisted["fields"]["Source_Id"] = kwargs["source_id"]
         return persisted
@@ -243,7 +248,7 @@ def test_upload_repairs_collision_detected_only_after_create(monkeypatch):
     monkeypatch.setattr(
         server.airtable_client, "get_growth_signal_by_share_id", fake_lookup
     )
-    monkeypatch.setattr(server.airtable_client, "create_uploaded_source", fake_create)
+    monkeypatch.setattr(server.airtable_client, "upsert_uploading_source", fake_upsert)
     monkeypatch.setattr(server.airtable_client, "update_source_by_id", fake_update)
 
     result = run(
@@ -253,7 +258,13 @@ def test_upload_repairs_collision_detected_only_after_create(monkeypatch):
         )
     )
 
-    assert updates == [{"Share_Id": "replacement-strong-token"}]
+    assert updates == [
+        {
+            "Blob_Url": "https://private.blob.example/source",
+            "Source_Status": "uploaded",
+        },
+        {"Share_Id": "replacement-strong-token"},
+    ]
     assert result.share_id == "replacement-strong-token"
 
 

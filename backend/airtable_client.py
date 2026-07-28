@@ -822,6 +822,12 @@ def _source_visible_to_owner(fields: dict, owner_id: str) -> bool:
 
 
 def _source_lifecycle_state(fields: dict) -> str:
+    explicit_status = (fields.get("Source_Status") or "").strip().lower()
+    if explicit_status in {"uploading", "upload_failed"}:
+        testimonial_status = (
+            fields.get("Testimonial_Status") or "draft"
+        ).strip().lower()
+        return explicit_status if testimonial_status == "draft" else "invalid"
     source_status = (
         "analyzed" if _is_analyzed_source_fields(fields) else "uploaded"
     )
@@ -850,6 +856,8 @@ def _assert_valid_source_transition(existing_fields: dict, updates: dict) -> Non
     current_state = _source_lifecycle_state(existing_fields)
     next_state = _source_lifecycle_state({**existing_fields, **updates})
     allowed = {
+        "uploading": {"uploading", "uploaded", "upload_failed"},
+        "upload_failed": {"upload_failed", "uploading", "uploaded"},
         "uploaded": {"uploaded", "analyzed"},
         "analyzed": {"analyzed", "sent"},
         "sent": {"sent", "approved"},
@@ -869,7 +877,25 @@ def _assert_valid_source_transition(existing_fields: dict, updates: dict) -> Non
         )
 
 
-async def create_uploaded_source(
+def _matches_upload_identity(record: Optional[dict], expected: dict) -> bool:
+    if not isinstance(record, dict) or not record.get("id"):
+        return False
+    fields = record.get("fields", {})
+    identity_fields = (
+        "Source_Id",
+        "Business_Name",
+        "Owner_Id",
+        "Name",
+        "File_Type",
+        "Transcript_Text",
+        "Word_Count",
+        "Share_Id",
+        "Created_At",
+    )
+    return all(fields.get(name) == expected.get(name) for name in identity_fields)
+
+
+async def upsert_uploading_source(
     *,
     source_id: str,
     business_name: str,
@@ -880,9 +906,8 @@ async def create_uploaded_source(
     word_count: int,
     share_id: str,
     created_at: str,
-    blob_url: str = "",
 ) -> dict:
-    """Strictly create the durable, owner-scoped Growth_Signals upload row."""
+    """Idempotently persist the canonical source before writing its Blob."""
     if not _enabled():
         raise RuntimeError("Airtable source persistence is unavailable")
     owner_id = (owner_id or "").strip()
@@ -897,19 +922,41 @@ async def create_uploaded_source(
         "File_Type": file_type,
         "Transcript_Text": transcript_text,
         "Word_Count": word_count,
-        "Source_Status": "uploaded",
+        "Source_Status": "uploading",
         "Share_Id": share_id,
         "Created_At": created_at,
     }
-    if blob_url:
-        fields["Blob_Url"] = blob_url
     try:
-        record = await _create(TABLE_GROWTH_SIGNALS, fields)
+        record = await _upsert_by_fields(
+            TABLE_GROWTH_SIGNALS, fields, ["Source_Id"]
+        )
     except Exception as exc:
-        logger.warning("Airtable uploaded-source create failed: %s", exc)
-        raise RuntimeError("Airtable source persistence failed") from None
-    if not isinstance(record, dict) or not record.get("id"):
-        raise RuntimeError("Airtable source persistence failed")
+        logger.warning("Airtable uploading-source upsert response failed: %s", exc)
+        try:
+            record = await get_source_by_id(
+                source_id, business_name, owner_id=owner_id
+            )
+        except Exception:
+            record = None
+        if (
+            _matches_upload_identity(record, fields)
+            and (record.get("fields", {}).get("Source_Status") or "")
+            .strip()
+            .lower()
+            == "uploading"
+        ):
+            return record
+        raise AirtableSourcePersistenceError(
+            "Airtable source persistence failed"
+        ) from None
+    if (
+        not _matches_upload_identity(record, fields)
+        or (record.get("fields", {}).get("Source_Status") or "")
+        .strip()
+        .lower()
+        != "uploading"
+    ):
+        raise AirtableSourcePersistenceError("Airtable source persistence failed")
     return record
 
 
