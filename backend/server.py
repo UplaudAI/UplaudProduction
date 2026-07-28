@@ -1750,10 +1750,11 @@ async def update_agent_plan_status(lead_id: str, action: str, current=Depends(ge
     existing = lead.get("agent_plan")
     if not existing:
         raise HTTPException(status_code=404, detail="No agent plan found for this lead yet.")
+    validated = AgentPlanOut(**existing)
     new_status = "approved" if action == "approve" else "skipped"
+    updated = AgentPlanOut(**{**validated.model_dump(), "status": new_status})
     await airtable_client.update_circle_agent_plan_status(lead_id, new_status)
-    existing["status"] = new_status
-    return AgentPlanOut(**existing)
+    return updated
 
 
 # ---------------------------------------------------------------------------

@@ -6,6 +6,7 @@ import os
 
 import httpx
 import pytest
+from pydantic import ValidationError
 
 
 os.environ.setdefault("MONGO_URL", "mongodb://localhost:27017")
@@ -26,6 +27,30 @@ PLAN = {
     "next_action": {"label": "Send the introduction", "cta": "Send Email"},
     "generated_at": "2026-07-27T20:00:00+00:00",
 }
+
+EMPTY_OUTREACH_PLAN = {
+    **PLAN,
+    "email_body": "",
+    "linkedin_message": "",
+}
+
+
+def persisted_empty_outreach_lead():
+    return airtable_client._circle_to_lead_dict(
+        {
+            "Research_Headline": EMPTY_OUTREACH_PLAN["research_headline"],
+            "Research_Summary": "\n".join(EMPTY_OUTREACH_PLAN["research_summary"]),
+            "Email_Subject": EMPTY_OUTREACH_PLAN["email_subject"],
+            "Email_Body": "",
+            "Linkedin_Message": "",
+            "Next_Action_Label": EMPTY_OUTREACH_PLAN["next_action"]["label"],
+            "Next_Action_Cta": EMPTY_OUTREACH_PLAN["next_action"]["cta"],
+            "Agent_Plan_Status": EMPTY_OUTREACH_PLAN["status"],
+            "Agent_Plan_Generated_At": EMPTY_OUTREACH_PLAN["generated_at"],
+        },
+        {},
+        "rec-lead-1",
+    )
 
 
 class ExplodingDb:
@@ -109,6 +134,7 @@ def test_update_circle_agent_plan_maps_fields_exactly(monkeypatch):
 
     async def fake_update(table, record_id, fields):
         calls.append((table, record_id, fields))
+        return {"id": record_id, "fields": fields}
 
     monkeypatch.setattr(airtable_client, "_update", fake_update)
 
@@ -138,6 +164,7 @@ def test_update_circle_agent_plan_status_maps_field_exactly(monkeypatch):
 
     async def fake_update(table, record_id, fields):
         calls.append((table, record_id, fields))
+        return {"id": record_id, "fields": fields}
 
     monkeypatch.setattr(airtable_client, "_update", fake_update)
 
@@ -150,6 +177,59 @@ def test_update_circle_agent_plan_status_maps_field_exactly(monkeypatch):
             {"Agent_Plan_Status": "skipped"},
         )
     ]
+
+
+def test_agent_plan_write_fields_round_trip_with_empty_outreach_bodies(monkeypatch):
+    written_fields = []
+
+    async def fake_update(table, record_id, fields):
+        written_fields.append(fields)
+        return {"id": record_id, "fields": fields}
+
+    monkeypatch.setattr(airtable_client, "_update", fake_update)
+
+    asyncio.run(
+        airtable_client.update_circle_agent_plan(
+            "rec-lead-1", EMPTY_OUTREACH_PLAN
+        )
+    )
+    lead = airtable_client._circle_to_lead_dict(
+        written_fields[0], {}, "rec-lead-1"
+    )
+
+    assert lead["agent_plan"] == EMPTY_OUTREACH_PLAN
+
+
+def test_legacy_plan_content_is_detected_without_generated_at_or_outreach_bodies():
+    lead = airtable_client._circle_to_lead_dict(
+        {
+            "Research_Headline": "Legacy research",
+            "Agent_Plan_Status": "approved",
+        },
+        {},
+        "rec-legacy",
+    )
+
+    assert lead["agent_plan"] is not None
+    assert lead["agent_plan"]["research_headline"] == "Legacy research"
+    assert lead["agent_plan"]["generated_at"] == ""
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        lambda: airtable_client.update_circle_agent_plan("rec-lead-1", PLAN),
+        lambda: airtable_client.update_circle_agent_plan_status("rec-lead-1", "approved"),
+    ],
+)
+def test_strict_agent_plan_writes_fail_when_airtable_is_disabled(
+    monkeypatch, operation
+):
+    monkeypatch.setattr(airtable_client, "AIRTABLE_PAT", "")
+    monkeypatch.setattr(airtable_client, "AIRTABLE_BASE_ID", "")
+
+    with pytest.raises(RuntimeError, match="Airtable is not configured"):
+        asyncio.run(operation())
 
 
 def test_get_warm_leads_returns_airtable_agent_plans_without_mongo(monkeypatch):
@@ -222,6 +302,27 @@ def test_agent_run_returns_scoped_airtable_cache_when_not_forced(monkeypatch):
 
     assert result.model_dump() == PLAN
     assert calls == [("Scoped Business", "rec-lead-1")]
+
+
+def test_agent_run_returns_empty_outreach_airtable_cache_without_regenerating(
+    monkeypatch,
+):
+    lead = persisted_empty_outreach_lead()
+    assert lead["agent_plan"] == EMPTY_OUTREACH_PLAN
+    install_scoped_lead(monkeypatch, lead)
+
+    async def unexpected(*args, **kwargs):
+        raise AssertionError("empty outreach cache must not regenerate or write")
+
+    monkeypatch.setattr(server, "research_lead", unexpected)
+    monkeypatch.setattr(server, "draft_outreach", unexpected)
+    monkeypatch.setattr(server.airtable_client, "update_circle_agent_plan", unexpected)
+
+    result = asyncio.run(
+        server.run_referral_agent("rec-lead-1", force=False, current=current_user())
+    )
+
+    assert result.model_dump() == EMPTY_OUTREACH_PLAN
 
 
 def install_agent_generation(monkeypatch, *, write_error=None):
@@ -319,6 +420,57 @@ def test_agent_plan_action_scopes_lead_and_strictly_updates_airtable(
     assert result.model_dump() == expected_plan
     assert calls == [("Scoped Business", "rec-lead-1")]
     assert writes == [("rec-lead-1", expected_status)]
+
+
+@pytest.mark.parametrize(
+    ("action", "expected_status"),
+    [("approve", "approved"), ("skip", "skipped")],
+)
+def test_agent_plan_action_accepts_persisted_empty_outreach_plan(
+    monkeypatch, action, expected_status
+):
+    lead = persisted_empty_outreach_lead()
+    assert lead["agent_plan"] == EMPTY_OUTREACH_PLAN
+    install_scoped_lead(monkeypatch, lead)
+    writes = []
+
+    async def fake_status_write(lead_id, status):
+        writes.append((lead_id, status))
+
+    monkeypatch.setattr(
+        server.airtable_client, "update_circle_agent_plan_status", fake_status_write
+    )
+
+    result = asyncio.run(
+        server.update_agent_plan_status("rec-lead-1", action, current=current_user())
+    )
+
+    assert result.model_dump() == {**EMPTY_OUTREACH_PLAN, "status": expected_status}
+    assert writes == [("rec-lead-1", expected_status)]
+
+
+def test_agent_plan_action_rejects_malformed_plan_before_airtable_write(monkeypatch):
+    install_scoped_lead(
+        monkeypatch,
+        {"id": "rec-lead-1", "agent_plan": {"status": "pending"}},
+    )
+    writes = []
+
+    async def fake_status_write(lead_id, status):
+        writes.append((lead_id, status))
+
+    monkeypatch.setattr(
+        server.airtable_client, "update_circle_agent_plan_status", fake_status_write
+    )
+
+    with pytest.raises(ValidationError):
+        asyncio.run(
+            server.update_agent_plan_status(
+                "rec-lead-1", "approve", current=current_user()
+            )
+        )
+
+    assert writes == []
 
 
 def test_agent_plan_action_missing_scoped_lead_is_404(monkeypatch):

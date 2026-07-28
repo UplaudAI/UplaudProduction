@@ -434,9 +434,28 @@ async def create_circle_record(
         return None
 
 
+_AGENT_PLAN_COMPATIBILITY_FIELDS = (
+    "Research_Headline",
+    "Research_Summary",
+    "Email_Subject",
+    "Email_Body",
+    "Linkedin_Message",
+    "Next_Action_Label",
+    "Next_Action_Cta",
+)
+
+
+def _circle_has_agent_plan(f: dict) -> bool:
+    if f.get("Agent_Plan_Generated_At"):
+        return True
+    if any(f.get(field) for field in _AGENT_PLAN_COMPATIBILITY_FIELDS):
+        return True
+    return f.get("Agent_Plan_Status") in {"approved", "skipped"}
+
+
 def _circle_to_lead_dict(f: dict, uf: dict, record_id: str, created_time: str = "") -> dict:
     agent_plan = None
-    if f.get("Email_Body") or f.get("Linkedin_Message"):
+    if _circle_has_agent_plan(f):
         agent_plan = {
             "lead_id": record_id,
             "status": f.get("Agent_Plan_Status") or "pending",
@@ -714,13 +733,17 @@ async def update_circle_agent_plan(lead_id: str, plan: dict) -> None:
         "Agent_Plan_Status": plan.get("status") or "pending",
         "Agent_Plan_Generated_At": plan.get("generated_at") or "",
     }
-    await _update(TABLE_CIRCLES, lead_id, fields)
+    updated = await _update(TABLE_CIRCLES, lead_id, fields)
+    if updated is None:
+        raise RuntimeError("Airtable is not configured for agent plan persistence")
     logger.info("Saved agent plan to Airtable for lead %s", lead_id)
 
 
 async def update_circle_agent_plan_status(lead_id: str, status: str) -> None:
     """Update only the agent plan status (approved/skipped) in the Airtable Circles record."""
-    await _update(TABLE_CIRCLES, lead_id, {"Agent_Plan_Status": status})
+    updated = await _update(TABLE_CIRCLES, lead_id, {"Agent_Plan_Status": status})
+    if updated is None:
+        raise RuntimeError("Airtable is not configured for agent plan persistence")
     logger.info("Updated agent plan status to %s in Airtable for lead %s", status, lead_id)
 
 
