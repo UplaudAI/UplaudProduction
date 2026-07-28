@@ -258,12 +258,7 @@ def test_vercel_entrypoint_serves_api_root_and_representative_routes():
 def test_vercel_catch_all_entrypoint_serves_nested_api_routes():
     from backend.server import app as server_app
 
-    entrypoints = [
-        REPO_ROOT / "api" / "[...path].py",
-        REPO_ROOT / "api" / "[path]" / "[subpath].py",
-        REPO_ROOT / "api" / "[path]" / "[subpath]" / "[id].py",
-        REPO_ROOT / "api" / "[path]" / "[subpath]" / "[id]" / "[action].py",
-    ]
+    entrypoints = [REPO_ROOT / "api" / "[...path].py"]
     for index, entrypoint in enumerate(entrypoints):
         spec = importlib.util.spec_from_file_location(
             f"vercel_api_catch_all_{index}", entrypoint
@@ -298,10 +293,14 @@ def test_vercel_config_packages_cra_and_fastapi_without_swallowing_api():
     assert catch_all.exists()
     assert "from backend.server import app" in catch_all.read_text()
 
-    # api/index.py serves /api/ and api/[...path].py serves nested /api/* paths.
-    # The SPA rule must leave those original paths untouched so FastAPI sees its
-    # /api prefix.
+    # Vercel's Python dynamic route only handles one nested segment reliably.
+    # Multi-segment /api/* requests are explicitly rewritten to api/index.py,
+    # while the SPA rule still leaves API paths out of the frontend fallback.
     assert config["rewrites"] == [
+        {
+            "source": "/api/:path*",
+            "destination": "/api/index.py",
+        },
         {
             "source": "/:path((?!api(?:/|$)).*)",
             "destination": "/index.html",
