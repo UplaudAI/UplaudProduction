@@ -12,6 +12,14 @@ import httpx
 
 logger = logging.getLogger("uplaud.airtable")
 
+
+class AirtableSourceLookupError(RuntimeError):
+    """A source could not be read from Airtable."""
+
+
+class AirtableSourcePersistenceError(RuntimeError):
+    """A source could not be written to Airtable."""
+
 AIRTABLE_PAT = os.environ.get("AIRTABLE_PAT", "")
 AIRTABLE_BASE_ID = os.environ.get("AIRTABLE_BASE_ID", "")
 AIRTABLE_API_URL = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}"
@@ -306,18 +314,8 @@ def _normalize_domain(raw: str) -> str:
     return d
 
 
-async def get_business_name_by_email_domain(email: str) -> Optional[str]:
-    """Resolve Business_Name from the Business table's Business Domain field for the given email's
-    domain. Exact domain matches (after normalizing away scheme/www) always win over a looser
-    subdomain match, so an unrelated business record can never shadow the real one."""
-    if not email or "@" not in email:
-        return None
-    domain = _normalize_domain(email.split("@", 1)[1])
-    try:
-        records = await _get_all(TABLE_BUSINESS, {"pageSize": 100})
-    except Exception as e:
-        logger.warning("Airtable business lookup failed: %s", e)
-        return None
+def _business_name_for_domain(records: list, domain: str) -> Optional[str]:
+    """Select an exact Business Domain match before a subdomain match."""
     exact_match, subdomain_match = None, None
     for rec in records:
         fields = rec.get("fields", {})
@@ -331,6 +329,30 @@ async def get_business_name_by_email_domain(email: str) -> Optional[str]:
         ):
             subdomain_match = fields.get("Business Name")
     return exact_match or subdomain_match
+
+
+async def get_source_business_name_by_email_domain(email: str) -> Optional[str]:
+    """Strictly resolve source tenant scope without hiding Airtable outages."""
+    if not email or "@" not in email:
+        return None
+    if not _enabled():
+        raise AirtableSourceLookupError("Airtable business scope is unavailable")
+    domain = _normalize_domain(email.split("@", 1)[1])
+    try:
+        records = await _get_all(TABLE_BUSINESS, {"pageSize": 100})
+    except Exception as e:
+        logger.warning("Airtable business lookup failed: %s", e)
+        raise AirtableSourceLookupError("Airtable business scope lookup failed") from None
+    return _business_name_for_domain(records, domain)
+
+
+async def get_business_name_by_email_domain(email: str) -> Optional[str]:
+    """Best-effort business lookup retained for non-source feature fallbacks."""
+    try:
+        return await get_source_business_name_by_email_domain(email)
+    except AirtableSourceLookupError as e:
+        logger.warning("Airtable business lookup failed: %s", e)
+        return None
 
 
 async def find_or_create_user(
@@ -732,9 +754,12 @@ async def create_uploaded_source(
     created_at: str,
     blob_url: str = "",
 ) -> dict:
-    """Strictly create the durable Growth_Signals row for an upload."""
+    """Strictly create the durable, owner-scoped Growth_Signals upload row."""
     if not _enabled():
         raise RuntimeError("Airtable source persistence is unavailable")
+    owner_id = (owner_id or "").strip()
+    if not owner_id:
+        raise RuntimeError("A source owner is required")
     fields = {
         "Source_Id": source_id,
         "Business_Name": business_name,
@@ -763,7 +788,17 @@ async def create_uploaded_source(
 async def get_source_by_id(
     source_id: str, business_name: str, *, owner_id: Optional[str] = None
 ) -> Optional[dict]:
-    """Fetch one source within its business and optional owner boundary."""
+    """Fetch one source within its required business and owner boundary.
+
+    Legacy records with a blank Owner_Id intentionally remain shared inside the
+    business. Every newly uploaded record has a nonblank owner and is private to
+    that owner.
+    """
+    if not _enabled():
+        raise AirtableSourceLookupError("Airtable source lookup is unavailable")
+    owner_id = (owner_id or "").strip()
+    if not owner_id:
+        raise AirtableSourceLookupError("Airtable source owner scope is required")
     if not source_id or not business_name:
         return None
     try:
@@ -778,7 +813,7 @@ async def get_source_by_id(
         )
     except Exception as exc:
         logger.warning("Airtable scoped source lookup failed: %s", exc)
-        raise RuntimeError("Airtable source lookup failed") from None
+        raise AirtableSourceLookupError("Airtable source lookup failed") from None
     records = data.get("records", []) if isinstance(data, dict) else []
     if not records:
         return None
@@ -804,19 +839,32 @@ async def update_source_by_id(
 ) -> Optional[dict]:
     """Strictly update an existing, tenant-scoped Growth_Signals row."""
     if not _enabled():
-        raise RuntimeError("Airtable source persistence is unavailable")
+        raise AirtableSourceLookupError(
+            "Airtable source persistence is unavailable"
+        )
+    owner_id = (owner_id or "").strip()
+    if not owner_id:
+        raise AirtableSourceLookupError("Airtable source owner scope is required")
     try:
         existing = await get_source_by_id(
             source_id, business_name, owner_id=owner_id
         )
-        if not existing:
-            return None
+    except AirtableSourceLookupError:
+        raise
+    except Exception as exc:
+        logger.warning("Airtable scoped source lookup failed during update: %s", exc)
+        raise AirtableSourceLookupError("Airtable source lookup failed") from None
+    if not existing:
+        return None
+    try:
         updated = await _update(TABLE_GROWTH_SIGNALS, existing["id"], fields)
     except Exception as exc:
         logger.warning("Airtable scoped source update failed: %s", exc)
-        raise RuntimeError("Airtable source persistence failed") from None
+        raise AirtableSourcePersistenceError(
+            "Airtable source persistence failed"
+        ) from None
     if not isinstance(updated, dict) or not updated.get("id"):
-        raise RuntimeError("Airtable source persistence failed")
+        raise AirtableSourcePersistenceError("Airtable source persistence failed")
     return updated
 
 
@@ -861,16 +909,50 @@ async def upsert_growth_signal(source_id: str, business_name: str, insights: dic
 
 async def get_growth_signal_by_share_id(share_id: str) -> Optional[dict]:
     """Fetch a single Growth_Signals record by its public Share_Id (used by /public/testimonial/*)."""
+    if not _enabled():
+        raise AirtableSourceLookupError("Airtable source lookup is unavailable")
     if not share_id:
         return None
     try:
         formula = f'{{Share_Id}}="{_escape(share_id)}"'
         data = await _get(TABLE_GROWTH_SIGNALS, {"filterByFormula": formula, "maxRecords": 1})
         records = data.get("records", [])
-        return records[0] if records else None
+        if not records:
+            return None
+        record = records[0]
+        if record.get("fields", {}).get("Share_Id") != share_id:
+            return None
+        return record
     except Exception as e:
         logger.warning("Airtable growth signal lookup by share_id failed: %s", e)
+        raise AirtableSourceLookupError("Airtable source lookup failed") from None
+
+
+async def update_source_by_share_id(share_id: str, fields: dict) -> Optional[dict]:
+    """Strictly update a public source through its persisted Share_Id."""
+    if not _enabled():
+        raise AirtableSourceLookupError(
+            "Airtable source persistence is unavailable"
+        )
+    try:
+        existing = await get_growth_signal_by_share_id(share_id)
+    except AirtableSourceLookupError:
+        raise
+    except Exception as exc:
+        logger.warning("Airtable public source lookup failed during update: %s", exc)
+        raise AirtableSourceLookupError("Airtable source lookup failed") from None
+    if not existing:
         return None
+    try:
+        updated = await _update(TABLE_GROWTH_SIGNALS, existing["id"], fields)
+    except Exception as exc:
+        logger.warning("Airtable public source update failed: %s", exc)
+        raise AirtableSourcePersistenceError(
+            "Airtable source persistence failed"
+        ) from None
+    if not isinstance(updated, dict) or not updated.get("id"):
+        raise AirtableSourcePersistenceError("Airtable source persistence failed")
+    return updated
 
 
 async def update_growth_signal_by_source_id(source_id: str, fields: dict) -> bool:
@@ -890,23 +972,24 @@ async def update_growth_signal_by_source_id(source_id: str, fields: dict) -> boo
 async def list_growth_signals_by_business(
     business_name: str, *, owner_id: Optional[str] = None
 ) -> list:
-    """Return Growth_Signals records for the given business from Airtable."""
+    """Return owner rows plus business-shared legacy rows from Airtable."""
+    if not _enabled():
+        raise AirtableSourceLookupError("Airtable source lookup is unavailable")
+    owner_id = (owner_id or "").strip()
+    if not owner_id:
+        raise AirtableSourceLookupError("Airtable source owner scope is required")
     if not business_name:
         return []
     try:
         business_clause = f'{{Business_Name}}="{_escape(business_name)}"'
-        formula = business_clause
-        if owner_id:
-            formula = (
-                f"AND({business_clause},"
-                f'OR({{Owner_Id}}="{_escape(owner_id)}",{{Owner_Id}}=BLANK()))'
-            )
+        formula = (
+            f"AND({business_clause},"
+            f'OR({{Owner_Id}}="{_escape(owner_id)}",{{Owner_Id}}=BLANK()))'
+        )
         records = await _get_all(
             TABLE_GROWTH_SIGNALS,
             {"filterByFormula": formula, "pageSize": 100},
         )
-        if not owner_id:
-            return records
         return [
             record
             for record in records
@@ -915,7 +998,7 @@ async def list_growth_signals_by_business(
         ]
     except Exception as e:
         logger.warning("Airtable growth signals list failed: %s", e)
-        return []
+        raise AirtableSourceLookupError("Airtable source lookup failed") from None
 
 
 async def log_event(event: str, page: str = "", share_id: str = "", details: str = "", user_email: str = "") -> None:
