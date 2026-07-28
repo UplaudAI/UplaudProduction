@@ -41,7 +41,8 @@ function toConversation(s) {
   const cardStatus =
     tStatus === "approved" ? "approved" : tStatus === "sent" ? "awaiting_approval" : "signals_extracted";
   return {
-    id: s.conversation_code || s.id,
+    id: s.id,
+    code: s.conversation_code || "CV_001",
     _sourceId: s.id,
     shareId: s.share_id,
     title: `${company} · ${ins.call_type || "Demo"}`,
@@ -313,10 +314,10 @@ export default function ConversationsPage() {
                   key={c.id}
                   data-testid={`conv-card-${c.id}`}
                   onClick={() => setSelectedId(c.id)}
-                  className={`w-full text-left rounded-2xl border p-4 transition-all ${
+                  className={`w-full text-left rounded-2xl border p-4 transition-all relative overflow-hidden ${
                     isActive
-                      ? "border-[#6d46c6] bg-[#f5f3ff]"
-                      : "border-[#eeeaf6] bg-white hover:border-[#d9d1ee]"
+                      ? "border-[#6d46c6] bg-[#f5f3ff] shadow-sm ring-1 ring-[#6d46c6]/20 font-medium"
+                      : "border-[#eeeaf6] bg-white hover:border-[#d9d1ee] hover:bg-slate-50/50"
                   }`}
                 >
                   <div className="flex items-center gap-2">
@@ -527,7 +528,7 @@ function ConversationDetail({ conversation: c, onChanged }) {
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#9ca3af]">
-              Conversation · {c.id}
+              Conversation · {c.code}
             </div>
             <h2 className="font-display text-[22px] font-semibold text-[#111827] mt-1">
               {c.title}
