@@ -4,6 +4,8 @@ from pathlib import Path
 import subprocess
 import sys
 
+import live_test_guard
+
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_STANDALONE_SCRIPTS = {
@@ -15,6 +17,13 @@ EXPECTED_STANDALONE_SCRIPTS = {
     "test_work_email_validation.py",
     "test_www_comprehensive.py",
     "test_www_prefix.py",
+}
+
+SOURCE_INSPECTION_SCRIPTS = {
+    "backend_test.py",
+    "test_business_profile.py",
+    "test_sources_airtable.py",
+    "test_sources_comprehensive.py",
 }
 
 
@@ -190,3 +199,27 @@ def test_readme_documents_runnable_standalone_live_commands():
     readme = (ROOT / "README.md").read_text()
     for filename in EXPECTED_STANDALONE_SCRIPTS:
         assert f"python3.12 {filename}" in readme
+
+
+def test_backend_source_path_is_repository_relative_not_cwd_relative(
+    monkeypatch, tmp_path
+):
+    monkeypatch.chdir(tmp_path)
+
+    assert live_test_guard.backend_source_path("server.py") == ROOT / "backend/server.py"
+    assert live_test_guard.backend_source_path("airtable_client.py") == (
+        ROOT / "backend/airtable_client.py"
+    )
+
+
+def test_all_standalone_scripts_are_free_of_container_absolute_backend_paths():
+    for filename in EXPECTED_STANDALONE_SCRIPTS:
+        source = (ROOT / filename).read_text()
+        assert "/app/backend" not in source, filename
+
+        if filename in SOURCE_INSPECTION_SCRIPTS:
+            assert "backend_source_path(" in source, filename
+
+    work_email_source = (ROOT / "test_work_email_validation.py").read_text()
+    assert "from backend.server import derive_business_name" in work_email_source
+    assert "from backend.server import is_work_email" in work_email_source

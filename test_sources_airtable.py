@@ -12,7 +12,7 @@ import httpx
 from datetime import datetime, timezone
 import tempfile
 
-from live_test_guard import require_live_script_environment
+from live_test_guard import backend_source_path, require_live_script_environment
 
 # Configuration (this module is collected only after explicit live-test opt-in)
 BACKEND_URL = f"{os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')}/api"
@@ -71,8 +71,7 @@ async def test_code_verification():
     
     try:
         print("\n[1.1] Checking server.py for Airtable usage...")
-        with open("/app/backend/server.py", "r") as f:
-            server_code = f.read()
+        server_code = backend_source_path("server.py").read_text()
         
         # Extract the sources-related functions
         list_sources_section = server_code.split("async def list_sources")[1].split("@api_router.get")[0] if "async def list_sources" in server_code else ""
@@ -113,8 +112,7 @@ async def test_code_verification():
             log_fail("Sources endpoints Airtable integration", error_msg)
         
         print("\n[1.2] Checking airtable_client.py for Growth_Signals functions...")
-        with open("/app/backend/airtable_client.py", "r") as f:
-            airtable_code = f.read()
+        airtable_code = backend_source_path("airtable_client.py").read_text()
         
         airtable_client_checks = {
             "list_growth_signals_by_business function exists": "async def list_growth_signals_by_business" in airtable_code,

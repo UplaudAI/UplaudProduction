@@ -9,7 +9,7 @@ import os
 import sys
 import requests
 
-from live_test_guard import require_live_script_environment
+from live_test_guard import backend_source_path, require_live_script_environment
 
 # Configuration (this module is collected only after explicit live-test opt-in)
 BACKEND_URL = f"{os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')}/api"
@@ -284,8 +284,7 @@ def verify_no_mongodb_in_code():
     print("\n🔍 Code Analysis: Checking for MongoDB references in business profile endpoints")
     
     try:
-        with open("/app/backend/server.py", "r") as f:
-            content = f.read()
+        content = backend_source_path("server.py").read_text()
             
         # Find the business profile endpoints
         post_start = content.find('@api_router.post("/business/profile")')

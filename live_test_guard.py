@@ -1,10 +1,17 @@
 """Fail-closed environment gate for legacy standalone live-test scripts."""
 
 import os
+from pathlib import Path
 from urllib.parse import urlparse
 
 
 RETIRED_PREVIEW_HOST_SUFFIX = ".preview.emergentagent.com"
+REPOSITORY_ROOT = Path(__file__).resolve().parent
+
+
+def backend_source_path(filename: str) -> Path:
+    """Resolve a backend source file independently of the caller's cwd."""
+    return REPOSITORY_ROOT / "backend" / filename
 
 
 def require_live_script_environment(*, require_jwt_secret: bool = False) -> str:

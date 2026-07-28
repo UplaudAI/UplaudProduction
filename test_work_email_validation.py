@@ -152,8 +152,7 @@ async def test_business_name_derivation():
     
     # Import the function directly from server.py
     try:
-        sys.path.insert(0, '/app/backend')
-        from server import derive_business_name
+        from backend.server import derive_business_name
         
         for email, expected_name in test_cases:
             derived_name = derive_business_name(email)
@@ -259,8 +258,7 @@ async def test_is_work_email_function():
     print("="*80)
     
     try:
-        sys.path.insert(0, '/app/backend')
-        from server import is_work_email
+        from backend.server import is_work_email
         
         # Personal emails (should return False)
         personal_emails = [

@@ -12,7 +12,7 @@ import httpx
 import io
 from datetime import datetime, timezone
 
-from live_test_guard import require_live_script_environment
+from live_test_guard import backend_source_path, require_live_script_environment
 
 # Configuration (this module is collected only after explicit live-test opt-in)
 BACKEND_URL = f"{os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')}/api"
@@ -276,8 +276,7 @@ async def test_comprehensive_sources():
         print("\nStep 5: Verifying code implementation...")
         try:
             # Check server.py for correct Airtable usage
-            with open('/app/backend/server.py', 'r') as f:
-                server_code = f.read()
+            server_code = backend_source_path("server.py").read_text()
             
             # Check list_sources endpoint
             if 'airtable_client.list_growth_signals_by_business' in server_code:

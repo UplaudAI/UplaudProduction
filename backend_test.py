@@ -12,7 +12,7 @@ import httpx
 from datetime import datetime, timezone, timedelta
 import jwt
 
-from live_test_guard import require_live_script_environment
+from live_test_guard import backend_source_path, require_live_script_environment
 
 # Configuration (this module is collected only after explicit live-test opt-in)
 BACKEND_URL = f"{os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')}/api"
@@ -204,8 +204,7 @@ async def test_supabase_metadata_approval():
     
     print("\n[5.1] Verifying approval flag implementation...")
     try:
-        with open("/app/backend/server.py", "r") as f:
-            server_code = f.read()
+        server_code = backend_source_path("server.py").read_text()
             
         # Check that approval flag comes from Supabase metadata
         checks = {
