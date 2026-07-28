@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Mic,
   Search,
@@ -106,6 +107,7 @@ const TONE_STYLES = {
 };
 
 export default function ConversationsPage() {
+  const navigate = useNavigate();
   const [conversations, setConversations] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [query, setQuery] = useState("");
@@ -228,6 +230,10 @@ export default function ConversationsPage() {
       toast.info("Upload a call transcript in Sources to get started");
       return;
     }
+    if (smartAction.cta === "Amplify now") {
+      navigate("/business/social");
+      return;
+    }
     setSelectedId(topSignalConversation.id);
     toast.success(`Jumped to ${topSignalConversation.person}'s call`, {
       description: smartAction.outcome,
@@ -255,16 +261,6 @@ export default function ConversationsPage() {
               {filtered.length} of {conversations.length}
             </span>
           </div>
-          <button
-            data-testid="conversations-connect-source-btn"
-            onClick={() =>
-              toast.info("Would open Zoom / Gong / Fireflies OAuth")
-            }
-            className="btn-secondary h-10 !py-0"
-          >
-            <Plus className="w-4 h-4" strokeWidth={2} />
-            Connect a source
-          </button>
         </div>
 
         {/* Split layout */}
@@ -353,7 +349,6 @@ export default function ConversationsPage() {
 
         {/* Detail */}
         <section className="lg:col-span-8 space-y-4 flex flex-col">
-          {latestApproved && <CompactLatestTestimonial conversation={latestApproved} />}
           {selected && <ConversationDetail conversation={selected} onChanged={load} />}
           {!loading && conversations.length === 0 && (
             <div
@@ -558,230 +553,234 @@ function ConversationDetail({ conversation: c, onChanged }) {
         </div>
       </div>
 
-      {/* Extracted signals */}
-      <div className="rounded-2xl border border-[#eeeaf6] bg-white p-6 order-3">
-        <div className="flex items-center gap-2 mb-5">
-          <Sparkles className="w-4 h-4 text-[#6d46c6]" strokeWidth={1.75} />
-          <div className="text-[13px] font-display font-semibold text-[#111827]">
-            AI-extracted signals
+      {/* Combined Extracted Signals & Testimonial Card */}
+      <div className="rounded-2xl border border-[#eeeaf6] bg-white p-6 order-2 space-y-8">
+        <div className="space-y-5">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-[#6d46c6]" strokeWidth={1.75} />
+            <div className="text-[13px] font-display font-semibold text-[#111827]">
+              AI-extracted signals
+            </div>
+            <span className="ml-auto text-[10.5px] font-mono text-[#9ca3af]">
+              From transcript · never auto-published
+            </span>
           </div>
-          <span className="ml-auto text-[10.5px] font-mono text-[#9ca3af]">
-            From transcript · never auto-published
-          </span>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {SECTIONS.map((sec) => {
+              const items = c.signals[sec.key] || [];
+              if (items.length === 0) return null;
+              const Icon = sec.icon;
+              return (
+                <div
+                  key={sec.key}
+                  data-testid={`signal-${sec.key}`}
+                  className="rounded-xl border border-[#eeeaf6] bg-[#faf9ff] p-4"
+                >
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: `${sec.accent}18` }}
+                    >
+                      <Icon
+                        className="w-3.5 h-3.5"
+                        strokeWidth={1.75}
+                        style={{ color: sec.accent }}
+                      />
+                    </div>
+                    <div className="text-[12px] font-display font-semibold text-[#111827]">
+                      {sec.title}
+                    </div>
+                    <span className="ml-auto text-[10px] font-mono text-[#9ca3af]">
+                      {items.length}
+                    </span>
+                  </div>
+                  <ul className="mt-2.5 space-y-1.5 text-[12.5px] text-[#4b5563] leading-relaxed">
+                    {items.map((item, i) => (
+                      <li key={i} className="flex gap-2">
+                        <span
+                          className="mt-1.5 w-1 h-1 rounded-full shrink-0"
+                          style={{ backgroundColor: sec.accent }}
+                        />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {SECTIONS.map((sec) => {
-            const items = c.signals[sec.key] || [];
-            if (items.length === 0) return null;
-            const Icon = sec.icon;
-            return (
+        {/* Delineated Testimonial section at the bottom (below the signals grid) */}
+        <div className="border-t border-[#eeeaf6] pt-6">
+          {c.draftedStory ? (
+            <div className="relative overflow-hidden rounded-xl border border-[#6d46c6]/20 bg-[#faf9ff]/40 p-5">
               <div
-                key={sec.key}
-                data-testid={`signal-${sec.key}`}
-                className="rounded-xl border border-[#eeeaf6] bg-[#faf9ff] p-4"
-              >
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
-                    style={{ backgroundColor: `${sec.accent}18` }}
-                  >
-                    <Icon
-                      className="w-3.5 h-3.5"
-                      strokeWidth={1.75}
-                      style={{ color: sec.accent }}
-                    />
+                aria-hidden
+                className="absolute -top-16 -right-8 w-[240px] h-[240px] rounded-full"
+                style={{
+                  background:
+                    "radial-gradient(circle, rgba(94,234,212,0.12), transparent 60%)",
+                }}
+              />
+              <div className="relative">
+                <div className="flex items-center gap-2 mb-4">
+                  <FileCheck
+                    className="w-4 h-4 text-[#6d46c6]"
+                    strokeWidth={1.75}
+                  />
+                  <div className="text-[13px] font-display font-semibold text-[#111827]">
+                    Drafted customer testimonial
                   </div>
-                  <div className="text-[12px] font-display font-semibold text-[#111827]">
-                    {sec.title}
-                  </div>
-                  <span className="ml-auto text-[10px] font-mono text-[#9ca3af]">
-                    {items.length}
+                  <span className="ml-auto text-[10.5px] font-mono text-[#9ca3af] flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3 text-[#0f9b7c]" strokeWidth={1.75} />
+                    Customer approves before publish
                   </span>
                 </div>
-                <ul className="mt-2.5 space-y-1.5 text-[12.5px] text-[#4b5563] leading-relaxed">
-                  {items.map((item, i) => (
-                    <li key={i} className="flex gap-2">
-                      <span
-                        className="mt-1.5 w-1 h-1 rounded-full shrink-0"
-                        style={{ backgroundColor: sec.accent }}
-                      />
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            );
-          })}
-        </div>
-      </div>
 
-      {/* Drafted testimonial + approval flow */}
-      {c.draftedStory ? (
-        <div className="rounded-2xl border border-[#6d46c6]/25 bg-white p-6 relative overflow-hidden order-2">
-          <div
-            aria-hidden
-            className="absolute -top-16 -right-8 w-[240px] h-[240px] rounded-full"
-            style={{
-              background:
-                "radial-gradient(circle, rgba(94,234,212,0.16), transparent 60%)",
-            }}
-          />
-          <div className="relative">
-            <div className="flex items-center gap-2 mb-4">
-              <FileCheck
-                className="w-4 h-4 text-[#6d46c6]"
-                strokeWidth={1.75}
-              />
-              <div className="text-[13px] font-display font-semibold text-[#111827]">
-                Drafted customer testimonial
-              </div>
-              <span className="ml-auto text-[10.5px] font-mono text-[#9ca3af] flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3 text-[#0f9b7c]" strokeWidth={1.75} />
-                Customer approves before publish
-              </span>
-            </div>
-
-            <ApprovalTimeline
-              story={{
-                ...c.draftedStory,
-                status: currentStoryStatus,
-                approvalRequestedAt:
-                  currentStoryStatus === "awaiting_approval" ||
-                  currentStoryStatus === "approved" ||
-                  currentStoryStatus === "amplified"
-                    ? c.draftedStory.approvalRequestedAt || new Date().toISOString()
-                    : c.draftedStory.approvalRequestedAt,
-              }}
-            />
-
-            <div className="mt-5 rounded-xl bg-[#faf9ff] border border-[#eeeaf6] p-5">
-              {editing ? (
-                <textarea
-                  data-testid="story-edit-textarea"
-                  value={draftText}
-                  onChange={(e) => setDraftText(e.target.value)}
-                  className="w-full min-h-[130px] rounded-lg border border-[#eeeaf6] bg-white px-3 py-2.5 text-[14px] leading-relaxed text-[#111827] focus:outline-none focus:border-[#d9d1ee] focus:ring-2 focus:ring-[#6d46c6]/10 resize-y font-display"
-                  spellCheck={false}
+                <ApprovalTimeline
+                  story={{
+                    ...c.draftedStory,
+                    status: currentStoryStatus,
+                    approvalRequestedAt:
+                      currentStoryStatus === "awaiting_approval" ||
+                      currentStoryStatus === "approved" ||
+                      currentStoryStatus === "amplified"
+                        ? c.draftedStory.approvalRequestedAt || new Date().toISOString()
+                        : c.draftedStory.approvalRequestedAt,
+                  }}
                 />
-              ) : (
-                <p className="text-[14px] leading-relaxed text-[#111827] whitespace-pre-line font-display">
-                  &ldquo;{c.draftedStory.body}&rdquo;
-                </p>
-              )}
-              <div className="mt-3 text-[11.5px] font-mono text-[#6d46c6]">
-                — {c.draftedStory.attribution}
-              </div>
-            </div>
 
-            <div className="mt-5 flex flex-wrap items-center gap-2">
-              {editing ? (
-                <>
-                  <button
-                    data-testid="story-save-btn"
-                    onClick={saveEdit}
-                    disabled={busy}
-                    className="btn-primary h-10 !py-0 disabled:opacity-60"
-                  >
-                    <FileCheck className="w-4 h-4" strokeWidth={1.75} />
-                    {busy ? "Saving..." : "Save draft"}
-                  </button>
-                  <button
-                    data-testid="story-cancel-edit-btn"
-                    onClick={() => {
-                      setEditing(false);
-                      setDraftText(c.draftedStory.body);
-                    }}
-                    className="btn-secondary h-10 !py-0"
-                  >
-                    Cancel
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    data-testid="story-edit-btn"
-                    onClick={() => {
-                      setDraftText(c.draftedStory.body);
-                      setEditing(true);
-                    }}
-                    className="btn-secondary h-10 !py-0"
-                  >
-                    <Edit3 className="w-4 h-4" strokeWidth={1.75} />
-                    Edit draft
-                  </button>
-                  <button
-                    data-testid="story-regenerate-btn"
-                    onClick={() => runAnalyze(true)}
-                    disabled={busy}
-                    className="btn-secondary h-10 !py-0 disabled:opacity-60"
-                  >
-                    <RefreshCcw className="w-4 h-4" strokeWidth={1.75} />
-                    {busy ? "Working..." : "Regenerate"}
-                  </button>
-                  <button
-                    data-testid="story-copy-btn"
-                    onClick={() => {
-                      navigator.clipboard.writeText(c.draftedStory.body);
-                      toast.success("Copied to clipboard");
-                    }}
-                    className="btn-secondary h-10 !py-0"
-                  >
-                    <Copy className="w-4 h-4" strokeWidth={1.75} />
-                    Copy
-                  </button>
+                <div className="mt-5 rounded-xl bg-white border border-[#eeeaf6] p-5 shadow-sm">
+                  {editing ? (
+                    <textarea
+                      data-testid="story-edit-textarea"
+                      value={draftText}
+                      onChange={(e) => setDraftText(e.target.value)}
+                      className="w-full min-h-[130px] rounded-lg border border-[#eeeaf6] bg-white px-3 py-2.5 text-[14px] leading-relaxed text-[#111827] focus:outline-none focus:border-[#d9d1ee] focus:ring-2 focus:ring-[#6d46c6]/10 resize-y font-display"
+                      spellCheck={false}
+                    />
+                  ) : (
+                    <p className="text-[14px] leading-relaxed text-[#111827] whitespace-pre-line font-display italic">
+                      &ldquo;{c.draftedStory.body}&rdquo;
+                    </p>
+                  )}
+                  <div className="mt-3 text-[11.5px] font-mono text-[#6d46c6]">
+                    — {c.draftedStory.attribution}
+                  </div>
+                </div>
 
-                  <div className="ml-auto flex items-center gap-2">
-                    {c.shareId && (
-                      <a
-                        data-testid="story-view-approval-page"
-                        href={`/t/${c.shareId}`}
-                        target="_blank"
-                        rel="noreferrer"
+                <div className="mt-5 flex flex-wrap items-center gap-2">
+                  {editing ? (
+                    <>
+                      <button
+                        data-testid="story-save-btn"
+                        onClick={saveEdit}
+                        disabled={busy}
+                        className="btn-primary h-10 !py-0 disabled:opacity-60"
+                      >
+                        <FileCheck className="w-4 h-4" strokeWidth={1.75} />
+                        {busy ? "Saving..." : "Save draft"}
+                      </button>
+                      <button
+                        data-testid="story-cancel-edit-btn"
+                        onClick={() => {
+                          setEditing(false);
+                          setDraftText(c.draftedStory.body);
+                        }}
                         className="btn-secondary h-10 !py-0"
                       >
-                        <ArrowUpRight className="w-4 h-4" strokeWidth={1.75} />
-                        View approval page
-                      </a>
-                    )}
-                    <button
-                      data-testid="story-view-email-btn"
-                      onClick={() => setComposerOpen(true)}
-                      className="btn-primary h-10 !py-0"
-                    >
-                      <Send className="w-4 h-4" strokeWidth={1.75} />
-                      View draft email for customer outreach
-                    </button>
-                  </div>
-                </>
-              )}
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        data-testid="story-edit-btn"
+                        onClick={() => {
+                          setDraftText(c.draftedStory.body);
+                          setEditing(true);
+                        }}
+                        className="btn-secondary h-10 !py-0"
+                      >
+                        <Edit3 className="w-4 h-4" strokeWidth={1.75} />
+                        Edit draft
+                      </button>
+                      <button
+                        data-testid="story-regenerate-btn"
+                        onClick={() => runAnalyze(true)}
+                        disabled={busy}
+                        className="btn-secondary h-10 !py-0 disabled:opacity-60"
+                      >
+                        <RefreshCcw className="w-4 h-4" strokeWidth={1.75} />
+                        {busy ? "Working..." : "Regenerate"}
+                      </button>
+                      <button
+                        data-testid="story-copy-btn"
+                        onClick={() => {
+                          navigator.clipboard.writeText(c.draftedStory.body);
+                          toast.success("Copied to clipboard");
+                        }}
+                        className="btn-secondary h-10 !py-0"
+                      >
+                        <Copy className="w-4 h-4" strokeWidth={1.75} />
+                        Copy
+                      </button>
+
+                      <div className="ml-auto flex items-center gap-2">
+                        {c.shareId && (
+                          <a
+                            data-testid="story-view-approval-page"
+                            href={`/t/${c.shareId}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="btn-secondary h-10 !py-0"
+                          >
+                            <ArrowUpRight className="w-4 h-4" strokeWidth={1.75} />
+                            View approval page
+                          </a>
+                        )}
+                        <button
+                          data-testid="story-view-email-btn"
+                          onClick={() => setComposerOpen(true)}
+                          className="btn-primary h-10 !py-0"
+                        >
+                          <Send className="w-4 h-4" strokeWidth={1.75} />
+                          View draft email for customer outreach
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-[#d9d1ee] bg-[#faf9ff]/40 p-8 text-center">
+              <FileCheck
+                className="w-6 h-6 text-[#6d46c6] mx-auto"
+                strokeWidth={1.5}
+              />
+              <div className="mt-3 text-[14px] font-display font-semibold text-[#111827]">
+                No testimonial drafted yet
+              </div>
+              <p className="mt-1 text-[12.5px] text-[#4b5563] max-w-[420px] mx-auto">
+                Ask Uplaud to draft an authentic customer perspective from this
+                conversation. Nothing is published without customer approval.
+              </p>
+              <button
+                data-testid="story-draft-btn"
+                onClick={() => runAnalyze(false)}
+                disabled={busy}
+                className="btn-primary mt-4 h-11 !py-0 mx-auto disabled:opacity-60"
+              >
+                <Sparkles className="w-4 h-4" strokeWidth={2} />
+                {busy ? "Drafting..." : "Draft customer testimonial"}
+              </button>
+            </div>
+          )}
         </div>
-      ) : (
-        <div className="rounded-2xl border border-dashed border-[#d9d1ee] bg-[#faf9ff] p-8 text-center order-2">
-          <FileCheck
-            className="w-6 h-6 text-[#6d46c6] mx-auto"
-            strokeWidth={1.5}
-          />
-          <div className="mt-3 text-[14px] font-display font-semibold text-[#111827]">
-            No testimonial drafted yet
-          </div>
-          <p className="mt-1 text-[12.5px] text-[#4b5563] max-w-[420px] mx-auto">
-            Ask Uplaud to draft an authentic customer perspective from this
-            conversation. Nothing is published without customer approval.
-          </p>
-          <button
-            data-testid="story-draft-btn"
-            onClick={() => runAnalyze(false)}
-            disabled={busy}
-            className="btn-primary mt-4 h-11 !py-0 mx-auto disabled:opacity-60"
-          >
-            <Sparkles className="w-4 h-4" strokeWidth={2} />
-            {busy ? "Drafting..." : "Draft customer testimonial"}
-          </button>
-        </div>
-      )}
+      </div>
 
       {/* Approval email composer */}
       {c.draftedStory && (

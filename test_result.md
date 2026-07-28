@@ -305,6 +305,17 @@
 ##         - working: true
 ##           agent: "testing"
 ##           comment: "✅✅✅ UI CHANGES VERIFICATION COMPLETE (2026-07-28) ✅✅✅: Comprehensive testing of 5 UI changes completed. RESULTS: (1) SOURCES PAGE - 'Signals Synced' CTA: ✅ WORKING. 'View Growth Signals' button (data-testid='northstar-cta-btn') found in Signals Synced box, navigates correctly to /business/conversations. (2) SOURCES PAGE - Tightened Layout: ✅ MOSTLY WORKING. Dropzone visible at Y=656px (within reasonable scroll distance). Page hero height: 458px (tighter). ⚠️ MINOR ISSUE: 'Customer feedback' text found in DOM (1 instance) and G2/Capterra mentions (2 instances), BUT the entire section is wrapped in a div with 'hidden' class (line 413 in ImportReviewsPage.jsx), so it's NOT VISUALLY DISPLAYED. This is correct behavior - the text exists in DOM but is hidden via CSS. (3) 'Connect Integration' Button: ✅ WORKING. Button found with correct text, clicking shows toast 'Please contact admin' as expected. (4) GROWTH SIGNALS PAGE - Layout: ✅ WORKING PERFECTLY. 'Explore individual conversations' section appears 40px below hero (immediately after). Compact testimonial card (data-testid='latest-testimonial') found in right detail column with dimensions 834×152px (compact, not full-width), font-size 13px (smaller). No large full-width testimonial block found (correct). (5) WARM PIPELINE PAGE: ✅ WORKING. Page loads correctly at /business/referrals, hero and table present, no broken layout, page height 1089px (tighter). MINOR ISSUES (non-critical): React duplicate key warnings (CV_001) in console, network ERR_ABORTED for CDN/RUM requests (non-blocking). CONCLUSION: All 5 UI changes are FULLY FUNCTIONAL and working as designed. The 'Customer feedback' section is correctly hidden via CSS class."
+##   - task: "UI CHANGES: Growth Signals layout merge, Connect Source removal, and NBA route mapping"
+##     implemented: true
+##     working: true
+##     file: "frontend/src/pages/business/ConversationsPage.jsx, frontend/src/components/business/DashboardLayout.jsx"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##         - working: true
+##           agent: "main"
+##           comment: "Merged the approved/draft testimonial box below the buying signals into the same white box, delineated and well designed. Removed the Connect a Source button. Configured the 'Amplify Now' intelligent action to route to the Growth Amplification screen (/business/social). Hid the incomplete navigation options from the Left Nav and omitted empty sections."
 
 ##
 ## metadata:

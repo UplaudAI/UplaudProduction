@@ -26,7 +26,6 @@ const NAV = [
   {
     section: "Business Impact",
     items: [
-      { to: "/business/insights", label: "Growth Overview", icon: LineChart, testId: "nav-insights" },
       { to: "/business/roi-simulator", label: "ROI Simulator", icon: Calculator, testId: "nav-roi" },
       { to: "/business/referrals", label: "Warm Pipeline", icon: Users, testId: "nav-referrals" },
     ],
@@ -35,20 +34,12 @@ const NAV = [
     section: "Pre-Customer Growth",
     items: [
       { to: "/business/conversations", label: "Growth Signals", icon: Mic, testId: "nav-conversations" },
-      { to: "/business/interactions", label: "Untapped Opportunities", icon: Radio, testId: "nav-interactions" },
-    ],
-  },
-  {
-    section: "Post-Customer Advocacy",
-    items: [
-      { to: "/business/reviews", label: "Trust Assets", icon: MessagesSquare, testId: "nav-reviews" },
     ],
   },
   {
     section: "Amplification",
     items: [
       { to: "/business/social", label: "Growth Amplification", icon: Megaphone, testId: "nav-social" },
-      { to: "/business/reddit", label: "High-Intent Demand", icon: Ghost, testId: "nav-reddit" },
     ],
   },
   {
