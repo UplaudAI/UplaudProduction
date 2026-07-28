@@ -2,8 +2,7 @@ import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { ArrowUpRight, Loader2, CheckCircle2 } from "lucide-react";
-
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+import { API } from "@/lib/api";
 
 export default function LeadForm() {
   const [form, setForm] = useState({

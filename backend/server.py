@@ -33,13 +33,22 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 from collections import Counter
 
-import airtable_client
-import blob_storage
-from airtable_client import (
-    AirtableSourceCollisionError,
-    AirtableSourceConflictError,
-    AirtableSourceLookupError,
-)
+if __package__:
+    from . import airtable_client, blob_storage
+    from .airtable_client import (
+        AirtableSourceCollisionError,
+        AirtableSourceConflictError,
+        AirtableSourceLookupError,
+    )
+else:
+    # Keep `uvicorn server:app` working when launched from backend/.
+    import airtable_client
+    import blob_storage
+    from airtable_client import (
+        AirtableSourceCollisionError,
+        AirtableSourceConflictError,
+        AirtableSourceLookupError,
+    )
 
 # ---------------------------------------------------------------------------
 # Config

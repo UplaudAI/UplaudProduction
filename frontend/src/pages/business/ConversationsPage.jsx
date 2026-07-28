@@ -434,7 +434,7 @@ function ConversationDetail({ conversation: c, onChanged }) {
     setDraftText(c.draftedStory?.body || "");
     setEditing(false);
     setLocalStoryStatus(c.draftedStory?.status || null);
-  }, [c.id]);
+  }, [c.id, c.draftedStory?.body, c.draftedStory?.status]);
 
   const runAnalyze = async (regenerate = false) => {
     setBusy(true);
@@ -987,7 +987,7 @@ function ApprovalEmailComposer({ open, onClose, onSent, conversation: c }) {
     setBody(generateEmailBody(c));
     setLiDraft(generateLinkedInDraft(c));
     setSending(false);
-  }, [open, c.id]);
+  }, [open, c]);
 
   if (!open) return null;
 
@@ -1254,4 +1254,3 @@ function RewardTierCard({ testId, icon: Icon, tier, title, reward, accent, bg })
     </div>
   );
 }
-

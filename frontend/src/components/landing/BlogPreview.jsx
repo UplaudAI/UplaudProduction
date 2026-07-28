@@ -3,8 +3,7 @@ import axios from "axios";
 import { Link } from "react-router-dom";
 import { ArrowUpRight } from "lucide-react";
 import { PostCard } from "@/pages/BlogListPage";
-
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+import { API } from "@/lib/api";
 
 export default function BlogPreview() {
   const [posts, setPosts] = useState([]);

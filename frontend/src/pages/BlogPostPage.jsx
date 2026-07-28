@@ -7,8 +7,7 @@ import { ArrowLeft, ArrowUpRight } from "lucide-react";
 import { toast } from "sonner";
 import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
-
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+import { API } from "@/lib/api";
 
 function formatDate(iso) {
   try {

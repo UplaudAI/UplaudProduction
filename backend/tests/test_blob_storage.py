@@ -233,7 +233,7 @@ def test_blob_adapter_requires_distinct_access_scoped_store_tokens(monkeypatch):
 
 
 def test_backend_declares_official_vercel_sdk_dependency():
-    requirements = (BACKEND_DIR / "requirements.txt").read_text()
+    requirements = (BACKEND_DIR.parent / "requirements.txt").read_text()
 
     assert "vercel==0.7.2" in requirements.splitlines()
 
