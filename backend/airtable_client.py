@@ -425,22 +425,51 @@ async def create_circle_record(
     receiver_company: str = "",
     receiver_user_id: Optional[str] = None,
     referrer_testimonial: str = "",
+    referral_key: str = "",
+    strict_persistence: bool = False,
 ) -> Optional[str]:
-    fields = {"Initiator": initiator or "", "Receiver": receiver or "", "Business_Name": business_name or ""}
-    if phone:
-        fields["phone"] = phone
-    if referred_date:
-        fields["Referred_Date"] = referred_date
-    if receiver_company:
-        fields["ReceiverCompany"] = receiver_company
-    if receiver_user_id:
-        fields["UserTable Link"] = [receiver_user_id]
-    if referrer_testimonial:
-        fields["Referrer_Testimonial"] = referrer_testimonial
     try:
+        if referral_key:
+            formula = f'{{Referral_Key}}="{_escape(referral_key)}"'
+            data = await _get(
+                TABLE_CIRCLES,
+                {"filterByFormula": formula, "maxRecords": 1},
+            )
+            if strict_persistence and data is None:
+                raise RuntimeError("Airtable Circle lookup returned no response")
+            records = (data or {}).get("records", [])
+            if records:
+                existing_id = records[0].get("id")
+                if strict_persistence and not existing_id:
+                    raise RuntimeError("Airtable Circle lookup returned no record ID")
+                return existing_id
+
+        fields = {
+            "Initiator": initiator or "",
+            "Receiver": receiver or "",
+            "Business_Name": business_name or "",
+        }
+        if phone:
+            fields["phone"] = phone
+        if referred_date:
+            fields["Referred_Date"] = referred_date
+        if receiver_company:
+            fields["ReceiverCompany"] = receiver_company
+        if receiver_user_id:
+            fields["UserTable Link"] = [receiver_user_id]
+        if referrer_testimonial:
+            fields["Referrer_Testimonial"] = referrer_testimonial
+        if referral_key:
+            fields["Referral_Key"] = referral_key
+
         rec = await _create(TABLE_CIRCLES, fields)
-        return rec["id"] if rec else None
+        record_id = rec.get("id") if rec else None
+        if strict_persistence and not record_id:
+            raise RuntimeError("Airtable Circle create returned no record ID")
+        return record_id
     except Exception as e:
+        if strict_persistence:
+            raise
         logger.warning("Airtable circle create failed: %s", e)
         return None
 

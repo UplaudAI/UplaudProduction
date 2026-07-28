@@ -69,23 +69,29 @@ def test_server_has_no_db_runtime_access():
     assert not db_accesses, "server.py must not access the Mongo db runtime"
 
 
-def test_server_has_no_mongo_lifecycle_hooks():
-    lifecycle_events = []
+def test_server_lifecycle_hooks_have_no_mongo_runtime_operations():
+    lifecycle_hooks = []
     for node in ast.walk(_server_tree()):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
-        for decorator in node.decorator_list:
-            if (
-                isinstance(decorator, ast.Call)
-                and isinstance(decorator.func, ast.Attribute)
-                and decorator.func.attr == "on_event"
-                and decorator.args
-                and isinstance(decorator.args[0], ast.Constant)
-            ):
-                lifecycle_events.append(decorator.args[0].value)
+        is_lifecycle_hook = any(
+            isinstance(decorator, ast.Call)
+            and isinstance(decorator.func, ast.Attribute)
+            and decorator.func.attr == "on_event"
+            for decorator in node.decorator_list
+        )
+        if is_lifecycle_hook:
+            lifecycle_hooks.append(node)
 
-    assert "startup" not in lifecycle_events
-    assert "shutdown" not in lifecycle_events
+    mongo_symbols = {"db", "mongo_url", "AsyncIOMotorClient"}
+    mongo_lifecycle_nodes = [
+        child
+        for hook in lifecycle_hooks
+        for child in ast.walk(hook)
+        if isinstance(child, ast.Name) and child.id in mongo_symbols
+    ]
+
+    assert not mongo_lifecycle_nodes
 
 
 def test_requirements_do_not_install_mongodb_runtime_drivers():

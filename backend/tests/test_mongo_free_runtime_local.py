@@ -1,6 +1,7 @@
 """Local behavior contracts for Airtable-only referral and lead persistence."""
 
 import asyncio
+from collections import Counter
 import os
 import subprocess
 import sys
@@ -146,6 +147,7 @@ def test_referral_batch_creates_one_enriched_circle_per_referral(monkeypatch):
     assert len(circle_calls) == 2
     assert user_calls[0]["extra_fields"]["Job_Title"] == "VP Growth"
     assert user_calls[0]["city"] == "Oakland"
+    assert user_calls[0]["strict_persistence"] is True
     assert circle_calls[0] == {
         "initiator": "Rita Referrer",
         "receiver": "Ada Lovelace",
@@ -155,7 +157,10 @@ def test_referral_batch_creates_one_enriched_circle_per_referral(monkeypatch):
         "receiver_company": "Analytical Engines",
         "receiver_user_id": "rec-user-1",
         "referrer_testimonial": "Uplaud made referrals easy.",
+        "referral_key": circle_calls[0]["referral_key"],
+        "strict_persistence": True,
     }
+    assert len(circle_calls[0]["referral_key"]) == 64
 
 
 def test_referral_returns_non_success_when_circle_creation_returns_none(monkeypatch):
@@ -171,14 +176,157 @@ def test_referral_returns_non_success_when_circle_creation_returns_none(monkeypa
     assert response.status_code == 502
 
 
-def test_referral_propagates_circle_creation_exception(monkeypatch):
-    install_referral_fakes(monkeypatch, circle_result=RuntimeError("airtable down"))
+def test_referral_maps_circle_creation_exception_without_leaking_details(monkeypatch):
+    install_referral_fakes(
+        monkeypatch, circle_result=RuntimeError("secret Airtable transport detail")
+    )
 
-    with pytest.raises(RuntimeError, match="airtable down"):
+    response = run(
+        post(
+            "/api/public/testimonial/share-1/referrals",
+            {"referrals": [referral_payload()["referrals"][0]]},
+        )
+    )
+
+    assert response.status_code == 502
+    assert "secret Airtable transport detail" not in response.text
+
+
+@pytest.mark.parametrize("contact", ["N/A", " null ", "None"])
+def test_referral_rejects_placeholder_contacts(monkeypatch, contact):
+    user_calls, circle_calls = install_referral_fakes(monkeypatch)
+
+    response = run(
+        post(
+            "/api/public/testimonial/share-1/referrals",
+            {
+                "referrals": [
+                    {"name": "Placeholder", "contact": contact, "company": "Acme"}
+                ]
+            },
+        )
+    )
+
+    assert response.status_code == 400
+    assert user_calls == []
+    assert circle_calls == []
+
+
+@pytest.mark.parametrize(
+    "user_result",
+    [None, RuntimeError("secret Airtable user failure")],
+)
+def test_referral_requires_user_persistence_before_circle(
+    monkeypatch, user_result
+):
+    _, circle_calls = install_referral_fakes(monkeypatch)
+
+    async def failed_user_write(**kwargs):
+        if isinstance(user_result, Exception):
+            raise user_result
+        return user_result
+
+    monkeypatch.setattr(
+        server.airtable_client, "find_or_create_user", failed_user_write
+    )
+
+    response = run(
+        post(
+            "/api/public/testimonial/share-1/referrals",
+            {"referrals": [referral_payload()["referrals"][0]]},
+        )
+    )
+
+    assert response.status_code == 502
+    assert "secret Airtable user failure" not in response.text
+    assert circle_calls == []
+
+
+def test_referral_key_is_deterministic_for_normalized_item_values():
+    first = server._referral_key(
+        "share-1",
+        {"name": " Ada   Lovelace ", "contact": "ADA@EXAMPLE.COM", "company": " ACME "},
+    )
+    second = server._referral_key(
+        "share-1",
+        {"name": "ada lovelace", "contact": "ada@example.com", "company": "acme"},
+    )
+
+    assert first == second
+    assert len(first) == 64
+
+
+def test_referral_retry_after_partial_failure_does_not_duplicate_circles(monkeypatch):
+    stored_by_key = {}
+    create_attempts = Counter()
+    second_key_failed_once = False
+
+    async def fake_find_public_source(share_id):
+        return PUBLIC_SOURCE
+
+    async def no_enrichment(*args):
+        return None
+
+    async def persisted_user(**kwargs):
+        return f"rec-user-{kwargs['name'].split()[0].lower()}"
+
+    async def fake_get(table, params):
+        assert table == server.airtable_client.TABLE_CIRCLES
+        referral_key = params["filterByFormula"].split('"')[1]
+        record = stored_by_key.get(referral_key)
+        return {"records": [record] if record else []}
+
+    async def fake_create(table, fields):
+        nonlocal second_key_failed_once
+        assert table == server.airtable_client.TABLE_CIRCLES
+        referral_key = fields["Referral_Key"]
+        create_attempts[referral_key] += 1
+        if len(create_attempts) == 2 and not second_key_failed_once:
+            second_key_failed_once = True
+            raise RuntimeError("second Circle failed once")
+        record = {"id": f"rec-circle-{len(stored_by_key) + 1}", "fields": fields}
+        stored_by_key[referral_key] = record
+        return record
+
+    monkeypatch.setattr(server, "find_public_source", fake_find_public_source)
+    monkeypatch.setattr(server.airtable_client, "enrich_person_pdl", no_enrichment)
+    monkeypatch.setattr(server.airtable_client, "find_or_create_user", persisted_user)
+    monkeypatch.setattr(server.airtable_client, "_get", fake_get)
+    monkeypatch.setattr(server.airtable_client, "_create", fake_create)
+
+    first_response = run(
+        post("/api/public/testimonial/share-1/referrals", referral_payload())
+    )
+    retry_response = run(
+        post("/api/public/testimonial/share-1/referrals", referral_payload())
+    )
+
+    assert first_response.status_code == 502
+    assert retry_response.status_code == 200
+    assert retry_response.json() == {"count": 2}
+    assert len(stored_by_key) == 2
+    assert sorted(create_attempts.values()) == [1, 2]
+
+
+def test_circle_upsert_missing_referral_key_field_fails_loudly(monkeypatch):
+    request = httpx.Request("GET", "https://api.airtable.com/v0/base/Circles")
+    response = httpx.Response(422, request=request)
+    missing_field_error = httpx.HTTPStatusError(
+        "Unknown field name: Referral_Key", request=request, response=response
+    )
+
+    async def failing_get(table, params):
+        raise missing_field_error
+
+    monkeypatch.setattr(server.airtable_client, "_get", failing_get)
+
+    with pytest.raises(httpx.HTTPStatusError, match="Referral_Key"):
         run(
-            server.submit_referrals(
-                "share-1",
-                server.ReferralSubmit(referrals=[referral_payload()["referrals"][0]]),
+            server.airtable_client.create_circle_record(
+                initiator="Rita",
+                receiver="Ada",
+                referral_key="a" * 64,
+                strict_persistence=True,
             )
         )
 
@@ -232,20 +380,23 @@ def test_lead_magnet_returns_non_success_when_user_write_returns_none(monkeypatc
     assert response.status_code == 502
 
 
-def test_lead_magnet_propagates_user_write_exception(monkeypatch):
+def test_lead_magnet_maps_user_write_exception_without_leaking_details(monkeypatch):
     async def fake_find_or_create_user(**kwargs):
-        raise RuntimeError("airtable unavailable")
+        raise RuntimeError("secret Airtable transport detail")
 
     monkeypatch.setattr(
         server.airtable_client, "find_or_create_user", fake_find_or_create_user
     )
 
-    with pytest.raises(RuntimeError, match="airtable unavailable"):
-        run(
-            server.blog_lead_magnet(
-                server.LeadMagnetRequest(email="lead@example.com", slug="growth")
-            )
+    response = run(
+        post(
+            "/api/blog/lead-magnet",
+            {"email": "lead@example.com", "slug": "growth"},
         )
+    )
+
+    assert response.status_code == 502
+    assert "secret Airtable transport detail" not in response.text
 
 
 def test_lead_magnet_existing_user_patch_failure_is_not_success(monkeypatch):

@@ -7,6 +7,7 @@ load_dotenv(ROOT_DIR / ".env")
 import os
 import io
 import re
+import hashlib
 import json
 import uuid
 import asyncio
@@ -1579,6 +1580,27 @@ class AgentPlanOut(BaseModel):
     generated_at: str = ""
 
 
+_PLACEHOLDER_CONTACTS = {"n/a", "na", "none", "null", "nil", "unknown", "-"}
+
+
+def _normalize_referral_key_value(value: str) -> str:
+    return " ".join((value or "").strip().casefold().split())
+
+
+def _referral_key(share_id: str, referral: dict) -> str:
+    normalized_values = [
+        _normalize_referral_key_value(share_id),
+        _normalize_referral_key_value(referral.get("name", "")),
+        _normalize_referral_key_value(referral.get("contact", "")),
+        _normalize_referral_key_value(referral.get("company", "")),
+    ]
+    return hashlib.sha256("\x1f".join(normalized_values).encode("utf-8")).hexdigest()
+
+
+def _airtable_dependency_error(detail: str) -> HTTPException:
+    return HTTPException(status_code=502, detail=detail)
+
+
 @api_router.post("/public/testimonial/{share_id}/referrals")
 async def submit_referrals(share_id: str, body: ReferralSubmit):
     doc = await find_public_source(share_id)
@@ -1595,6 +1617,14 @@ async def submit_referrals(share_id: str, body: ReferralSubmit):
     ]
     if not clean:
         raise HTTPException(status_code=400, detail="Please add at least one friend with a name and a way to reach them.")
+    if any(
+        _normalize_referral_key_value(r["contact"]) in _PLACEHOLDER_CONTACTS
+        for r in clean
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Please add a valid way to reach each friend.",
+        )
     if any(not r["company"] for r in clean):
         raise HTTPException(status_code=400, detail="Please add a company name for each friend.")
     ins = doc.get("insights") or {}
@@ -1632,31 +1662,44 @@ async def submit_referrals(share_id: str, body: ReferralSubmit):
             city = _s(pdl_data.get("location_locality")) or None
             state = _s(pdl_data.get("location_region")) or None
             country = _s(pdl_data.get("location_country")) or None
-        user_record_id = await airtable_client.find_or_create_user(
-            name=r["name"],
-            email=parsed.get("email"),
-            phone=parsed.get("phone"),
-            linkedin=parsed.get("linkedin") or _s(pdl_data.get("linkedin_url")) or None,
-            city=city,
-            state=state,
-            country=country,
-            extra_fields=extra_fields,
-        )
-        circle_record_id = await airtable_client.create_circle_record(
-            initiator=referrer_name,
-            receiver=r["name"],
-            business_name=business_name,
-            phone=parsed.get("phone") or "",
-            referred_date=today,
-            receiver_company=r["company"],
-            receiver_user_id=user_record_id,
-            referrer_testimonial=doc.get("testimonial_draft") or "",
-        )
-        if not circle_record_id:
-            raise HTTPException(
-                status_code=502,
-                detail="Failed to save referral in Airtable",
+        try:
+            user_record_id = await airtable_client.find_or_create_user(
+                name=r["name"],
+                email=parsed.get("email"),
+                phone=parsed.get("phone"),
+                linkedin=parsed.get("linkedin") or _s(pdl_data.get("linkedin_url")) or None,
+                city=city,
+                state=state,
+                country=country,
+                extra_fields=extra_fields,
+                strict_persistence=True,
             )
+        except Exception:
+            logger.exception("Required referral User persistence failed")
+            raise _airtable_dependency_error("Referral persistence unavailable")
+        if not user_record_id:
+            logger.error("Required referral User persistence returned no record ID")
+            raise _airtable_dependency_error("Referral persistence unavailable")
+
+        try:
+            circle_record_id = await airtable_client.create_circle_record(
+                initiator=referrer_name,
+                receiver=r["name"],
+                business_name=business_name,
+                phone=parsed.get("phone") or "",
+                referred_date=today,
+                receiver_company=r["company"],
+                receiver_user_id=user_record_id,
+                referrer_testimonial=doc.get("testimonial_draft") or "",
+                referral_key=_referral_key(share_id, r),
+                strict_persistence=True,
+            )
+        except Exception:
+            logger.exception("Required referral Circle persistence failed")
+            raise _airtable_dependency_error("Referral persistence unavailable")
+        if not circle_record_id:
+            logger.error("Required referral Circle persistence returned no record ID")
+            raise _airtable_dependency_error("Referral persistence unavailable")
     return {"count": len(clean)}
 
 
@@ -1863,17 +1906,19 @@ async def blog_lead_magnet(body: LeadMagnetRequest):
     slug = body.slug.strip()
 
     name_part = email.split("@")[0].title().replace(".", " ").replace("-", " ")
-    user_record_id = await airtable_client.find_or_create_user(
-        name=name_part,
-        email=email,
-        extra_fields={"Interests": f"Blog Lead Magnet: {slug}"},
-        strict_persistence=True,
-    )
-    if not user_record_id:
-        raise HTTPException(
-            status_code=502,
-            detail="Failed to save lead in Airtable",
+    try:
+        user_record_id = await airtable_client.find_or_create_user(
+            name=name_part,
+            email=email,
+            extra_fields={"Interests": f"Blog Lead Magnet: {slug}"},
+            strict_persistence=True,
         )
+    except Exception:
+        logger.exception("Required blog lead persistence failed")
+        raise _airtable_dependency_error("Lead persistence unavailable")
+    if not user_record_id:
+        logger.error("Required blog lead persistence returned no record ID")
+        raise _airtable_dependency_error("Lead persistence unavailable")
 
     return {"status": "ok"}
 
