@@ -209,6 +209,7 @@ def test_lead_magnet_awaits_user_write_with_exact_interests(monkeypatch):
             "name": "Test Lead",
             "email": "test.lead@example.com",
             "extra_fields": {"Interests": "Blog Lead Magnet: compounding-growth"},
+            "strict_persistence": True,
         }
     ]
 
@@ -245,3 +246,105 @@ def test_lead_magnet_propagates_user_write_exception(monkeypatch):
                 server.LeadMagnetRequest(email="lead@example.com", slug="growth")
             )
         )
+
+
+def test_lead_magnet_existing_user_patch_failure_is_not_success(monkeypatch):
+    async def fake_get(table, params):
+        return {"records": [{"id": "rec-existing"}]}
+
+    async def failing_update(table, record_id, fields):
+        raise RuntimeError("Airtable PATCH failed")
+
+    monkeypatch.setattr(server.airtable_client, "_get", fake_get)
+    monkeypatch.setattr(server.airtable_client, "_update", failing_update)
+
+    response = run(
+        post(
+            "/api/blog/lead-magnet",
+            {"email": "existing@example.com", "slug": "growth"},
+        )
+    )
+
+    assert response.status_code >= 500
+
+
+def test_find_or_create_user_strict_mode_propagates_lookup_failure(monkeypatch):
+    async def failing_get(table, params):
+        raise RuntimeError("Airtable lookup failed")
+
+    async def unexpected_create(table, fields):
+        raise AssertionError("strict lookup failure must not attempt a create")
+
+    monkeypatch.setattr(server.airtable_client, "_get", failing_get)
+    monkeypatch.setattr(server.airtable_client, "_create", unexpected_create)
+
+    with pytest.raises(RuntimeError, match="Airtable lookup failed"):
+        run(
+            server.airtable_client.find_or_create_user(
+                name="Strict Lead",
+                email="strict@example.com",
+                strict_persistence=True,
+            )
+        )
+
+
+def test_find_or_create_user_strict_mode_propagates_create_failure(monkeypatch):
+    async def fake_get(table, params):
+        return {"records": []}
+
+    async def failing_create(table, fields):
+        raise RuntimeError("Airtable create failed")
+
+    monkeypatch.setattr(server.airtable_client, "_get", fake_get)
+    monkeypatch.setattr(server.airtable_client, "_create", failing_create)
+
+    with pytest.raises(RuntimeError, match="Airtable create failed"):
+        run(
+            server.airtable_client.find_or_create_user(
+                name="Strict Lead",
+                email="strict@example.com",
+                strict_persistence=True,
+            )
+        )
+
+
+def test_find_or_create_user_strict_mode_rejects_empty_patch_result(monkeypatch):
+    async def fake_get(table, params):
+        return {"records": [{"id": "rec-existing"}]}
+
+    async def empty_update(table, record_id, fields):
+        return None
+
+    monkeypatch.setattr(server.airtable_client, "_get", fake_get)
+    monkeypatch.setattr(server.airtable_client, "_update", empty_update)
+
+    with pytest.raises(RuntimeError, match="Airtable user update returned no record"):
+        run(
+            server.airtable_client.find_or_create_user(
+                name="Strict Lead",
+                email="strict@example.com",
+                strict_persistence=True,
+            )
+        )
+
+
+def test_find_or_create_user_default_preserves_existing_user_on_patch_failure(
+    monkeypatch,
+):
+    async def fake_get(table, params):
+        return {"records": [{"id": "rec-existing"}]}
+
+    async def failing_update(table, record_id, fields):
+        raise RuntimeError("Airtable PATCH failed")
+
+    monkeypatch.setattr(server.airtable_client, "_get", fake_get)
+    monkeypatch.setattr(server.airtable_client, "_update", failing_update)
+
+    result = run(
+        server.airtable_client.find_or_create_user(
+            name="Legacy Caller",
+            email="legacy@example.com",
+        )
+    )
+
+    assert result == "rec-existing"

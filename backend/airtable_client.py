@@ -320,10 +320,13 @@ async def find_or_create_user(
     country: Optional[str] = None,
     linkedin: Optional[str] = None,
     extra_fields: Optional[dict] = None,
+    strict_persistence: bool = False,
 ) -> Optional[str]:
     """Find a User record by Profile Email or Phone, else create one. Returns the Airtable record id.
 
     If found, also patches in any newly-provided fields (e.g. enrichment data) instead of leaving them stale.
+    With strict_persistence enabled, lookup and write errors propagate instead of
+    being logged and converted into the legacy best-effort result.
     """
     name = (name or "").strip() or "Unknown"
     existing_id = None
@@ -341,6 +344,8 @@ async def find_or_create_user(
             if recs:
                 existing_id = recs[0]["id"]
     except Exception as e:
+        if strict_persistence:
+            raise
         logger.warning("Airtable user lookup failed: %s", e)
 
     fields = {"Name": name}
@@ -361,8 +366,12 @@ async def find_or_create_user(
 
     if existing_id:
         try:
-            await _update(TABLE_USER, existing_id, fields)
+            updated_record = await _update(TABLE_USER, existing_id, fields)
+            if strict_persistence and not updated_record:
+                raise RuntimeError("Airtable user update returned no record")
         except Exception as e:
+            if strict_persistence:
+                raise
             logger.warning("Airtable user update failed: %s", e)
         return existing_id
 
@@ -370,6 +379,8 @@ async def find_or_create_user(
         rec = await _create(TABLE_USER, fields)
         return rec["id"] if rec else None
     except Exception as e:
+        if strict_persistence:
+            raise
         logger.warning("Airtable user create failed: %s", e)
         return None
 

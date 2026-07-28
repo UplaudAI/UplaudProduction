@@ -1866,7 +1866,8 @@ async def blog_lead_magnet(body: LeadMagnetRequest):
     user_record_id = await airtable_client.find_or_create_user(
         name=name_part,
         email=email,
-        extra_fields={"Interests": f"Blog Lead Magnet: {slug}"}
+        extra_fields={"Interests": f"Blog Lead Magnet: {slug}"},
+        strict_persistence=True,
     )
     if not user_record_id:
         raise HTTPException(
