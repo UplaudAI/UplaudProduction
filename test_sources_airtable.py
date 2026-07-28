@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 import tempfile
 
 # Configuration
-BACKEND_URL = "https://growth-signals-8.preview.emergentagent.com/api"
+BACKEND_URL = "https://crm-preview-build-2.preview.emergentagent.com/api"
 
 # Test credentials from test_credentials.md
 ADMIN_EMAIL = "dcameron@payrewards.com"

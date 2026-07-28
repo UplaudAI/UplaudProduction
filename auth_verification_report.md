@@ -2,7 +2,7 @@
 ## Supabase-Only Authentication (Zero MongoDB Dependencies)
 
 ### Test Date: 2026-07-27
-### Backend URL: https://growth-signals-8.preview.emergentagent.com/api
+### Backend URL: https://crm-preview-build-2.preview.emergentagent.com/api
 
 ---
 
