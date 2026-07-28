@@ -4,7 +4,10 @@ import io
 import pytest
 import requests
 
-BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/") if os.environ.get("REACT_APP_BACKEND_URL") else "https://crm-preview-build-2.preview.emergentagent.com"
+from live_integration import require_live_backend_url
+
+pytestmark = pytest.mark.live_integration
+BASE_URL = require_live_backend_url()
 API = f"{BASE_URL}/api"
 
 EMAIL = "dcameron@payrewards.com"

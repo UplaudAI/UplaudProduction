@@ -2,7 +2,10 @@ import os
 import requests
 import pytest
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://crm-preview-build-2.preview.emergentagent.com").rstrip("/")
+from live_integration import require_live_backend_url
+
+pytestmark = pytest.mark.live_integration
+BASE_URL = require_live_backend_url()
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "P@yRew@rds123")
 
 @pytest.fixture(scope="module")

@@ -16,16 +16,14 @@ Changes tested:
 
 import os
 import re
-from pathlib import Path
 
 import httpx
 import pytest
-from dotenv import load_dotenv
 
-load_dotenv(Path("/app/frontend/.env"))
-load_dotenv(Path("/app/backend/.env"))
+from live_integration import require_live_backend_url
 
-BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
+pytestmark = pytest.mark.live_integration
+BASE_URL = require_live_backend_url()
 API = f"{BASE_URL}/api"
 
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "dcameron@payrewards.com").strip('"')

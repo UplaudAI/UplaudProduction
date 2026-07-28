@@ -9,16 +9,10 @@ import io
 import pytest
 import requests
 
-BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/") if os.environ.get("REACT_APP_BACKEND_URL") else None
-if not BASE_URL:
-    # Fall back to reading from frontend/.env for pytest runs outside CI
-    from pathlib import Path
-    env_file = Path("/app/frontend/.env")
-    if env_file.exists():
-        for line in env_file.read_text().splitlines():
-            if line.startswith("REACT_APP_BACKEND_URL="):
-                BASE_URL = line.split("=", 1)[1].strip().rstrip("/")
-                break
+from live_integration import require_live_backend_url
+
+pytestmark = pytest.mark.live_integration
+BASE_URL = require_live_backend_url()
 
 ADMIN_EMAIL = "dcameron@payrewards.com"
 ADMIN_PASSWORD = "P@yRew@rds123"

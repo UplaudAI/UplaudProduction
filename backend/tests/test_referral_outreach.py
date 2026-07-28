@@ -10,7 +10,10 @@ import re
 import pytest
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL").rstrip("/")
+from live_integration import require_live_backend_url
+
+pytestmark = pytest.mark.live_integration
+BASE_URL = require_live_backend_url()
 EMAIL = "dcameron@payrewards.com"
 PASSWORD = "P@yRew@rds123"
 

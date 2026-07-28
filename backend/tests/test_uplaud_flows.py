@@ -16,16 +16,14 @@ swallows Airtable failures per spec).
 import os
 import time
 import uuid
-from pathlib import Path
 
 import httpx
 import pytest
-from dotenv import load_dotenv
 
-# Load frontend .env to pick up the public REACT_APP_BACKEND_URL
-load_dotenv(Path("/app/frontend/.env"))
+from live_integration import require_live_backend_url
 
-BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
+pytestmark = pytest.mark.live_integration
+BASE_URL = require_live_backend_url()
 API = f"{BASE_URL}/api"
 
 SHARE_ID = "demo123"

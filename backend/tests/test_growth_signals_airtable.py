@@ -4,8 +4,11 @@ import time
 import requests
 import pytest
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://crm-preview-build-2.preview.emergentagent.com").rstrip("/")
-AIRTABLE_PAT = os.environ.get("AIRTABLE_PAT") or open("/app/backend/.env").read().split('AIRTABLE_PAT="')[1].split('"')[0]
+from live_integration import require_live_backend_url
+
+pytestmark = pytest.mark.live_integration
+BASE_URL = require_live_backend_url()
+AIRTABLE_PAT = os.environ.get("AIRTABLE_PAT", "")
 AIRTABLE_BASE_ID = "appFUJWWTaoJ3YiWt"
 AIRTABLE_URL = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/Growth_Signals"
 

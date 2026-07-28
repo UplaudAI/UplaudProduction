@@ -5,24 +5,16 @@
 """
 import os
 import jwt
+import pytest
 import time
 import requests
 from datetime import datetime, timezone, timedelta
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/") or "http://localhost:8001"
-if not BASE_URL.startswith("http"):
-    BASE_URL = "http://localhost:8001"
+from live_integration import require_live_backend_url
 
-# Read the same JWT secret used by backend
-JWT_SECRET = None
-try:
-    with open("/app/backend/.env") as f:
-        for line in f:
-            if line.startswith("JWT_SECRET="):
-                JWT_SECRET = line.split("=", 1)[1].strip().strip('"').strip("'")
-                break
-except Exception:
-    pass
+pytestmark = pytest.mark.live_integration
+BASE_URL = require_live_backend_url()
+JWT_SECRET = os.environ.get("JWT_SECRET")
 
 EMAIL = "dcameron@payrewards.com"
 PASSWORD = "P@yRew@rds123"
