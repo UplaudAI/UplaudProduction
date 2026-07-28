@@ -1694,12 +1694,6 @@ async def get_warm_leads(current=Depends(get_current_user)):
         or current["company"]
     )
     leads = await airtable_client.list_circles_by_business(business_name)
-    lead_ids = [l["id"] for l in leads]
-    plans = await db.agent_plans.find({"lead_id": {"$in": lead_ids}}, {"_id": 0}).to_list(len(lead_ids) or 1)
-    plan_map = {p["lead_id"]: p for p in plans}
-    for l in leads:
-        if not l.get("agent_plan"):
-            l["agent_plan"] = plan_map.get(l["id"])
     return {"business_name": business_name, "leads": leads}
 
 
@@ -1713,7 +1707,7 @@ async def run_referral_agent(lead_id: str, force: bool = False, current=Depends(
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
-    existing = await db.agent_plans.find_one({"lead_id": lead_id}, {"_id": 0})
+    existing = lead.get("agent_plan")
     if existing and not force:
         return AgentPlanOut(**existing)
 
@@ -1738,7 +1732,6 @@ async def run_referral_agent(lead_id: str, force: bool = False, current=Depends(
         },
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
-    await db.agent_plans.update_one({"lead_id": lead_id}, {"$set": plan}, upsert=True)
     await airtable_client.update_circle_agent_plan(lead_id, plan)
     return AgentPlanOut(**plan)
 
@@ -1747,11 +1740,17 @@ async def run_referral_agent(lead_id: str, force: bool = False, current=Depends(
 async def update_agent_plan_status(lead_id: str, action: str, current=Depends(get_current_user)):
     if action not in ("approve", "skip"):
         raise HTTPException(status_code=404, detail="Not found")
-    existing = await db.agent_plans.find_one({"lead_id": lead_id}, {"_id": 0})
+    business_name = (
+        await airtable_client.get_business_name_by_email_domain(current["email"])
+        or current["company"]
+    )
+    lead = await airtable_client.get_circle_lead(business_name, lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    existing = lead.get("agent_plan")
     if not existing:
         raise HTTPException(status_code=404, detail="No agent plan found for this lead yet.")
     new_status = "approved" if action == "approve" else "skipped"
-    await db.agent_plans.update_one({"lead_id": lead_id}, {"$set": {"status": new_status}})
     await airtable_client.update_circle_agent_plan_status(lead_id, new_status)
     existing["status"] = new_status
     return AgentPlanOut(**existing)
@@ -1906,7 +1905,6 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup():
     await db.sources.create_index("owner")
-    await db.agent_plans.create_index("lead_id", unique=True)
 
 
 @app.on_event("shutdown")

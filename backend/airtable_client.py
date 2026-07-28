@@ -714,20 +714,14 @@ async def update_circle_agent_plan(lead_id: str, plan: dict) -> None:
         "Agent_Plan_Status": plan.get("status") or "pending",
         "Agent_Plan_Generated_At": plan.get("generated_at") or "",
     }
-    try:
-        await _update(TABLE_CIRCLES, lead_id, fields)
-        logger.info("Saved agent plan to Airtable for lead %s", lead_id)
-    except Exception as e:
-        logger.warning("Failed to save agent plan to Airtable for lead %s: %s", lead_id, e)
+    await _update(TABLE_CIRCLES, lead_id, fields)
+    logger.info("Saved agent plan to Airtable for lead %s", lead_id)
 
 
 async def update_circle_agent_plan_status(lead_id: str, status: str) -> None:
     """Update only the agent plan status (approved/skipped) in the Airtable Circles record."""
-    try:
-        await _update(TABLE_CIRCLES, lead_id, {"Agent_Plan_Status": status})
-        logger.info("Updated agent plan status to %s in Airtable for lead %s", status, lead_id)
-    except Exception as e:
-        logger.warning("Failed to update agent plan status in Airtable for lead %s: %s", lead_id, e)
+    await _update(TABLE_CIRCLES, lead_id, {"Agent_Plan_Status": status})
+    logger.info("Updated agent plan status to %s in Airtable for lead %s", status, lead_id)
 
 
 TABLE_BLOG_POSTS = "Blog_Posts"
