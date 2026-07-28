@@ -176,6 +176,11 @@ export default function ConversationsPage() {
     return [...conversations].sort((a, b) => b.signalScore - a.signalScore)[0];
   }, [conversations]);
 
+  const latestApproved = useMemo(
+    () => conversations.find((c) => c.draftedStory?.status === "approved") || null,
+    [conversations]
+  );
+
   const smartAction = useMemo(() => {
     if (!topSignalConversation) {
       return {
@@ -230,7 +235,7 @@ export default function ConversationsPage() {
   };
 
   return (
-    <div data-testid="conversations-page" className="space-y-12">
+    <div data-testid="conversations-page" className="space-y-8">
       <PageHero
         eyebrow="Growth Signals · AI-extracted from customer calls"
         question="Which conversation should you act on next?"
@@ -239,77 +244,11 @@ export default function ConversationsPage() {
         onAction={handleIntelligentAction}
       />
 
-      {/* Latest approved testimonial — the key takeaway */}
-      {(() => {
-        const latest = conversations.find((c) => c.draftedStory?.status === "approved");
-        if (!latest) return null;
-        return (
-          <section
-            data-testid="latest-testimonial"
-            className="rounded-2xl border border-[#eeeaf6] bg-white p-8 relative overflow-hidden"
-          >
-            <div
-              aria-hidden
-              className="absolute -top-20 -right-16 w-[320px] h-[320px] rounded-full pointer-events-none"
-              style={{
-                background:
-                  "radial-gradient(circle, rgba(94,234,212,0.18), transparent 60%)",
-              }}
-            />
-            <div className="relative">
-              <div className="flex items-center gap-2">
-                <FileCheck className="w-4 h-4 text-[#0f9b7c]" strokeWidth={1.75} />
-                <div className="text-[9px] font-mono uppercase tracking-[0.18em] text-[#0f9b7c]">
-                  Latest customer-approved testimonial
-                </div>
-              </div>
-              <p className="mt-4 font-display text-[22px] md:text-[26px] leading-[1.25] text-[#111827] max-w-[820px]">
-                &ldquo;{latest.draftedStory.body}&rdquo;
-              </p>
-              <div className="mt-5 flex flex-wrap items-center gap-3">
-                <div className="text-[13px] font-mono text-[#6d46c6]">
-                  — {latest.draftedStory.attribution}
-                </div>
-                <span className="text-[11px] font-mono text-[#9ca3af]">
-                  approved {new Date(latest.draftedStory.approvedAt).toLocaleDateString()} · source: {latest.source}
-                </span>
-              </div>
-              <div className="mt-6 flex items-center gap-2">
-                <button
-                  data-testid="latest-amplify-btn"
-                  onClick={() =>
-                    toast.success("Sent to Growth Amplification", {
-                      description: "Drafts ready for LinkedIn, Instagram, X.",
-                    })
-                  }
-                  className="btn-primary h-10 !py-0"
-                >
-                  Amplify across channels
-                  <ArrowUpRight className="w-4 h-4" strokeWidth={1.75} />
-                </button>
-                <button
-                  data-testid="latest-referral-btn"
-                  onClick={() =>
-                    toast.success("Seeded a referral campaign from this testimonial")
-                  }
-                  className="btn-secondary h-10 !py-0"
-                >
-                  Seed referral campaign
-                </button>
-              </div>
-            </div>
-          </section>
-        );
-      })()}
-
-      {/* Divider */}
-      <div className="pt-2 border-t border-[#eeeaf6]" />
-
-      {/* Explore individual conversations */}
-      <section className="space-y-6">
+      {/* Explore individual conversations — this is where the action happens, kept up top */}
+      <section className="space-y-4">
         <div className="flex items-baseline justify-between gap-3 flex-wrap">
           <div className="flex items-baseline gap-3">
-            <h2 className="font-display text-[20px] font-semibold tracking-tight text-[#111827]">
+            <h2 className="font-display text-[18px] font-semibold tracking-tight text-[#111827]">
               Explore individual conversations
             </h2>
             <span className="text-[12px] text-[#9ca3af]">
@@ -329,7 +268,7 @@ export default function ConversationsPage() {
         </div>
 
         {/* Split layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* List */}
         <aside className="lg:col-span-4 space-y-3">
           {/* Filter bar */}
@@ -413,7 +352,8 @@ export default function ConversationsPage() {
         </aside>
 
         {/* Detail */}
-        <section className="lg:col-span-8 space-y-5 flex flex-col">
+        <section className="lg:col-span-8 space-y-4 flex flex-col">
+          {latestApproved && <CompactLatestTestimonial conversation={latestApproved} />}
           {selected && <ConversationDetail conversation={selected} onChanged={load} />}
           {!loading && conversations.length === 0 && (
             <div
@@ -433,6 +373,45 @@ export default function ConversationsPage() {
         </section>
       </div>
       </section>
+    </div>
+  );
+}
+
+/* ────── Compact latest-approved testimonial (right side, small footprint) ────── */
+function CompactLatestTestimonial({ conversation: latest }) {
+  return (
+    <div
+      data-testid="latest-testimonial"
+      className="rounded-xl border border-[#eeeaf6] bg-[#faf9ff] p-4"
+    >
+      <div className="flex items-center gap-2">
+        <FileCheck className="w-3.5 h-3.5 text-[#0f9b7c]" strokeWidth={1.75} />
+        <div className="text-[9px] font-mono uppercase tracking-[0.16em] text-[#0f9b7c]">
+          Latest customer-approved testimonial
+        </div>
+      </div>
+      <p className="mt-2 text-[13px] leading-snug text-[#111827]">
+        &ldquo;{latest.draftedStory.body}&rdquo;
+      </p>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <div className="text-[11.5px] font-mono text-[#6d46c6]">
+          — {latest.draftedStory.attribution}
+        </div>
+        <span className="text-[10px] font-mono text-[#9ca3af]">
+          approved {new Date(latest.draftedStory.approvedAt).toLocaleDateString()}
+        </span>
+        <button
+          data-testid="latest-amplify-btn"
+          onClick={() =>
+            toast.success("Sent to Growth Amplification", {
+              description: "Drafts ready for LinkedIn, Instagram, X.",
+            })
+          }
+          className="ml-auto text-[11px] font-medium text-[#6d46c6] hover:underline whitespace-nowrap"
+        >
+          Amplify across channels
+        </button>
+      </div>
     </div>
   );
 }

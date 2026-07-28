@@ -25,7 +25,7 @@ export default function PageHero({
   return (
     <section
       data-testid="page-hero"
-      className="pb-8 border-b border-[#eeeaf6] mb-12"
+      className="pb-6 border-b border-[#eeeaf6] mb-8"
     >
       <div
         data-testid="page-hero-eyebrow"
@@ -36,24 +36,24 @@ export default function PageHero({
 
       <h1
         data-testid="page-hero-question"
-        className="mt-4 font-display font-semibold tracking-tight text-[#111827] text-[30px] md:text-[40px] leading-[1.08] max-w-[880px]"
+        className="mt-3 font-display font-semibold tracking-tight text-[#111827] text-[26px] md:text-[34px] leading-[1.1] max-w-[880px]"
       >
         {question}
       </h1>
 
       {subhead && (
-        <p className="mt-4 text-[15px] leading-relaxed text-[#4b5563] max-w-[640px]">
+        <p className="mt-3 text-[14px] leading-relaxed text-[#4b5563] max-w-[640px]">
           {subhead}
         </p>
       )}
 
       {/* Metric + Action grid */}
       {(valueChain || northStar || smartAction || action) && (
-        <div className="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
           {/* Left — metric or value chain */}
           <div className="lg:col-span-7 h-full">
             {valueChain && <ValueChain data={valueChain} />}
-            {!valueChain && northStar && <NorthStarBlock data={northStar} />}
+            {!valueChain && northStar && <NorthStarBlock data={northStar} nav={nav} />}
           </div>
 
           {/* Right — intelligent NBA */}
@@ -175,7 +175,7 @@ function ValueChain({ data }) {
 }
 
 /* ────── North Star fallback ────── */
-function NorthStarBlock({ data }) {
+function NorthStarBlock({ data, nav }) {
   const trendColor = "text-[#0f9b7c]";
   return (
     <div
@@ -188,7 +188,7 @@ function NorthStarBlock({ data }) {
       <div className="mt-3 flex items-baseline gap-3 flex-wrap">
         <div
           data-testid="page-hero-northstar-value"
-          className="font-display font-semibold text-[#111827] text-[44px] md:text-[52px] leading-[0.95] tracking-tight"
+          className="font-display font-semibold text-[#111827] text-[40px] md:text-[46px] leading-[0.95] tracking-tight"
         >
           {data.value}
         </div>
@@ -200,29 +200,43 @@ function NorthStarBlock({ data }) {
         )}
       </div>
       {data.attribution && (
-        <p className="mt-4 text-[13.5px] leading-relaxed text-[#4b5563]">
+        <p className="mt-3 text-[13px] leading-relaxed text-[#4b5563]">
           {data.attribution}
         </p>
       )}
-      {data.stats?.length > 0 && (
-        <div
-          className="mt-auto pt-5 grid grid-cols-2 sm:grid-cols-3 gap-3"
-          data-testid="page-hero-northstar-stats"
-        >
-          {data.stats.map((s, i) => (
+      {(data.stats?.length > 0 || data.cta) && (
+        <div className="mt-auto pt-4 space-y-3">
+          {data.stats?.length > 0 && (
             <div
-              key={i}
-              data-testid={`page-hero-northstar-stat-${i}`}
-              className="rounded-xl border border-[#eeeaf6] bg-[#faf9ff] px-3.5 py-2.5 min-w-0"
+              className="grid grid-cols-2 sm:grid-cols-3 gap-3"
+              data-testid="page-hero-northstar-stats"
             >
-              <div className="text-[9.5px] font-mono uppercase tracking-[0.14em] text-[#9ca3af] truncate">
-                {s.label}
-              </div>
-              <div className="mt-1 font-display font-semibold text-[16.5px] text-[#111827] leading-none truncate">
-                {s.value}
-              </div>
+              {data.stats.map((s, i) => (
+                <div
+                  key={i}
+                  data-testid={`page-hero-northstar-stat-${i}`}
+                  className="rounded-xl border border-[#eeeaf6] bg-[#faf9ff] px-3.5 py-2.5 min-w-0"
+                >
+                  <div className="text-[9.5px] font-mono uppercase tracking-[0.14em] text-[#9ca3af] truncate">
+                    {s.label}
+                  </div>
+                  <div className="mt-1 font-display font-semibold text-[16.5px] text-[#111827] leading-none truncate">
+                    {s.value}
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
+          {data.cta && (
+            <button
+              data-testid="northstar-cta-btn"
+              onClick={() => nav(data.cta.to)}
+              className="btn-secondary h-9 !py-0 !text-[12.5px]"
+            >
+              {data.cta.label}
+              <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={1.75} />
+            </button>
+          )}
         </div>
       )}
     </div>

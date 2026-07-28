@@ -173,6 +173,7 @@ export default function ImportReviewsPage() {
     attribution: hasData 
       ? "Connect a source once — Uplaud continuously extracts signals from every meeting and review and updates attribution against HubSpot."
       : "No data sources connected yet. Upload your first sales/demo transcript or connect a tool to begin extracting growth signals.",
+    cta: hasData ? { label: "View Growth Signals", to: "/business/conversations" } : null,
   };
 
   const dynamicSmartAction = {
@@ -197,14 +198,14 @@ export default function ImportReviewsPage() {
     if (!hasData) {
       pickFile();
     } else {
-      toast.info("Integrations are simulated in the preview environment.", {
-        description: "In production, this securely connects your CRM or meeting provider."
+      toast.info("Please contact admin", {
+        description: "Integration connections are managed by your Uplaud admin — reach out to get your CRM or meeting provider connected."
       });
     }
   };
 
   return (
-    <div data-testid="import-page" className="max-w-[1080px] mx-auto space-y-10">
+    <div data-testid="import-page" className="max-w-[1080px] mx-auto space-y-6">
       {hasData ? (
         <PageHero
           eyebrow={PAGE_OUTCOMES.import.eyebrow}
@@ -218,18 +219,18 @@ export default function ImportReviewsPage() {
       )}
 
       {profileLoaded && !isPersonalized && (
-        <div data-testid="personalize-workspace-card" className="rounded-2xl border border-[#d9d1ee] bg-[#fdfcff] p-8 shadow-sm flex flex-col md:flex-row items-center gap-6 animate-in fade-in duration-300">
-          <div className="w-12 h-12 rounded-xl bg-[#f5f3ff] text-[#6d46c6] flex items-center justify-center shrink-0">
-            <Sparkles className="w-6 h-6" strokeWidth={1.75} />
+        <div data-testid="personalize-workspace-card" className="rounded-2xl border border-[#d9d1ee] bg-[#fdfcff] p-5 shadow-sm flex flex-col md:flex-row items-center gap-5 animate-in fade-in duration-300">
+          <div className="w-10 h-10 rounded-xl bg-[#f5f3ff] text-[#6d46c6] flex items-center justify-center shrink-0">
+            <Sparkles className="w-5 h-5" strokeWidth={1.75} />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="font-display text-[17px] font-semibold text-[#111827]">
+            <h3 className="font-display text-[15px] font-semibold text-[#111827]">
               {"Let's personalize your workspace!"}
             </h3>
-            <p className="text-[13px] text-[#4b5563] mt-1 leading-relaxed">
-              Enter your company website to instantly extract and apply your brand assets (colors, logo initials, handles, and brand voice) across all social content, page headers, and image previews.
+            <p className="text-[12.5px] text-[#4b5563] mt-0.5 leading-relaxed">
+              Enter your company website to extract your brand colors, logo and voice.
             </p>
-            <form onSubmit={handlePersonalize} className="mt-4 flex gap-2 max-w-[480px]">
+            <form onSubmit={handlePersonalize} className="mt-3 flex gap-2 max-w-[480px]">
               <input
                 type="text"
                 required
@@ -237,13 +238,13 @@ export default function ImportReviewsPage() {
                 value={websiteInput}
                 onChange={(e) => setWebsiteInput(e.target.value)}
                 placeholder="scalis.ai"
-                className="flex-1 h-10 px-4 rounded-xl border border-[#e2d9f5] bg-white text-[13px] focus:outline-none focus:border-[#6d46c6] focus:ring-2 focus:ring-[#6d46c6]/10"
+                className="flex-1 h-9 px-4 rounded-xl border border-[#e2d9f5] bg-white text-[13px] focus:outline-none focus:border-[#6d46c6] focus:ring-2 focus:ring-[#6d46c6]/10"
               />
               <button
                 type="submit"
                 data-testid="personalize-workspace-btn"
                 disabled={personalizing}
-                className="btn-primary h-10 !py-0 whitespace-nowrap"
+                className="btn-primary h-9 !py-0 whitespace-nowrap"
               >
                 {personalizing ? "Analyzing brand..." : "Personalize Workspace"}
               </button>
@@ -252,21 +253,18 @@ export default function ImportReviewsPage() {
         </div>
       )}
 
-      {/* Section header */}
+      {/* Dropzone — kept above the fold; primary action on this page */}
       <div>
-        <h2 className="font-display text-[20px] font-semibold tracking-tight text-[#111827]">
-          Add another source
-        </h2>
-        <p className="text-[12.5px] text-[#9ca3af] mt-1">
-          Drop a file or connect any of the sources below.
-        </p>
-      </div>
+        <div className="mb-3">
+          <h2 className="font-display text-[16px] font-semibold tracking-tight text-[#111827]">
+            Add another source
+          </h2>
+          <p className="text-[12px] text-[#9ca3af]">
+            Drop a file or connect any of the sources below.
+          </p>
+        </div>
 
-      {/* Dropzone + sources grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* Dropzone */}
-        <div className="lg:col-span-3">
-          <div
+        <div
             data-testid="import-dropzone"
             onDragOver={(e) => {
               e.preventDefault();
@@ -278,7 +276,7 @@ export default function ImportReviewsPage() {
               setDragOver(false);
               handleFile(e.dataTransfer.files?.[0]);
             }}
-            className={`relative rounded-2xl border-2 border-dashed p-10 min-h-[380px] flex flex-col items-center justify-center text-center transition-all ${
+            className={`relative rounded-2xl border-2 border-dashed p-6 min-h-[220px] flex flex-col items-center justify-center text-center transition-all ${
               dragOver
                 ? "border-[#6d46c6] bg-[#f5f3ff]"
                 : "border-[#d9d1ee] bg-white hover:border-[#6d46c6] hover:bg-[#faf9ff]"
@@ -294,23 +292,23 @@ export default function ImportReviewsPage() {
                   data-testid="import-file-input"
                   onChange={(e) => handleFile(e.target.files?.[0])}
                 />
-                <div className="w-14 h-14 rounded-2xl bg-[#f5f3ff] flex items-center justify-center mb-5">
+                <div className="w-11 h-11 rounded-2xl bg-[#f5f3ff] flex items-center justify-center mb-3">
                   <UploadCloud
-                    className="w-7 h-7 text-[#6d46c6]"
+                    className="w-5 h-5 text-[#6d46c6]"
                     strokeWidth={1.75}
                   />
                 </div>
-                <h3 className="font-display text-[20px] font-semibold text-[#111827]">
+                <h3 className="font-display text-[17px] font-semibold text-[#111827]">
                   Drop your call transcript
                 </h3>
-                <p className="mt-2 text-[13.5px] text-[#4b5563] max-w-[400px]">
+                <p className="mt-1.5 text-[13px] text-[#4b5563] max-w-[400px]">
                   Upload a client demo / sales call transcript as .txt, .docx or
                   .pdf — Uplaud extracts growth signals and drafts a testimonial.
                 </p>
                 <button
                   data-testid="import-select-file-btn"
                   onClick={pickFile}
-                  className="btn-primary mt-6"
+                  className="btn-primary mt-4 h-10 !py-0"
                 >
                   Select file
                   <ArrowUpRight className="w-4 h-4" strokeWidth={1.75} />
@@ -318,7 +316,7 @@ export default function ImportReviewsPage() {
                 <button
                   data-testid="import-use-sample-btn"
                   onClick={pickFile}
-                  className="mt-3 text-[12.5px] text-[#6d46c6] hover:underline"
+                  className="mt-2.5 text-[12px] text-[#6d46c6] hover:underline"
                 >
                   or browse for a transcript file (.txt · .docx · .pdf)
                 </button>
@@ -372,20 +370,20 @@ export default function ImportReviewsPage() {
                 data-testid="import-success"
                 className="text-center max-w-[420px]"
               >
-                <div className="w-14 h-14 rounded-2xl bg-[#ecfdf7] flex items-center justify-center mx-auto mb-5">
+                <div className="w-11 h-11 rounded-2xl bg-[#ecfdf7] flex items-center justify-center mx-auto mb-3">
                   <CheckCircle2
-                    className="w-8 h-8 text-[#0f9b7c]"
+                    className="w-6 h-6 text-[#0f9b7c]"
                     strokeWidth={1.75}
                   />
                 </div>
-                <h3 className="font-display text-[22px] font-semibold text-[#111827]">
+                <h3 className="font-display text-[18px] font-semibold text-[#111827]">
                   Transcript analyzed — signals extracted.
                 </h3>
-                <p className="mt-2 text-[13.5px] text-[#4b5563]">
+                <p className="mt-1.5 text-[13px] text-[#4b5563]">
                   Uplaud pulled the growth signals from this conversation and
                   drafted a <b>customer testimonial</b> ready for your review.
                 </p>
-                <div className="mt-6 flex items-center justify-center gap-3">
+                <div className="mt-4 flex items-center justify-center gap-3">
                   <button
                     data-testid="import-goto-reviews-btn"
                     onClick={() => {
@@ -408,11 +406,11 @@ export default function ImportReviewsPage() {
                 </div>
               </div>
             )}
-          </div>
         </div>
+      </div>
 
         {/* Right — sources (dual streams) */}
-        <div className="lg:col-span-2 space-y-5">
+        <div className="lg:col-span-2 space-y-5 hidden">
           {/* Conversation sources */}
           {false && (
             <div>
@@ -520,10 +518,9 @@ export default function ImportReviewsPage() {
             </div>
           </div>
         </div>
-      </div>
 
       {/* What happens next */}
-      <div className="rounded-2xl bg-[#261c4d] text-white p-8 relative overflow-hidden noise">
+      <div className="rounded-2xl bg-[#261c4d] text-white p-6 relative overflow-hidden noise">
         <div
           aria-hidden
           className="absolute -top-24 -right-16 w-[380px] h-[380px] rounded-full"
@@ -537,7 +534,7 @@ export default function ImportReviewsPage() {
             <Sparkles className="w-3.5 h-3.5 text-[#5eead4]" strokeWidth={2} />
             What happens the moment you hit import
           </span>
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-4">
             {[
               {
                 icon: Zap,
@@ -558,15 +555,15 @@ export default function ImportReviewsPage() {
                   "Once connected, new reviews flow in automatically and re-score against your campaigns hourly.",
               },
             ].map((f) => (
-              <div key={f.title} className="rounded-xl border border-white/10 bg-white/[0.03] backdrop-blur-xl p-5">
+              <div key={f.title} className="rounded-xl border border-white/10 bg-white/[0.03] backdrop-blur-xl p-4">
                 <f.icon
-                  className="w-5 h-5 text-[#5eead4]"
+                  className="w-4 h-4 text-[#5eead4]"
                   strokeWidth={1.75}
                 />
-                <div className="mt-3 font-display text-[16px] font-semibold">
+                <div className="mt-2.5 font-display text-[14.5px] font-semibold">
                   {f.title}
                 </div>
-                <p className="mt-2 text-[12.5px] leading-relaxed text-white/60">
+                <p className="mt-1.5 text-[12px] leading-relaxed text-white/60">
                   {f.body}
                 </p>
               </div>
@@ -598,7 +595,7 @@ function WelcomeBanner({ firstName, companyName, onUpload }) {
   return (
     <div
       data-testid="sources-welcome-banner"
-      className="relative overflow-hidden rounded-3xl bg-[#1b1435] text-white p-10 md:p-12 noise"
+      className="relative overflow-hidden rounded-3xl bg-[#1b1435] text-white p-7 md:p-9 noise"
     >
       <div
         aria-hidden

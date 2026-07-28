@@ -17,7 +17,7 @@ import {
   PAGE_OUTCOMES,
 } from "@/mocks/fintech";
 import { toast } from "sonner";
-import { getAuth } from "@/lib/business-storage";
+import { getAuth, setSeenLeadsCount } from "@/lib/business-storage";
 import PageHero from "@/components/business/PageHero";
 import api, { formatApiError } from "@/lib/api";
 
@@ -130,7 +130,10 @@ export default function ReferralAgentPage() {
   useEffect(() => {
     api
       .get("/warm-leads")
-      .then(({ data }) => setWarmLeads((data.leads || []).map(circleToLead)))
+      .then(({ data }) => {
+        setWarmLeads((data.leads || []).map(circleToLead));
+        setSeenLeadsCount((data.leads || []).length);
+      })
       .catch(() => setWarmLeads([]))
       .finally(() => setLoadingLeads(false));
   }, []);
@@ -255,7 +258,7 @@ export default function ReferralAgentPage() {
     : null;
 
   return (
-    <div data-testid="referral-agent-page" className="space-y-12">
+    <div data-testid="referral-agent-page" className="space-y-8">
       <PageHero
         eyebrow={PAGE_OUTCOMES.referrals.eyebrow}
         question={`How many warm introductions did ${businessName} customers deliver?`}
@@ -265,10 +268,10 @@ export default function ReferralAgentPage() {
       />
 
       {/* Warm leads */}
-      <section data-testid="warm-leads" className="space-y-6">
+      <section data-testid="warm-leads" className="space-y-4">
         <div className="flex items-baseline justify-between gap-4 flex-wrap">
           <div className="flex items-baseline gap-3">
-            <h2 className="font-display text-[20px] font-semibold tracking-tight text-[#111827]">
+            <h2 className="font-display text-[18px] font-semibold tracking-tight text-[#111827]">
               Active warm leads
             </h2>
             <span className="text-[12px] text-[#9ca3af]">
@@ -387,9 +390,9 @@ export default function ReferralAgentPage() {
       </section>
 
       {/* Agentic approvals panel — one-click on suggested actions per top lead */}
-      <section data-testid="agentic-approvals" className="space-y-4">
+      <section data-testid="agentic-approvals" className="space-y-3">
         <div className="flex items-baseline gap-3">
-          <h2 className="font-display text-[20px] font-semibold tracking-tight text-[#111827]">
+          <h2 className="font-display text-[18px] font-semibold tracking-tight text-[#111827]">
             Agentic actions awaiting your approval
           </h2>
           <span className="text-[12px] text-[#9ca3af]">

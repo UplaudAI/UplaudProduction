@@ -1,12 +1,28 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowUpRight, Lock, Mail, Sparkles, ShieldCheck } from "lucide-react";
-import { setAuth, getAuth, getImported } from "@/lib/business-storage";
+import { setAuth, getAuth, getImported, getSeenLeadsCount } from "@/lib/business-storage";
 import { supabase } from "@/lib/supabase";
 import api, { formatApiError } from "@/lib/api";
 
 const LOGO_URL =
   "https://customer-assets-gfyr7b9c.emergentagent.net/job_ai-acquisition-hub-2/artifacts/24zfs0md_logo_white_background.webp";
+
+// Land on Warm Pipeline instead of the usual destination whenever there are
+// new warm leads the user hasn't seen yet.
+async function resolvePostLoginDestination() {
+  const fallback = getImported() ? "/business/insights" : "/business/import";
+  try {
+    const { data } = await api.get("/warm-leads");
+    const leadCount = (data.leads || []).length;
+    if (leadCount > getSeenLeadsCount()) {
+      return "/business/referrals";
+    }
+  } catch {
+    // ignore — fall back to the usual destination
+  }
+  return fallback;
+}
 
 export default function BusinessLoginPage() {
   const nav = useNavigate();
@@ -19,7 +35,7 @@ export default function BusinessLoginPage() {
 
   useEffect(() => {
     if (getAuth()) {
-      nav(getImported() ? "/business/insights" : "/business/import", { replace: true });
+      resolvePostLoginDestination().then((dest) => nav(dest, { replace: true }));
     }
   }, [nav]);
 
@@ -102,7 +118,7 @@ export default function BusinessLoginPage() {
               workspace: data.user.company,
               token: data.token,
             });
-            const dest = getImported() ? "/business/insights" : "/business/import";
+            const dest = await resolvePostLoginDestination();
             nav(dest, { replace: true });
             return;
           } catch (fallbackErr) {
@@ -129,7 +145,7 @@ export default function BusinessLoginPage() {
             workspace: profile.company,
             token: token,
           });
-          const dest = getImported() ? "/business/insights" : "/business/import";
+          const dest = await resolvePostLoginDestination();
           nav(dest, { replace: true });
         } catch (backendErr) {
           const msg = backendErr.response?.data?.detail || "Authentication failed on the backend.";
