@@ -19,7 +19,6 @@ from typing import List, Optional
 
 from fastapi import FastAPI, APIRouter, Request, HTTPException, Depends, UploadFile, File
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr, Field
 
 from docx import Document as DocxDocument
@@ -32,12 +31,8 @@ from collections import Counter
 import airtable_client
 
 # ---------------------------------------------------------------------------
-# Config / DB
+# Config
 # ---------------------------------------------------------------------------
-mongo_url = os.environ["MONGO_URL"]
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ["DB_NAME"]]
-
 JWT_SECRET = os.environ.get("JWT_SECRET", "uplaud-demo-secret")
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_HOURS = 168
@@ -1604,17 +1599,6 @@ async def submit_referrals(share_id: str, body: ReferralSubmit):
         raise HTTPException(status_code=400, detail="Please add a company name for each friend.")
     ins = doc.get("insights") or {}
     referrer_name = ins.get("speaker_name") or ""
-    rec = {
-        "id": str(uuid.uuid4()),
-        "share_id": share_id,
-        "source_id": doc["id"],
-        "brand": doc.get("brand") or "PayRewards",
-        "referrer_name": referrer_name,
-        "referrer_company": ins.get("company_name") or doc.get("client_name", ""),
-        "referrals": clean,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    await db.referrals.insert_one(rec)
 
     # Each referred friend becomes a Circles entry (Initiator = referrer, Receiver = referee),
     # plus a User record for the referee enriched via People Data Labs.
@@ -1658,7 +1642,7 @@ async def submit_referrals(share_id: str, body: ReferralSubmit):
             country=country,
             extra_fields=extra_fields,
         )
-        await airtable_client.create_circle_record(
+        circle_record_id = await airtable_client.create_circle_record(
             initiator=referrer_name,
             receiver=r["name"],
             business_name=business_name,
@@ -1668,6 +1652,11 @@ async def submit_referrals(share_id: str, body: ReferralSubmit):
             receiver_user_id=user_record_id,
             referrer_testimonial=doc.get("testimonial_draft") or "",
         )
+        if not circle_record_id:
+            raise HTTPException(
+                status_code=502,
+                detail="Failed to save referral in Airtable",
+            )
     return {"count": len(clean)}
 
 
@@ -1872,23 +1861,19 @@ async def admin_upload(file: UploadFile = File(...), token: str = Depends(check_
 async def blog_lead_magnet(body: LeadMagnetRequest):
     email = body.email.lower().strip()
     slug = body.slug.strip()
-    
-    # 1. Save to MongoDB
-    doc = {
-        "email": email,
-        "slug": slug,
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.lead_magnet_signups.insert_one(doc)
-    
-    # 2. Save/Sync to Airtable as a CRM User Lead in the background!
+
     name_part = email.split("@")[0].title().replace(".", " ").replace("-", " ")
-    asyncio.create_task(airtable_client.find_or_create_user(
+    user_record_id = await airtable_client.find_or_create_user(
         name=name_part,
         email=email,
         extra_fields={"Interests": f"Blog Lead Magnet: {slug}"}
-    ))
-    
+    )
+    if not user_record_id:
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to save lead in Airtable",
+        )
+
     return {"status": "ok"}
 
 
@@ -1901,13 +1886,3 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.on_event("startup")
-async def startup():
-    await db.sources.create_index("owner")
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    client.close()

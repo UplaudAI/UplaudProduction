@@ -5,6 +5,7 @@ from pathlib import Path
 
 
 SERVER_PATH = Path(__file__).resolve().parents[1] / "server.py"
+REQUIREMENTS_PATH = SERVER_PATH.with_name("requirements.txt")
 
 
 def _server_tree() -> ast.Module:
@@ -66,6 +67,35 @@ def test_server_has_no_db_runtime_access():
     ]
 
     assert not db_accesses, "server.py must not access the Mongo db runtime"
+
+
+def test_server_has_no_mongo_lifecycle_hooks():
+    lifecycle_events = []
+    for node in ast.walk(_server_tree()):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for decorator in node.decorator_list:
+            if (
+                isinstance(decorator, ast.Call)
+                and isinstance(decorator.func, ast.Attribute)
+                and decorator.func.attr == "on_event"
+                and decorator.args
+                and isinstance(decorator.args[0], ast.Constant)
+            ):
+                lifecycle_events.append(decorator.args[0].value)
+
+    assert "startup" not in lifecycle_events
+    assert "shutdown" not in lifecycle_events
+
+
+def test_requirements_do_not_install_mongodb_runtime_drivers():
+    requirement_names = {
+        line.split("==", 1)[0].strip().lower()
+        for line in REQUIREMENTS_PATH.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    }
+
+    assert requirement_names.isdisjoint({"motor", "pymongo"})
 
 
 def test_server_does_not_use_temporary_source_store():

@@ -2,15 +2,10 @@
 
 import ast
 import asyncio
-import os
-
 import httpx
 import pytest
 from pydantic import ValidationError
 
-
-os.environ.setdefault("MONGO_URL", "mongodb://localhost:27017")
-os.environ.setdefault("DB_NAME", "uplaud-test")
 
 import airtable_client  # noqa: E402
 import server  # noqa: E402
@@ -51,11 +46,6 @@ def persisted_empty_outreach_lead():
         {},
         "rec-lead-1",
     )
-
-
-class ExplodingDb:
-    def __getattr__(self, name):
-        raise AssertionError(f"referral route accessed MongoDB attribute {name!r}")
 
 
 class QueuedAsyncClient:
@@ -234,7 +224,6 @@ def test_strict_agent_plan_writes_fail_when_airtable_is_disabled(
 
 def test_get_warm_leads_returns_airtable_agent_plans_without_mongo(monkeypatch):
     leads = [{"id": "rec-lead-1", "agent_plan": dict(PLAN)}]
-    monkeypatch.setattr(server, "db", ExplodingDb())
 
     async def fake_business_name(email):
         return "Scoped Business"
@@ -270,7 +259,6 @@ def install_scoped_lead(monkeypatch, lead):
         calls.append((business_name, lead_id))
         return lead
 
-    monkeypatch.setattr(server, "db", ExplodingDb())
     monkeypatch.setattr(
         server.airtable_client,
         "get_business_name_by_email_domain",
