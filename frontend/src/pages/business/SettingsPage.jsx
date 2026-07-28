@@ -1,14 +1,41 @@
 import { useState } from "react";
 import { Save, User, Bell, Plug, Trash2 } from "lucide-react";
-import { getAuth, resetBusinessState } from "@/lib/business-storage";
+import { getAuth, setAuth, resetBusinessState } from "@/lib/business-storage";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
 
 export default function SettingsPage() {
   const user = getAuth() || {};
   const nav = useNavigate();
   const [name, setName] = useState(user.name || "Nick Patel");
   const [email, setEmail] = useState(user.email || "");
+
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!name.trim()) {
+      toast.error("Name cannot be empty");
+      return;
+    }
+    setSaving(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: { display_name: name }
+      });
+      if (error) throw error;
+
+      const auth = getAuth() || {};
+      auth.name = name;
+      setAuth(auth);
+
+      toast.success("Settings saved successfully!");
+    } catch (err) {
+      toast.error(err.message || "Failed to save settings");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleReset = () => {
     resetBusinessState();
@@ -81,11 +108,12 @@ export default function SettingsPage() {
       <div className="flex items-center gap-3 pt-2">
         <button
           data-testid="settings-save-btn"
-          onClick={() => toast.success("Settings saved")}
-          className="btn-primary h-11 !py-0"
+          onClick={handleSave}
+          disabled={saving}
+          className="btn-primary h-11 !py-0 disabled:opacity-60"
         >
           <Save className="w-4 h-4" strokeWidth={1.75} />
-          Save changes
+          {saving ? "Saving..." : "Save changes"}
         </button>
         <button
           data-testid="settings-reset-btn"
