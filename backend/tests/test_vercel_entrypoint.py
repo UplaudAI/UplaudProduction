@@ -1,3 +1,4 @@
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -253,6 +254,21 @@ def test_vercel_entrypoint_serves_api_root_and_representative_routes():
     } <= route_paths
 
 
+def test_vercel_catch_all_entrypoint_serves_nested_api_routes():
+    catch_all = REPO_ROOT / "api" / "[...path].py"
+    spec = importlib.util.spec_from_file_location("vercel_api_catch_all", catch_all)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    from backend.server import app as server_app
+
+    assert module.app is server_app
+
+    response = TestClient(module.app).get("/api/auth/me")
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Not authenticated"
+
+
 def test_vercel_config_packages_cra_and_fastapi_without_swallowing_api():
     config = json.loads((REPO_ROOT / "vercel.json").read_text())
 
@@ -264,14 +280,19 @@ def test_vercel_config_packages_cra_and_fastapi_without_swallowing_api():
     )
     assert config["outputDirectory"] == "frontend/build"
 
-    function = config["functions"]["api/index.py"]
+    function = config["functions"]["api/**/*.py"]
     assert 1 <= function["maxDuration"] <= 300
     assert "tests" in function["excludeFiles"]
     assert "test_reports" in function["excludeFiles"]
     assert "frontend" in function["excludeFiles"]
 
-    # Vercel natively makes api/index.py the /api/* catch-all. The SPA rule
-    # must leave those original paths untouched so FastAPI sees its /api prefix.
+    catch_all = REPO_ROOT / "api" / "[...path].py"
+    assert catch_all.exists()
+    assert "from backend.server import app" in catch_all.read_text()
+
+    # api/index.py serves /api/ and api/[...path].py serves nested /api/* paths.
+    # The SPA rule must leave those original paths untouched so FastAPI sees its
+    # /api prefix.
     assert config["rewrites"] == [
         {
             "source": "/:path((?!api(?:/|$)).*)",

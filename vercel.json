@@ -5,7 +5,7 @@
   "buildCommand": "npm --prefix frontend run build",
   "outputDirectory": "frontend/build",
   "functions": {
-    "api/index.py": {
+    "api/**/*.py": {
       "maxDuration": 300,
       "excludeFiles": "{.git/**,.pytest_cache/**,backend/tests/**,tests/**,test_reports/**,frontend/**,docs/**,memory/**,**/__pycache__/**,**/*.pyc,**/test_*.py,**/*_test.py,**/*.md,**/*.png,**/*.webp}"
     }
