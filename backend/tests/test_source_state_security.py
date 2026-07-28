@@ -1,6 +1,7 @@
 """Security and state-machine contracts for persisted testimonial sources."""
 
 import asyncio
+import hashlib
 import io
 
 import pytest
@@ -193,6 +194,7 @@ def test_upload_retries_global_token_collision_and_uses_strong_token(monkeypatch
             source_status="uploading", share_id=kwargs["share_id"]
         )
         persisted["fields"]["Source_Id"] = kwargs["source_id"]
+        persisted["fields"]["Content_SHA256"] = kwargs["content_sha256"]
         return persisted
 
     async def fake_update(source_id, business_name, fields, owner_id=None):
@@ -237,6 +239,7 @@ def test_upload_repairs_collision_detected_only_after_create(monkeypatch):
             source_status="uploading", share_id=kwargs["share_id"]
         )
         persisted["fields"]["Source_Id"] = kwargs["source_id"]
+        persisted["fields"]["Content_SHA256"] = kwargs["content_sha256"]
         return persisted
 
     async def fake_update(source_id, business_name, fields, owner_id=None):
@@ -351,6 +354,19 @@ def test_upload_rejects_raw_bytes_before_full_read_or_parse(monkeypatch):
 
     assert exc_info.value.status_code == 413
     assert stream.read_sizes == [server.MAX_UPLOAD_BYTES + 1]
+
+
+def test_upload_identity_is_stable_for_owner_and_content(monkeypatch):
+    payload = b"Stable retry transcript"
+    digest = hashlib.sha256(payload).hexdigest()
+
+    first = server._source_id_for_upload("owner-1", digest)
+    retry = server._source_id_for_upload("owner-1", digest)
+    other_owner = server._source_id_for_upload("owner-2", digest)
+
+    assert first == retry
+    assert first != other_owner
+    assert len(first) >= 64
 
 
 def test_authenticated_edit_and_regenerate_reject_approved_source(monkeypatch):

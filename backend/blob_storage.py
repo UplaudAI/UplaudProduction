@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import logging
 import os
 import re
 from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import urlsplit
 
 try:
     from vercel.blob import AsyncBlobClient
@@ -21,6 +24,7 @@ _FALSE_VALUES = {"0", "false", "no", "off"}
 _RECEIPT_KEYS = {"share_id", "source_id", "testimonial", "approved_at"}
 _RECEIPT_ID = re.compile(r"[A-Za-z0-9_-]{1,256}\Z")
 MAX_APPROVAL_RECEIPT_BYTES = 64 * 1024
+MAX_SOURCE_BLOB_BYTES = 5 * 1024 * 1024
 
 
 class BlobStorageError(RuntimeError):
@@ -87,6 +91,18 @@ def _safe_component(value: str, fallback: str) -> str:
     return sanitized[:180] or fallback
 
 
+def source_pathname(source_id: str, filename: str) -> str:
+    safe_source_id = _safe_component(source_id, "source")
+    safe_filename = _safe_component(filename, "upload.bin")
+    return f"sources/{safe_source_id}/{safe_filename}"
+
+
+def source_url_matches(url: str, source_id: str, filename: str) -> bool:
+    if not isinstance(url, str) or not url:
+        return False
+    return urlsplit(url).path.lstrip("/") == source_pathname(source_id, filename)
+
+
 def _mapped_error(exc: Exception) -> BlobStorageError:
     unavailable_names = {
         "BlobAccessError",
@@ -140,9 +156,7 @@ async def store_source(
     content_type: str,
 ) -> str:
     """Create a private source Blob once and reconcile safe same-ID retries."""
-    safe_source_id = _safe_component(source_id, "source")
-    safe_filename = _safe_component(filename, "upload.bin")
-    pathname = f"sources/{safe_source_id}/{safe_filename}"
+    pathname = source_pathname(source_id, filename)
     client = _new_client("private")
     try:
         try:
@@ -169,10 +183,35 @@ async def store_source(
             if (
                 existing_path != pathname
                 or existing_size != len(content)
+                or existing_size > MAX_SOURCE_BLOB_BYTES
                 or not isinstance(existing_url, str)
                 or not existing_url
             ):
                 logger.warning("Vercel Blob source reconciliation failed")
+                raise BlobStorageError("Blob operation failed.") from None
+            try:
+                downloaded = await client.get(
+                    pathname, access="private", use_cache=False
+                )
+            except Exception as get_error:
+                logger.warning("Vercel Blob source verification read failed")
+                raise _mapped_error(get_error) from None
+            stored_content = getattr(downloaded, "content", None)
+            if (
+                getattr(downloaded, "status_code", 200) != 200
+                or not isinstance(stored_content, (bytes, bytearray, memoryview))
+            ):
+                raise BlobStorageError("Blob operation failed.") from None
+            stored_content = bytes(stored_content)
+            if (
+                len(stored_content) > MAX_SOURCE_BLOB_BYTES
+                or len(stored_content) != len(content)
+                or not hmac.compare_digest(
+                    hashlib.sha256(stored_content).digest(),
+                    hashlib.sha256(content).digest(),
+                )
+            ):
+                logger.warning("Vercel Blob source digest reconciliation failed")
                 raise BlobStorageError("Blob operation failed.") from None
             return existing_url
         url = getattr(result, "url", "")

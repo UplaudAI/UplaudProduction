@@ -358,7 +358,12 @@ async def test_upsert_uploading_source_round_trips(monkeypatch):
         stored.update(fields)
         return {"id": "recSource", "fields": fields}
 
+    async def get_source(*args, **kwargs):
+        return None
+
     monkeypatch.setattr(airtable_client, "_upsert_by_fields", upsert)
+    monkeypatch.setattr(airtable_client, "get_source_by_id", get_source)
+    monkeypatch.setattr(airtable_client, "_get_source_by_id_unscoped", get_source)
     record = await airtable_client.upsert_uploading_source(
         source_id="src-1",
         business_name="Acme",
@@ -367,10 +372,12 @@ async def test_upsert_uploading_source_round_trips(monkeypatch):
         file_type="txt",
         transcript_text="Customer transcript",
         word_count=2,
+        content_sha256="a" * 64,
         share_id="share-1",
         created_at="2026-07-28T12:00:00+00:00",
     )
     assert record["fields"]["Source_Status"] == "uploading"
+    assert record["fields"]["Content_SHA256"] == "a" * 64
     assert "Blob_Url" not in record["fields"]
     assert stored["Transcript_Text"] == "Customer transcript"
 ```
@@ -383,11 +390,11 @@ Expected: FAIL because `upsert_uploading_source` does not exist.
 
 - [ ] **Step 3: Add additive `Growth_Signals` source fields**
 
-Before code deployment, verify or create these Airtable fields through the Airtable Metadata API: `Owner_Id`, `Filename`, `File_Type`, `Transcript_Text`, `Word_Count`, `Source_Status`, and `Blob_Url`. Do not rename or delete existing fields.
+Before code deployment, verify or create these Airtable fields through the Airtable Metadata API: `Owner_Id`, `Filename`, `File_Type`, `Transcript_Text`, `Word_Count`, `Content_SHA256`, `Source_Status`, and `Blob_Url`. `Content_SHA256` is an additive single-line text field containing a lowercase 64-character hex digest. Do not rename or delete existing fields.
 
 - [ ] **Step 4: Implement the Airtable source repository**
 
-Add `upsert_uploading_source`, `get_source_by_id`, and `update_source_by_id` to `airtable_client.py`. The initial source write must use Airtable `performUpsert` keyed by `Source_Id`, persist canonical metadata/transcript with status `uploading`, and omit `Blob_Url`. Re-read and validate the canonical row after an ambiguous upsert response. Scope reads by both `Source_Id` and `Business_Name`; permit strict transitions through `uploading`/`upload_failed`/`uploaded`, and store `analyzed` only after successful insight persistence.
+Add `upsert_uploading_source`, `get_source_by_id`, and `update_source_by_id` to `airtable_client.py`. Compute raw-byte SHA-256 and derive `Source_Id` from authenticated owner ID plus the digest. The initial source write must use Airtable `performUpsert` keyed by `Source_Id`, persist canonical metadata/transcript/`Content_SHA256` with status `uploading`, and omit `Blob_Url`. Re-read and validate the canonical row after an ambiguous upsert response. Retry identity uses owner, business, source ID, digest, and immutable file facts—not exact `Created_At` string equality—and preserves the existing `Created_At` and `Share_Id`. Scope reads by both `Source_Id` and `Business_Name`; permit strict transitions through `uploading`/`upload_failed`/`uploaded`, and store `analyzed` only after successful insight persistence.
 
 - [ ] **Step 5: Rewrite source routes to use persisted records**
 
@@ -475,13 +482,13 @@ async def test_store_blog_image_uses_public_blob(monkeypatch):
 
 - [ ] **Step 2: Add the Vercel SDK and adapter**
 
-Pin `vercel==0.7.2` in `backend/requirements.txt`. Add an import/signature contract for `AsyncBlobClient.put`, `get`, `head`, `delete`, and `aclose` (skip only when the SDK is unavailable in the local test environment). Implement source, blog-image, and approval-receipt operations with `vercel.blob.AsyncBlobClient`. Source pathnames must be deterministic and sanitized under `sources/{source_id}/`, with `overwrite=False` and no random suffix; after a failed put, reconcile the same pathname with `head` and validate its path and size. Blog images remain public and collision-resistant. Cap approval-receipt reads at 64 KiB before decoding JSON. Map access, missing-token, and expired-token SDK errors to a sanitized storage-unavailable error.
+Pin `vercel==0.7.2` in `backend/requirements.txt`. Add a required (never skipped) import/version/signature contract for `AsyncBlobClient.put`, `get`, `head`, `delete`, and `aclose` in the Task 6 suite. Implement source, blog-image, and approval-receipt operations with `vercel.blob.AsyncBlobClient`. Source pathnames must be deterministic and sanitized under `sources/{source_id}/`, with `overwrite=False` and no random suffix; after a failed put, reconcile the same pathname with `head`, then read no more than the 5 MiB source limit from the private store and require the stored bytes' SHA-256 to match. Size alone is insufficient. Blog images remain public and collision-resistant. Cap approval-receipt reads at 64 KiB before decoding JSON. Map access, missing-token, and expired-token SDK errors to a sanitized storage-unavailable error.
 
 - [ ] **Step 3: Integrate source and admin uploads**
 
 Implement the controlling source-first state machine: upsert canonical Airtable metadata/transcript as `uploading` with no Blob URL; create the deterministic private Blob; then strictly update that same row with `Blob_Url` and `uploaded`. On Blob failure, best-effort mark `upload_failed` and return a sanitized dependency error. On an ambiguous final Airtable response, re-read and accept only the exact URL/`uploaded` state; otherwise retain both the deterministic Blob and tracked source row for retry or reconciliation. Never delete the Blob as compensation for an ambiguous Airtable result. Replace `open(filepath, "wb")` in `/admin/upload` with public-store `store_blog_image` and return the public Blob URL.
 
-Add local mocked tests for committed-then-timeout initial upserts, lost final-update responses, Blob failure status, ambiguous final updates without deletion, same-source Blob retries, receipt-size limits, and credential-expiry mapping. Preserve deterministic first-writer approval behavior.
+Add local mocked tests for committed-then-timeout initial upserts, lost final-update responses, Blob failure status, ambiguous final updates without deletion, owner-and-digest source identity, same-client retry resumption, cross-owner separation, mismatched-digest collisions, digest-verified Blob adoption, receipt-size limits, and credential-expiry mapping. Preserve deterministic first-writer approval behavior.
 
 - [ ] **Step 4: Run Blob and blog tests**
 
@@ -658,7 +665,7 @@ Create a private Blob store for source binaries and approval receipts and a sepa
 
 - [ ] **Step 5: Verify additive Airtable fields**
 
-Use Airtable Metadata API to confirm the source-persistence fields from Task 5 and agent-plan fields from the design exist. Add only missing fields. This is a live schema mutation and requires explicit user approval at execution time.
+Use Airtable Metadata API to confirm the source-persistence fields from Task 5—including the additive single-line text field `Content_SHA256`—and agent-plan fields from the design exist. Add only missing fields. Confirm the digest field accepts a lowercase 64-character SHA-256 hex value without printing production record contents. This is a live schema mutation and requires explicit user approval at execution time.
 
 - [ ] **Step 6: Deploy Preview only**
 

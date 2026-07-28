@@ -1100,6 +1100,12 @@ def _legacy_source_share_id(source_id: str, business_name: str) -> str:
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
 
+def _source_id_for_upload(owner_id: str, content_sha256: str) -> str:
+    """Derive a stable, owner-scoped identity for one exact upload payload."""
+    identity = f"uplaud-source:v1\0{owner_id}\0{content_sha256}".encode("utf-8")
+    return hashlib.sha256(identity).hexdigest()
+
+
 async def _unique_source_share_id(
     *,
     preferred: str = "",
@@ -1175,8 +1181,9 @@ async def upload_source(file: UploadFile = File(...), current=Depends(get_curren
             ),
         )
     word_count = len(text.split())
+    content_sha256 = hashlib.sha256(content).hexdigest()
     business_name = await _current_business_name(current)
-    source_id = str(uuid.uuid4())
+    source_id = _source_id_for_upload(current["id"], content_sha256)
     try:
         share_id = await _unique_source_share_id(
             source_id=source_id, business_name=business_name
@@ -1194,14 +1201,48 @@ async def upload_source(file: UploadFile = File(...), current=Depends(get_curren
             file_type=filename.rsplit(".", 1)[-1].lower(),
             transcript_text=text,
             word_count=word_count,
+            content_sha256=content_sha256,
             share_id=share_id,
             created_at=datetime.now(timezone.utc).isoformat(),
         )
+    except AirtableSourceConflictError:
+        raise HTTPException(
+            status_code=409, detail="Source identity conflicts with persisted content."
+        ) from None
+    except AirtableSourceLookupError:
+        raise HTTPException(
+            status_code=503, detail="Source storage is temporarily unavailable."
+        ) from None
     except Exception as exc:
         logger.warning("Source upload metadata persistence failed: %s", exc)
         raise HTTPException(
             status_code=502, detail="Could not persist the uploaded source."
         ) from None
+    persisted_fields = rec.get("fields", {})
+    persisted_status = (
+        persisted_fields.get("Source_Status") or ""
+    ).strip().lower()
+    if persisted_fields.get("Content_SHA256") != content_sha256:
+        raise HTTPException(
+            status_code=409, detail="Source identity conflicts with persisted content."
+        )
+    if persisted_status == "uploaded" and blob_storage.source_url_matches(
+        persisted_fields.get("Blob_Url") or "", source_id, filename
+    ):
+        try:
+            rec = await _verify_persisted_source_share_id(
+                rec, business_name=business_name, owner_id=current["id"]
+            )
+        except RuntimeError:
+            raise HTTPException(
+                status_code=503,
+                detail="Source storage is temporarily unavailable.",
+            ) from None
+        return record_to_source_out(rec)
+    if persisted_status != "uploading":
+        raise HTTPException(
+            status_code=409, detail="Source upload cannot be resumed."
+        )
     try:
         blob_url = await blob_storage.store_source(
             source_id,
@@ -1234,6 +1275,7 @@ async def upload_source(file: UploadFile = File(...), current=Depends(get_curren
             fields.get("Source_Id") == source_id
             and fields.get("Business_Name") == business_name
             and fields.get("Owner_Id") == current["id"]
+            and fields.get("Content_SHA256") == content_sha256
             and fields.get("Blob_Url") == blob_url
             and (fields.get("Source_Status") or "").strip().lower()
             == "uploaded"

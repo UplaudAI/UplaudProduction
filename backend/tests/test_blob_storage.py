@@ -239,7 +239,10 @@ def test_backend_declares_official_vercel_sdk_dependency():
 
 
 def test_official_vercel_sdk_async_client_api_contract():
-    sdk = pytest.importorskip("vercel.blob")
+    try:
+        import vercel.blob as sdk
+    except ImportError as exc:
+        pytest.fail(f"vercel==0.7.2 Blob SDK must import: {exc}")
     client = sdk.AsyncBlobClient
 
     assert importlib.metadata.version("vercel") == "0.7.2"
@@ -345,6 +348,21 @@ def test_source_retry_reuses_deterministic_create_once_blob(monkeypatch):
     assert first == second == "https://private.blob.example/sources/source-1/call.txt"
     assert list(store.objects) == ["sources/source-1/call.txt"]
     assert all(call[2]["add_random_suffix"] is False for call in store.put_calls)
+
+
+def test_source_reconciliation_rejects_same_size_different_content(monkeypatch):
+    store = AtomicFakeStore()
+    pathname = "sources/source-1/call.txt"
+    store.objects[pathname] = b"evil content"
+    monkeypatch.setenv("BLOB_PRIVATE_READ_WRITE_TOKEN", "blob-token")
+    monkeypatch.setattr(blob_storage, "AsyncBlobClient", store.client)
+
+    with pytest.raises(blob_storage.BlobStorageError):
+        run(
+            blob_storage.store_source(
+                "source-1", "call.txt", b"safe content", "text/plain"
+            )
+        )
 
 
 def test_approval_receipt_read_rejects_payload_over_64_kib():
@@ -478,6 +496,7 @@ def test_source_upload_persists_uploading_row_before_blob_then_finalizes(
             {
                 "Source_Id": kwargs["source_id"],
                 "Share_Id": kwargs["share_id"],
+                "Content_SHA256": kwargs["content_sha256"],
                 "Source_Status": "uploading",
                 "Testimonial_Status": "draft",
             }
@@ -551,6 +570,7 @@ def test_source_blob_failure_marks_canonical_row_upload_failed(monkeypatch):
             {
                 "Source_Id": kwargs["source_id"],
                 "Share_Id": kwargs["share_id"],
+                "Content_SHA256": kwargs["content_sha256"],
                 "Source_Status": "uploading",
                 "Testimonial_Status": "draft",
             }
@@ -615,6 +635,7 @@ def test_source_final_update_ambiguous_failure_keeps_tracked_blob_for_retry(
             {
                 "Source_Id": kwargs["source_id"],
                 "Share_Id": kwargs["share_id"],
+                "Content_SHA256": kwargs["content_sha256"],
                 "Source_Status": "uploading",
                 "Testimonial_Status": "draft",
             }
@@ -673,6 +694,7 @@ def test_source_final_update_lost_response_reconciles_to_success(monkeypatch):
             {
                 "Source_Id": kwargs["source_id"],
                 "Share_Id": kwargs["share_id"],
+                "Content_SHA256": kwargs["content_sha256"],
                 "Source_Status": "uploading",
                 "Testimonial_Status": "draft",
             }
@@ -717,6 +739,194 @@ def test_source_final_update_lost_response_reconciles_to_success(monkeypatch):
     assert persisted["fields"]["Blob_Url"].endswith(
         "/sources/source-1/call.txt"
     )
+
+
+def test_same_owner_same_bytes_returns_existing_upload_without_second_blob(
+    monkeypatch,
+):
+    records = {}
+    blob_writes = []
+
+    async def fake_business(email):
+        return BUSINESS
+
+    async def fake_lookup(share_id):
+        return next(
+            (
+                record
+                for record in records.values()
+                if record["fields"].get("Share_Id") == share_id
+            ),
+            None,
+        )
+
+    async def fake_upsert(**kwargs):
+        existing = records.get(kwargs["source_id"])
+        if existing:
+            assert existing["fields"]["Content_SHA256"] == kwargs["content_sha256"]
+            return existing
+        record = {
+            "id": f"rec-{len(records) + 1}",
+            "fields": {
+                "Source_Id": kwargs["source_id"],
+                "Business_Name": kwargs["business_name"],
+                "Owner_Id": kwargs["owner_id"],
+                "Name": kwargs["filename"],
+                "File_Type": kwargs["file_type"],
+                "Transcript_Text": kwargs["transcript_text"],
+                "Word_Count": kwargs["word_count"],
+                "Content_SHA256": kwargs["content_sha256"],
+                "Source_Status": "uploading",
+                "Share_Id": kwargs["share_id"],
+                "Created_At": kwargs["created_at"],
+            },
+        }
+        records[kwargs["source_id"]] = record
+        return record
+
+    async def fake_store(source_id, filename, content, content_type):
+        blob_writes.append((source_id, content))
+        return f"https://private.blob.example/sources/{source_id}/{filename}"
+
+    async def fake_update(source_id, business_name, fields, owner_id=None):
+        records[source_id]["fields"].update(fields)
+        return records[source_id]
+
+    async def fake_get(source_id, business_name, owner_id=None):
+        return records.get(source_id)
+
+    monkeypatch.setattr(
+        server.airtable_client,
+        "get_source_business_name_by_email_domain",
+        fake_business,
+    )
+    monkeypatch.setattr(
+        server.airtable_client, "get_growth_signal_by_share_id", fake_lookup
+    )
+    monkeypatch.setattr(
+        server.airtable_client, "upsert_uploading_source", fake_upsert
+    )
+    monkeypatch.setattr(server.airtable_client, "update_source_by_id", fake_update)
+    monkeypatch.setattr(server.airtable_client, "get_source_by_id", fake_get)
+    monkeypatch.setattr(server.blob_storage, "store_source", fake_store)
+
+    payload = b"Same retryable transcript"
+    first = run(
+        server.upload_source(
+            UploadFile(filename="call.txt", file=io.BytesIO(payload)), current=USER
+        )
+    )
+    retry = run(
+        server.upload_source(
+            UploadFile(filename="call.txt", file=io.BytesIO(payload)), current=USER
+        )
+    )
+    other_user = {**USER, "id": "user-2", "email": "other@scoped.example"}
+    other = run(
+        server.upload_source(
+            UploadFile(filename="call.txt", file=io.BytesIO(payload)),
+            current=other_user,
+        )
+    )
+
+    assert first.id == retry.id
+    assert other.id != first.id
+    assert len(records) == 2
+    assert len(blob_writes) == 2
+
+
+def test_client_retry_resumes_ambiguous_finalization_without_duplicate_blob(
+    monkeypatch,
+):
+    records = {}
+    final_attempts = 0
+    store = AtomicFakeStore()
+
+    async def fake_business(email):
+        return BUSINESS
+
+    async def fake_lookup(share_id):
+        return next(
+            (
+                record
+                for record in records.values()
+                if record["fields"].get("Share_Id") == share_id
+            ),
+            None,
+        )
+
+    async def fake_upsert(**kwargs):
+        existing = records.get(kwargs["source_id"])
+        if existing:
+            assert existing["fields"]["Content_SHA256"] == kwargs["content_sha256"]
+            existing["fields"]["Source_Status"] = "uploading"
+            return existing
+        record = {
+            "id": "rec-source",
+            "fields": {
+                "Source_Id": kwargs["source_id"],
+                "Business_Name": kwargs["business_name"],
+                "Owner_Id": kwargs["owner_id"],
+                "Name": kwargs["filename"],
+                "File_Type": kwargs["file_type"],
+                "Transcript_Text": kwargs["transcript_text"],
+                "Word_Count": kwargs["word_count"],
+                "Content_SHA256": kwargs["content_sha256"],
+                "Source_Status": "uploading",
+                "Share_Id": kwargs["share_id"],
+                "Created_At": kwargs["created_at"],
+            },
+        }
+        records[kwargs["source_id"]] = record
+        return record
+
+    async def fake_update(source_id, business_name, fields, owner_id=None):
+        nonlocal final_attempts
+        if "Blob_Url" in fields:
+            final_attempts += 1
+            if final_attempts == 1:
+                raise TimeoutError("final response lost before commit")
+        records[source_id]["fields"].update(fields)
+        return records[source_id]
+
+    async def fake_get(source_id, business_name, owner_id=None):
+        return records.get(source_id)
+
+    monkeypatch.setattr(
+        server.airtable_client,
+        "get_source_business_name_by_email_domain",
+        fake_business,
+    )
+    monkeypatch.setattr(
+        server.airtable_client, "get_growth_signal_by_share_id", fake_lookup
+    )
+    monkeypatch.setattr(
+        server.airtable_client, "upsert_uploading_source", fake_upsert
+    )
+    monkeypatch.setattr(server.airtable_client, "update_source_by_id", fake_update)
+    monkeypatch.setattr(server.airtable_client, "get_source_by_id", fake_get)
+    monkeypatch.setenv("BLOB_PRIVATE_READ_WRITE_TOKEN", "blob-token")
+    monkeypatch.setattr(blob_storage, "AsyncBlobClient", store.client)
+
+    payload = b"Retry after ambiguous final update"
+    with pytest.raises(HTTPException) as first_error:
+        run(
+            server.upload_source(
+                UploadFile(filename="call.txt", file=io.BytesIO(payload)), current=USER
+            )
+        )
+    source_id = next(iter(records))
+    retry = run(
+        server.upload_source(
+            UploadFile(filename="call.txt", file=io.BytesIO(payload)), current=USER
+        )
+    )
+
+    assert first_error.value.status_code == 502
+    assert retry.id == source_id
+    assert retry.status == "uploaded"
+    assert len(records) == 1
+    assert list(store.objects) == [f"sources/{source_id}/call.txt"]
 
 
 def test_admin_upload_returns_durable_public_blob_url(monkeypatch):

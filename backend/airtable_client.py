@@ -47,6 +47,7 @@ _MAX_RETRY_DELAY_SECONDS = 30.0
 _RATE_LIMIT_FALLBACK_SECONDS = 30.0
 _USER_BATCH_MAX_IDS = 100
 _USER_BATCH_MAX_FORMULA_CHARS = 3500
+_SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
 
 
 def _enabled() -> bool:
@@ -889,10 +890,29 @@ def _matches_upload_identity(record: Optional[dict], expected: dict) -> bool:
         "File_Type",
         "Transcript_Text",
         "Word_Count",
-        "Share_Id",
-        "Created_At",
+        "Content_SHA256",
     )
     return all(fields.get(name) == expected.get(name) for name in identity_fields)
+
+
+async def _get_source_by_id_unscoped(source_id: str) -> Optional[dict]:
+    """Detect a global Source_Id collision before performUpsert can mutate it."""
+    data = await _get(
+        TABLE_GROWTH_SIGNALS,
+        {
+            "filterByFormula": f'{{Source_Id}}="{_escape(source_id)}"',
+            "maxRecords": 2,
+        },
+    )
+    records = data.get("records", []) if isinstance(data, dict) else []
+    if len(records) > 1:
+        raise AirtableSourceCollisionError("Airtable Source_Id collision detected")
+    if not records:
+        return None
+    record = records[0]
+    if record.get("fields", {}).get("Source_Id") != source_id:
+        return None
+    return record
 
 
 async def upsert_uploading_source(
@@ -904,6 +924,7 @@ async def upsert_uploading_source(
     file_type: str,
     transcript_text: str,
     word_count: int,
+    content_sha256: str,
     share_id: str,
     created_at: str,
 ) -> dict:
@@ -913,6 +934,9 @@ async def upsert_uploading_source(
     owner_id = (owner_id or "").strip()
     if not owner_id:
         raise RuntimeError("A source owner is required")
+    content_sha256 = (content_sha256 or "").strip().lower()
+    if not _SHA256_RE.fullmatch(content_sha256):
+        raise RuntimeError("A valid source content digest is required")
     fields = {
         "Source_Id": source_id,
         "Business_Name": business_name,
@@ -922,10 +946,43 @@ async def upsert_uploading_source(
         "File_Type": file_type,
         "Transcript_Text": transcript_text,
         "Word_Count": word_count,
+        "Content_SHA256": content_sha256,
         "Source_Status": "uploading",
         "Share_Id": share_id,
         "Created_At": created_at,
     }
+    try:
+        existing = await get_source_by_id(
+            source_id, business_name, owner_id=owner_id
+        )
+    except Exception:
+        logger.warning("Airtable source retry lookup failed")
+        raise AirtableSourceLookupError("Airtable source lookup failed") from None
+    if not existing:
+        try:
+            collision = await _get_source_by_id_unscoped(source_id)
+        except Exception:
+            logger.warning("Airtable global source collision check failed")
+            raise AirtableSourceLookupError("Airtable source lookup failed") from None
+        if collision:
+            raise AirtableSourceConflictError(
+                "Source identity collides with another tenant scope"
+            )
+    if existing:
+        if not _matches_upload_identity(existing, fields):
+            raise AirtableSourceConflictError(
+                "Source identity collides with different upload content"
+            )
+        existing_fields = existing.get("fields", {})
+        status = (existing_fields.get("Source_Status") or "").strip().lower()
+        if status == "uploaded" and existing_fields.get("Blob_Url"):
+            return existing
+        if status not in {"uploading", "upload_failed"}:
+            raise AirtableSourceConflictError(
+                "Existing source cannot resume upload"
+            )
+        fields["Share_Id"] = existing_fields.get("Share_Id") or share_id
+        fields["Created_At"] = existing_fields.get("Created_At") or created_at
     try:
         record = await _upsert_by_fields(
             TABLE_GROWTH_SIGNALS, fields, ["Source_Id"]
@@ -938,24 +995,20 @@ async def upsert_uploading_source(
             )
         except Exception:
             record = None
-        if (
-            _matches_upload_identity(record, fields)
-            and (record.get("fields", {}).get("Source_Status") or "")
-            .strip()
-            .lower()
-            == "uploading"
-        ):
-            return record
+        if _matches_upload_identity(record, fields):
+            record_fields = record.get("fields", {})
+            status = (record_fields.get("Source_Status") or "").strip().lower()
+            if status == "uploading" or (
+                status == "uploaded" and record_fields.get("Blob_Url")
+            ):
+                return record
         raise AirtableSourcePersistenceError(
             "Airtable source persistence failed"
         ) from None
-    if (
-        not _matches_upload_identity(record, fields)
-        or (record.get("fields", {}).get("Source_Status") or "")
-        .strip()
-        .lower()
-        != "uploading"
-    ):
+    if not _matches_upload_identity(record, fields):
+        raise AirtableSourcePersistenceError("Airtable source persistence failed")
+    record_fields = record.get("fields", {})
+    if (record_fields.get("Source_Status") or "").strip().lower() != "uploading":
         raise AirtableSourcePersistenceError("Airtable source persistence failed")
     return record
 

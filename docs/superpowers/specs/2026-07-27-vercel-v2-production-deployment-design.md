@@ -77,12 +77,13 @@ Remove Motor, `MONGO_URL`, `DB_NAME`, Mongo client initialization, shutdown hand
 
 1. The browser uploads a supported transcript.
 2. The backend validates size and file type.
-3. Before any Blob write, the backend uses Airtable `performUpsert`, keyed by `Source_Id`, to persist the canonical owner-scoped metadata and transcript with `Source_Status="uploading"` and no `Blob_Url`.
-4. The original file is created once in the private Blob store at a deterministic, sanitized source-ID pathname. A retry reconciles an existing object instead of creating a duplicate.
-5. The same Airtable source is strictly updated with the matching `Blob_Url` and `Source_Status="uploaded"`. If the update response is lost, the backend re-reads that canonical source and returns success only when both values match.
-6. A Blob failure is best-effort marked `upload_failed`. A final Airtable failure leaves the deterministic Blob and canonical source row intact for retry or reconciliation; it never performs a destructive compensation delete after an ambiguous response.
-7. Analysis retrieves persisted transcript text only from an `uploaded` source, calls OpenAI, and updates that same `Growth_Signals` record to `analyzed` after successful insight persistence.
-8. Regeneration and public testimonial flows operate entirely from persisted records. Approval receipts use deterministic create-once objects in the private Blob store.
+3. The backend computes `Content_SHA256` over the raw bytes and derives a stable `Source_Id` from the authenticated owner ID plus that digest. The same owner and bytes therefore resume one source; another owner receives a different identity.
+4. Before any Blob write, the backend uses Airtable `performUpsert`, keyed by `Source_Id`, to persist the canonical owner-scoped metadata, transcript, and `Content_SHA256` with `Source_Status="uploading"` and no `Blob_Url`. Retry identity excludes exact `Created_At` string equality, preserves the original timestamp/share ID, and fails closed if immutable facts or the digest differ.
+5. The original file is created once in the private Blob store at a deterministic, sanitized source-ID pathname. A retry may adopt an existing object only after downloading at most the 5 MiB upload limit and comparing its SHA-256 digest, not merely its size.
+6. The same Airtable source is strictly updated with the matching `Blob_Url` and `Source_Status="uploaded"`. If the update response is lost, the backend re-reads that canonical source and returns success only when the URL, status, owner, and digest match. A later client retry resumes the same row and Blob.
+7. A Blob failure is best-effort marked `upload_failed`. A final Airtable failure leaves the deterministic Blob and canonical source row intact for retry or reconciliation; it never performs a destructive compensation delete after an ambiguous response.
+8. Analysis retrieves persisted transcript text only from an `uploaded` source, calls OpenAI, and updates that same `Growth_Signals` record to `analyzed` after successful insight persistence.
+9. Regeneration and public testimonial flows operate entirely from persisted records. Approval receipts use deterministic create-once objects in the private Blob store.
 
 This replaces `TEMP_SOURCES`, ensuring uploads survive cold starts, concurrent instances, and deployments.
 

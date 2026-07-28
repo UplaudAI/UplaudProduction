@@ -1,6 +1,7 @@
 """Local contracts for durable, tenant-scoped source persistence."""
 
 import asyncio
+import hashlib
 import importlib.util
 import io
 
@@ -19,6 +20,7 @@ USER = {
     "company": "Fallback",
 }
 BUSINESS = "Scoped Business"
+DIGEST = hashlib.sha256(b"hello").hexdigest()
 
 
 def run(coroutine):
@@ -108,8 +110,21 @@ def test_upsert_uploading_source_writes_exact_growth_signal_fields(monkeypatch):
         calls.append((table, fields, merge_fields))
         return {"id": "rec-source-1", "fields": fields}
 
+    async def fake_get(*args, **kwargs):
+        return None
+
+    async def fake_unscoped_get(*args, **kwargs):
+        return None
+
     monkeypatch.setattr(airtable_client, "_enabled", lambda: True)
     monkeypatch.setattr(airtable_client, "_upsert_by_fields", fake_upsert)
+    monkeypatch.setattr(airtable_client, "get_source_by_id", fake_get)
+    monkeypatch.setattr(
+        airtable_client,
+        "_get_source_by_id_unscoped",
+        fake_unscoped_get,
+        raising=False,
+    )
 
     result = run(
         airtable_client.upsert_uploading_source(
@@ -120,6 +135,7 @@ def test_upsert_uploading_source_writes_exact_growth_signal_fields(monkeypatch):
             file_type="txt",
             transcript_text="A durable transcript.",
             word_count=3,
+            content_sha256=DIGEST,
             share_id="share-1",
             created_at="2026-07-28T12:00:00+00:00",
         )
@@ -133,6 +149,7 @@ def test_upsert_uploading_source_writes_exact_growth_signal_fields(monkeypatch):
         "File_Type": "txt",
         "Transcript_Text": "A durable transcript.",
         "Word_Count": 3,
+        "Content_SHA256": DIGEST,
         "Source_Status": "uploading",
         "Share_Id": "share-1",
         "Created_At": "2026-07-28T12:00:00+00:00",
@@ -145,6 +162,7 @@ def test_upsert_uploading_source_writes_exact_growth_signal_fields(monkeypatch):
 
 def test_upsert_uploading_source_reconciles_committed_then_timeout(monkeypatch):
     persisted = record(status="uploading", transcript="hello")
+    persisted["fields"]["Content_SHA256"] = DIGEST
     reads = []
 
     async def committed_then_timeout(table, fields, merge_fields):
@@ -153,13 +171,22 @@ def test_upsert_uploading_source_reconciles_committed_then_timeout(monkeypatch):
 
     async def fake_get(source_id, business_name, *, owner_id=None):
         reads.append((source_id, business_name, owner_id))
-        return persisted
+        return None if len(reads) == 1 else persisted
+
+    async def fake_unscoped_get(*args, **kwargs):
+        return None
 
     monkeypatch.setattr(airtable_client, "_enabled", lambda: True)
     monkeypatch.setattr(
         airtable_client, "_upsert_by_fields", committed_then_timeout
     )
     monkeypatch.setattr(airtable_client, "get_source_by_id", fake_get)
+    monkeypatch.setattr(
+        airtable_client,
+        "_get_source_by_id_unscoped",
+        fake_unscoped_get,
+        raising=False,
+    )
 
     result = run(
         airtable_client.upsert_uploading_source(
@@ -170,6 +197,7 @@ def test_upsert_uploading_source_reconciles_committed_then_timeout(monkeypatch):
             file_type="txt",
             transcript_text="hello",
             word_count=1,
+            content_sha256=DIGEST,
             share_id="share-1",
             created_at="now",
         )
@@ -178,7 +206,10 @@ def test_upsert_uploading_source_reconciles_committed_then_timeout(monkeypatch):
     assert result is persisted
     assert result["fields"]["Source_Status"] == "uploading"
     assert "Blob_Url" not in result["fields"]
-    assert reads == [("source-1", BUSINESS, "user-1")]
+    assert reads == [
+        ("source-1", BUSINESS, "user-1"),
+        ("source-1", BUSINESS, "user-1"),
+    ]
 
 
 def test_upsert_uploading_source_requires_nonblank_owner(monkeypatch):
@@ -200,6 +231,143 @@ def test_upsert_uploading_source_requires_nonblank_owner(monkeypatch):
                 file_type="txt",
                 transcript_text="hello",
                 word_count=1,
+                content_sha256=DIGEST,
+                share_id="share-1",
+                created_at="now",
+            )
+        )
+
+    assert writes == []
+
+
+def test_upsert_uploading_source_preserves_retry_share_and_created_at(monkeypatch):
+    persisted = record(status="upload_failed", transcript="hello")
+    persisted["fields"].update(
+        {
+            "Name": "call.txt",
+            "File_Type": "txt",
+            "Word_Count": 1,
+            "Content_SHA256": DIGEST,
+            "Share_Id": "original-share",
+            "Created_At": "2026-07-28T12:00:00.000Z",
+        }
+    )
+    writes = []
+
+    async def fake_get(*args, **kwargs):
+        return persisted
+
+    async def fake_upsert(table, fields, merge_fields):
+        writes.append(dict(fields))
+        persisted["fields"].update(fields)
+        return persisted
+
+    monkeypatch.setattr(airtable_client, "_enabled", lambda: True)
+    monkeypatch.setattr(airtable_client, "get_source_by_id", fake_get)
+    monkeypatch.setattr(airtable_client, "_upsert_by_fields", fake_upsert)
+
+    result = run(
+        airtable_client.upsert_uploading_source(
+            source_id="source-1",
+            business_name=BUSINESS,
+            owner_id="user-1",
+            filename="call.txt",
+            file_type="txt",
+            transcript_text="hello",
+            word_count=1,
+            content_sha256=DIGEST,
+            share_id="replacement-share",
+            created_at="2026-07-28T12:00:00+00:00",
+        )
+    )
+
+    assert result is persisted
+    assert writes[0]["Share_Id"] == "original-share"
+    assert writes[0]["Created_At"] == "2026-07-28T12:00:00.000Z"
+    assert writes[0]["Source_Status"] == "uploading"
+
+
+def test_upsert_uploading_source_fails_closed_on_digest_collision(monkeypatch):
+    persisted = record(status="uploading", transcript="hello")
+    persisted["fields"]["Content_SHA256"] = "0" * 64
+    writes = []
+
+    async def fake_get(*args, **kwargs):
+        return persisted
+
+    async def unexpected_upsert(*args, **kwargs):
+        writes.append((args, kwargs))
+
+    monkeypatch.setattr(airtable_client, "_enabled", lambda: True)
+    monkeypatch.setattr(airtable_client, "get_source_by_id", fake_get)
+    monkeypatch.setattr(airtable_client, "_upsert_by_fields", unexpected_upsert)
+
+    with pytest.raises(airtable_client.AirtableSourceConflictError):
+        run(
+            airtable_client.upsert_uploading_source(
+                source_id="source-1",
+                business_name=BUSINESS,
+                owner_id="user-1",
+                filename="call.txt",
+                file_type="txt",
+                transcript_text="hello",
+                word_count=1,
+                content_sha256=DIGEST,
+                share_id="share-1",
+                created_at="now",
+            )
+        )
+
+    assert writes == []
+
+
+def test_upsert_uploading_source_fails_closed_on_cross_scope_source_collision(
+    monkeypatch,
+):
+    collision = record(
+        status="uploading", business="Different Business", owner="user-1", transcript="hello"
+    )
+    collision["fields"].update(
+        {
+            "Name": "call.txt",
+            "File_Type": "txt",
+            "Word_Count": 1,
+            "Content_SHA256": DIGEST,
+        }
+    )
+    writes = []
+
+    async def scoped_get(*args, **kwargs):
+        return None
+
+    async def unscoped_get(*args, **kwargs):
+        return collision
+
+    async def unexpected_upsert(*args, **kwargs):
+        writes.append((args, kwargs))
+        return collision
+
+    monkeypatch.setattr(airtable_client, "_enabled", lambda: True)
+    monkeypatch.setattr(airtable_client, "get_source_by_id", scoped_get)
+    monkeypatch.setattr(
+        airtable_client,
+        "_get_source_by_id_unscoped",
+        unscoped_get,
+        raising=False,
+    )
+    monkeypatch.setattr(airtable_client, "_upsert_by_fields", unexpected_upsert)
+
+    with pytest.raises(airtable_client.AirtableSourceConflictError):
+        run(
+            airtable_client.upsert_uploading_source(
+                source_id="source-1",
+                business_name=BUSINESS,
+                owner_id="user-1",
+                filename="call.txt",
+                file_type="txt",
+                transcript_text="hello",
+                word_count=1,
+                content_sha256=DIGEST,
                 share_id="share-1",
                 created_at="now",
             )
@@ -678,6 +846,7 @@ def test_source_writes_fail_strictly_when_airtable_is_disabled(monkeypatch, oper
             file_type="txt",
             transcript_text="hello",
             word_count=1,
+            content_sha256=DIGEST,
             share_id="share-1",
             created_at="now",
         )
@@ -701,6 +870,7 @@ def test_upload_persists_transcript_before_returning_success(monkeypatch):
         persisted = record(status="uploading", transcript=kwargs["transcript_text"])
         persisted["fields"]["Source_Id"] = kwargs["source_id"]
         persisted["fields"]["Share_Id"] = kwargs["share_id"]
+        persisted["fields"]["Content_SHA256"] = kwargs["content_sha256"]
         return persisted
 
     async def fake_update(source_id, business_name, fields, owner_id=None):
@@ -1190,6 +1360,7 @@ def test_upload_then_analyze_survives_independent_route_invocations(monkeypatch)
                     "File_Type": kwargs["file_type"],
                     "Transcript_Text": kwargs["transcript_text"],
                     "Word_Count": kwargs["word_count"],
+                    "Content_SHA256": kwargs["content_sha256"],
                     "Source_Status": "uploading",
                     "Share_Id": kwargs["share_id"],
                     "Created_At": kwargs["created_at"],
