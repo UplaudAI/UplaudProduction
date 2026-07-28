@@ -29,6 +29,9 @@ export default function SettingsPage() {
       auth.name = name;
       setAuth(auth);
 
+      // Trigger reactive update across layouts
+      window.dispatchEvent(new Event("auth_change"));
+
       toast.success("Settings saved successfully!");
     } catch (err) {
       toast.error(err.message || "Failed to save settings");

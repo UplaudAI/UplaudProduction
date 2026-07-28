@@ -53,8 +53,20 @@ const NAV = [
 export default function DashboardLayout() {
   const nav = useNavigate();
   const loc = useLocation();
-  const user = getAuth();
+  const [user, setUser] = useState(getAuth());
   const [sources, setSources] = useState([]);
+
+  useEffect(() => {
+    const handler = () => {
+      setUser(getAuth());
+    };
+    window.addEventListener("auth_change", handler);
+    window.addEventListener("storage", handler);
+    return () => {
+      window.removeEventListener("auth_change", handler);
+      window.removeEventListener("storage", handler);
+    };
+  }, []);
   const zeroStateChecked = useRef(false);
 
   useEffect(() => {

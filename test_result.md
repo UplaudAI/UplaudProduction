@@ -333,7 +333,7 @@
 ##     file: "frontend/src/pages/business/SettingsPage.jsx, frontend/src/components/business/DashboardLayout.jsx"
 ##     stuck_count: 1
 ##     priority: "high"
-##     needs_retesting: false
+##     needs_retesting: true
 ##     status_history:
 ##         - working: true
 ##           agent: "main"
