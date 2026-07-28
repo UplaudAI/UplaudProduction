@@ -48,9 +48,6 @@ def _escape(v: str) -> str:
 def _retry_delay(
     response: httpx.Response, attempt: int, *, now: Optional[datetime] = None
 ) -> float:
-    if response.status_code != 429:
-        return min(_BACKOFF_SECONDS * (2 ** attempt), _MAX_RETRY_DELAY_SECONDS)
-
     retry_after = response.headers.get("Retry-After")
     if retry_after is not None:
         try:
@@ -68,7 +65,9 @@ def _retry_delay(
             return min(delay, _MAX_RETRY_DELAY_SECONDS)
         except (TypeError, ValueError, OverflowError):
             pass
-    return _RATE_LIMIT_FALLBACK_SECONDS
+    if response.status_code == 429:
+        return _RATE_LIMIT_FALLBACK_SECONDS
+    return min(_BACKOFF_SECONDS * (2 ** attempt), _MAX_RETRY_DELAY_SECONDS)
 
 
 async def _request(
@@ -121,15 +120,20 @@ async def _get(table: str, params: Optional[dict] = None) -> dict:
     return response.json()
 
 
-async def _get_all(table: str, params: Optional[dict] = None) -> list:
+async def _get_all(
+    table: str,
+    params: Optional[dict] = None,
+    *,
+    client: Optional[httpx.AsyncClient] = None,
+) -> list:
     if not _enabled():
         return []
     query = dict(params or {})
-    records = []
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async def fetch(active_client: httpx.AsyncClient) -> list:
+        records = []
         while True:
             response = await _request(
-                "GET", _table_url(table), client=client, params=dict(query)
+                "GET", _table_url(table), client=active_client, params=dict(query)
             )
             data = response.json()
             records.extend(data.get("records", []))
@@ -137,6 +141,11 @@ async def _get_all(table: str, params: Optional[dict] = None) -> list:
             if not offset:
                 return records
             query["offset"] = offset
+
+    if client is not None:
+        return await fetch(client)
+    async with httpx.AsyncClient(timeout=10.0) as owned_client:
+        return await fetch(owned_client)
 
 
 async def _get_record(table: str, record_id: str) -> Optional[dict]:
@@ -530,15 +539,20 @@ async def list_circles_by_business(business_name: str) -> list:
     user_map = {}
     if user_ids:
         try:
-            for user_id_chunk in _chunk_record_ids(user_ids):
-                formula = "OR(" + ",".join(
-                    f'RECORD_ID()="{_escape(user_id)}"' for user_id in user_id_chunk
-                ) + ")"
-                users = await _get_all(
-                    TABLE_USER, {"filterByFormula": formula, "pageSize": 100}
-                )
-                for user in users:
-                    user_map[user["id"]] = user.get("fields", {})
+            complete_user_map = {}
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                for user_id_chunk in _chunk_record_ids(user_ids):
+                    formula = "OR(" + ",".join(
+                        f'RECORD_ID()="{_escape(user_id)}"' for user_id in user_id_chunk
+                    ) + ")"
+                    users = await _get_all(
+                        TABLE_USER,
+                        {"filterByFormula": formula, "pageSize": 100},
+                        client=client,
+                    )
+                    for user in users:
+                        complete_user_map[user["id"]] = user.get("fields", {})
+            user_map = complete_user_map
         except Exception as e:
             logger.warning("Airtable user batch fetch failed: %s", e)
 

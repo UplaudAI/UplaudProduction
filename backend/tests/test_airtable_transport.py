@@ -145,6 +145,26 @@ def test_5xx_retries_use_short_exponential_backoff(monkeypatch):
     assert sleeps == [0.1, 0.2]
 
 
+@pytest.mark.parametrize(
+    ("retry_after", "expected_delay"),
+    [("7", 7), ("999999", 30)],
+)
+def test_503_honors_and_caps_retry_after(retry_after, expected_delay):
+    delay = airtable_client._retry_delay(
+        response(503, headers={"Retry-After": retry_after}), 0
+    )
+
+    assert delay == expected_delay
+
+
+def test_503_malformed_retry_after_uses_exponential_fallback():
+    delay = airtable_client._retry_delay(
+        response(503, headers={"Retry-After": "not-a-delay"}), 1
+    )
+
+    assert delay == 0.2
+
+
 @pytest.mark.parametrize("status_code", [429, 500, 502, 503, 504])
 def test_exhausted_retryable_status_propagates_after_three_attempts(monkeypatch, status_code):
     enable_airtable(monkeypatch)
@@ -286,11 +306,14 @@ def test_circles_linked_users_are_fetched_in_bounded_complete_batches(monkeypatc
         for index in range(count)
     ]
     user_calls = []
+    user_clients = []
+    client = install_client(monkeypatch, [])
 
-    async def fake_get_all(table, params=None):
+    async def fake_get_all(table, params=None, client=None):
         if table == airtable_client.TABLE_CIRCLES:
             return circle_records
         assert table == airtable_client.TABLE_USER
+        user_clients.append(client)
         formula = params["filterByFormula"]
         user_ids = re.findall(r'RECORD_ID\(\)="([^"]+)"', formula)
         user_calls.append((formula, user_ids))
@@ -306,7 +329,45 @@ def test_circles_linked_users_are_fetched_in_bounded_complete_batches(monkeypatc
     assert len(user_calls) > 1
     assert all(len(user_ids) <= 100 for _, user_ids in user_calls)
     assert all(len(formula) <= 3500 for formula, _ in user_calls)
+    assert client.factory.calls == 1
+    assert user_clients and all(user_client is client for user_client in user_clients)
     assert len(leads) == count
     assert {lead["job_title"] for lead in leads} == {
         f"Title {index}" for index in range(count)
     }
+
+
+def test_circles_discard_partial_user_enrichment_when_a_batch_fails(monkeypatch):
+    count = 150
+    circle_records = [
+        {
+            "id": f"circle-{index}",
+            "fields": {
+                "Receiver": f"Lead {index}",
+                "UserTable Link": [f"recUser{index:04d}"],
+            },
+        }
+        for index in range(count)
+    ]
+    user_call_count = 0
+    install_client(monkeypatch, [])
+
+    async def fake_get_all(table, params=None, client=None):
+        nonlocal user_call_count
+        if table == airtable_client.TABLE_CIRCLES:
+            return circle_records
+        user_call_count += 1
+        if user_call_count == 2:
+            raise httpx.ReadTimeout("second user batch failed")
+        user_ids = re.findall(r'RECORD_ID\(\)="([^"]+)"', params["filterByFormula"])
+        return [
+            {"id": user_id, "fields": {"Job_Title": "Temporarily enriched"}}
+            for user_id in user_ids
+        ]
+
+    monkeypatch.setattr(airtable_client, "_get_all", fake_get_all)
+
+    leads = asyncio.run(airtable_client.list_circles_by_business("Acme"))
+
+    assert user_call_count == 2
+    assert all(lead["job_title"] == "" for lead in leads)
