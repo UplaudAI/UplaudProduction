@@ -1,3 +1,4 @@
+import asyncio
 import os
 import re
 import logging
@@ -20,6 +21,10 @@ TABLE_BUSINESS = "Business"
 TABLE_CIRCLES = "Circles"
 TABLE_EVENT_LOG = "Event_Log"
 
+_RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
+_MAX_ATTEMPTS = 3
+_BACKOFF_SECONDS = 0.1
+
 
 def _enabled() -> bool:
     return bool(AIRTABLE_PAT and AIRTABLE_BASE_ID)
@@ -33,42 +38,78 @@ def _escape(v: str) -> str:
     return (v or "").replace('"', '\\"')
 
 
+def _retry_delay(response: httpx.Response, attempt: int) -> float:
+    retry_after = response.headers.get("Retry-After")
+    if retry_after is not None:
+        try:
+            return max(0.0, float(retry_after))
+        except ValueError:
+            pass
+    return _BACKOFF_SECONDS * (2 ** attempt)
+
+
+async def _request(method: str, url: str, *, allow_not_found: bool = False, **kwargs) -> httpx.Response:
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        for attempt in range(_MAX_ATTEMPTS):
+            response = await client.request(method, url, headers=_headers(), **kwargs)
+            if response.status_code in _RETRYABLE_STATUSES:
+                if attempt == _MAX_ATTEMPTS - 1:
+                    response.raise_for_status()
+                await asyncio.sleep(_retry_delay(response, attempt))
+                continue
+            if allow_not_found and response.status_code == 404:
+                return response
+            response.raise_for_status()
+            return response
+    raise RuntimeError("Airtable request retry loop exited unexpectedly")
+
+
 async def _get(table: str, params: Optional[dict] = None) -> dict:
     if not _enabled():
         return {"records": []}
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        r = await client.get(f"{AIRTABLE_API_URL}/{table}", headers=_headers(), params=params or {})
-        r.raise_for_status()
-        return r.json()
+    response = await _request("GET", f"{AIRTABLE_API_URL}/{table}", params=params or {})
+    return response.json()
+
+
+async def _get_all(table: str, params: Optional[dict] = None) -> list:
+    query = dict(params or {})
+    records = []
+    while True:
+        data = await _get(table, dict(query))
+        records.extend(data.get("records", []))
+        offset = data.get("offset")
+        if not offset:
+            return records
+        query["offset"] = offset
 
 
 async def _get_record(table: str, record_id: str) -> Optional[dict]:
     if not _enabled():
         return None
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        r = await client.get(f"{AIRTABLE_API_URL}/{table}/{record_id}", headers=_headers())
-        if r.status_code == 404:
-            return None
-        r.raise_for_status()
-        return r.json()
+    response = await _request(
+        "GET", f"{AIRTABLE_API_URL}/{table}/{record_id}", allow_not_found=True
+    )
+    if response.status_code == 404:
+        return None
+    return response.json()
 
 
 async def _create(table: str, fields: dict) -> Optional[dict]:
     if not _enabled():
         return None
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        r = await client.post(f"{AIRTABLE_API_URL}/{table}", headers=_headers(), json={"fields": fields})
-        r.raise_for_status()
-        return r.json()
+    response = await _request(
+        "POST", f"{AIRTABLE_API_URL}/{table}", json={"fields": fields}
+    )
+    return response.json()
 
 
 async def _update(table: str, record_id: str, fields: dict) -> Optional[dict]:
     if not _enabled():
         return None
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        r = await client.patch(f"{AIRTABLE_API_URL}/{table}/{record_id}", headers=_headers(), json={"fields": fields})
-        r.raise_for_status()
-        return r.json()
+    response = await _request(
+        "PATCH", f"{AIRTABLE_API_URL}/{table}/{record_id}", json={"fields": fields}
+    )
+    return response.json()
 
 
 async def enrich_person_pdl(first_name: str, last_name: str, company: str) -> Optional[dict]:
@@ -186,12 +227,12 @@ async def get_business_name_by_email_domain(email: str) -> Optional[str]:
         return None
     domain = _normalize_domain(email.split("@", 1)[1])
     try:
-        data = await _get(TABLE_BUSINESS, {"pageSize": 100})
+        records = await _get_all(TABLE_BUSINESS, {"pageSize": 100})
     except Exception as e:
         logger.warning("Airtable business lookup failed: %s", e)
         return None
     exact_match, subdomain_match = None, None
-    for rec in data.get("records", []):
+    for rec in records:
         fields = rec.get("fields", {})
         biz_domain = _normalize_domain(fields.get("Business Domain") or "")
         if not biz_domain:
@@ -399,11 +440,10 @@ async def list_circles_by_business(business_name: str) -> list:
         return []
     try:
         formula = f'{{Business_Name}}="{_escape(business_name)}"'
-        data = await _get(TABLE_CIRCLES, {"filterByFormula": formula, "pageSize": 100})
+        records = await _get_all(TABLE_CIRCLES, {"filterByFormula": formula, "pageSize": 100})
     except Exception as e:
         logger.warning("Airtable circles list failed: %s", e)
         return []
-    records = data.get("records", [])
 
     user_ids = set()
     for rec in records:
@@ -412,8 +452,8 @@ async def list_circles_by_business(business_name: str) -> list:
     if user_ids:
         try:
             formula = "OR(" + ",".join(f'RECORD_ID()="{uid}"' for uid in user_ids) + ")"
-            udata = await _get(TABLE_USER, {"filterByFormula": formula, "pageSize": 100})
-            for u in udata.get("records", []):
+            users = await _get_all(TABLE_USER, {"filterByFormula": formula, "pageSize": 100})
+            for u in users:
                 user_map[u["id"]] = u.get("fields", {})
         except Exception as e:
             logger.warning("Airtable user batch fetch failed: %s", e)
@@ -447,13 +487,13 @@ async def list_uplaud_by_business(business_name: str) -> list:
         return []
     try:
         formula = f'{{business_name}}="{_escape(business_name)}"'
-        data = await _get(TABLE_UPLAUD, {"filterByFormula": formula, "pageSize": 100})
+        records = await _get_all(TABLE_UPLAUD, {"filterByFormula": formula, "pageSize": 100})
     except Exception as e:
         logger.warning("Airtable uplaud list failed: %s", e)
         return []
     seen = set()
     out = []
-    for rec in data.get("records", []):
+    for rec in records:
         t = _uplaud_to_testimonial(rec)
         if not t["body"] or t["sentiment"] == "low":
             continue
@@ -542,8 +582,7 @@ async def list_growth_signals_by_business(business_name: str) -> list:
         return []
     try:
         formula = f'{{Business_Name}}="{_escape(business_name)}"'
-        data = await _get(TABLE_GROWTH_SIGNALS, {"filterByFormula": formula, "pageSize": 100})
-        return data.get("records", [])
+        return await _get_all(TABLE_GROWTH_SIGNALS, {"filterByFormula": formula, "pageSize": 100})
     except Exception as e:
         logger.warning("Airtable growth signals list failed: %s", e)
         return []
@@ -613,25 +652,17 @@ def _record_to_blog_post(rec: dict) -> dict:
 
 async def list_blog_posts_airtable(limit: int = 50, published_only: bool = True) -> list:
     """Fetch blog posts from Airtable, optionally filtering by Published=1, sorted by Created_At/createdTime descending."""
-    posts = []
-    offset = None
-    while len(posts) < limit:
-        page_size = min(limit - len(posts), 100)
-        params = {"pageSize": page_size}
-        if published_only:
-            params["filterByFormula"] = "{Published}=1"
-        if offset:
-            params["offset"] = offset
-        try:
-            data = await _get(TABLE_BLOG_POSTS, params)
-            records = data.get("records", [])
-            posts.extend([_record_to_blog_post(r) for r in records])
-            offset = data.get("offset")
-            if not offset or not records:
-                break
-        except Exception as e:
-            logger.warning("Airtable list_blog_posts failed: %s", e)
-            break
+    if limit <= 0:
+        return []
+    params = {"pageSize": min(limit, 100), "maxRecords": limit}
+    if published_only:
+        params["filterByFormula"] = "{Published}=1"
+    try:
+        records = await _get_all(TABLE_BLOG_POSTS, params)
+        posts = [_record_to_blog_post(record) for record in records]
+    except Exception as e:
+        logger.warning("Airtable list_blog_posts failed: %s", e)
+        return []
     posts.sort(key=lambda p: p["created_at"], reverse=True)
     return posts[:limit]
 
