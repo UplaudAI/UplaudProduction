@@ -40,6 +40,7 @@ if __package__:
         AirtableSourceConflictError,
         AirtableSourceLookupError,
     )
+    from .runtime_config import validate_vercel_runtime_config
 else:
     # Keep `uvicorn server:app` working when launched from backend/.
     import airtable_client
@@ -49,11 +50,18 @@ else:
         AirtableSourceConflictError,
         AirtableSourceLookupError,
     )
+    from runtime_config import validate_vercel_runtime_config
+
+validate_vercel_runtime_config()
 
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
-JWT_SECRET = os.environ.get("JWT_SECRET", "uplaud-demo-secret")
+JWT_SECRET = (
+    os.environ["JWT_SECRET"]
+    if "VERCEL_ENV" in os.environ
+    else os.environ.get("JWT_SECRET") or "uplaud-local-dev-secret"
+)
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_HOURS = 168
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
@@ -2335,7 +2343,12 @@ async def update_agent_plan_status(lead_id: str, action: str, current=Depends(ge
 # ---------------------------------------------------------------------------
 def check_admin_token(request: Request):
     token = request.headers.get("X-Admin-Token", "").strip()
-    expected = os.environ.get("ADMIN_PASSWORD", "P@yRew@rds123").strip()
+    expected = os.environ.get("ADMIN_PASSWORD", "").strip()
+    if not expected:
+        raise HTTPException(
+            status_code=503,
+            detail="ADMIN_PASSWORD is not configured on the server.",
+        )
     if not token or token != expected:
         raise HTTPException(status_code=401, detail="Unauthorized admin token")
     return token
