@@ -986,6 +986,56 @@ def test_uplaud_upsert_identity_is_share_id_across_request_hosts(monkeypatch):
     assert len({call[1]["Share Link"] for call in calls}) == 2
 
 
+def test_uplaud_cross_business_share_id_collision_fails_before_any_write(
+    monkeypatch,
+):
+    conflicting = {
+        "id": "rec-other-business",
+        "fields": {
+            "business_name": "Another Business",
+            "Share_Id": "stable-share-id",
+            "Share Link": "https://other.example/t/stable-share-id",
+        },
+    }
+    queries = []
+    writes = []
+
+    async def fake_get(table, params):
+        queries.append((table, params))
+        formula = params["filterByFormula"]
+        if formula == '{Share_Id}="stable-share-id"':
+            return {"records": [conflicting]}
+        return {"records": []}
+
+    async def fake_update(*args, **kwargs):
+        writes.append(("update", args, kwargs))
+        return {"id": "unexpected"}
+
+    async def fake_upsert(*args, **kwargs):
+        writes.append(("upsert", args, kwargs))
+        return {"id": "unexpected"}
+
+    monkeypatch.setattr(airtable_client, "_get", fake_get)
+    monkeypatch.setattr(airtable_client, "_update", fake_update)
+    monkeypatch.setattr(airtable_client, "_upsert_by_fields", fake_upsert)
+
+    with pytest.raises(RuntimeError, match="collision"):
+        run(
+            airtable_client.upsert_uplaud_record(
+                business_name=BUSINESS,
+                testimonial="Frozen approval",
+                reviewer_record_id="rec-user",
+                share_id="stable-share-id",
+                share_link="https://new.example/t/stable-share-id",
+                date_added="2026-07-28",
+            )
+        )
+
+    assert len(queries) == 1
+    assert "business_name" not in queries[0][1]["filterByFormula"]
+    assert writes == []
+
+
 def test_uplaud_upsert_adopts_legacy_share_link_row_without_duplicate(monkeypatch):
     legacy = {
         "id": "rec-legacy-uplaud",
@@ -995,9 +1045,13 @@ def test_uplaud_upsert_adopts_legacy_share_link_row_without_duplicate(monkeypatc
             "Share Link": "https://old-host.example/t/stable-share-id",
         },
     }
+    queries = []
     updates = []
 
     async def fake_get(table, params):
+        queries.append((table, params))
+        if len(queries) == 1:
+            return {"records": []}
         return {"records": [legacy]}
 
     async def fake_update(table, record_id, fields):
@@ -1024,6 +1078,10 @@ def test_uplaud_upsert_adopts_legacy_share_link_row_without_duplicate(monkeypatc
     )
 
     assert record_id == "rec-legacy-uplaud"
+    assert queries[0][1]["filterByFormula"] == '{Share_Id}="stable-share-id"'
+    assert "business_name" not in queries[0][1]["filterByFormula"]
+    assert '{business_name}="Scoped Business"' in queries[1][1]["filterByFormula"]
+    assert "RIGHT({Share Link}" in queries[1][1]["filterByFormula"]
     assert updates[0][1] == "rec-legacy-uplaud"
     assert updates[0][2]["Share_Id"] == "stable-share-id"
 

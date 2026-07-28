@@ -489,23 +489,46 @@ async def upsert_uplaud_record(
     fields["Share Link"] = share_link
     if date_added:
         fields["Date_Added"] = date_added
-    suffix = f"/t/{share_id}"
-    formula = (
-        f'AND({{business_name}}="{_escape(business_name)}",OR('
-        f'{{Share_Id}}="{_escape(share_id)}",'
-        f'RIGHT({{Share Link}},{len(suffix)})="{_escape(suffix)}"))'
+    share_id_formula = f'{{Share_Id}}="{_escape(share_id)}"'
+    share_id_data = await _get(
+        TABLE_UPLAUD, {"filterByFormula": share_id_formula, "maxRecords": 2}
     )
-    existing_data = await _get(
-        TABLE_UPLAUD, {"filterByFormula": formula, "maxRecords": 2}
-    )
-    existing_records = existing_data.get("records", [])
-    if len(existing_records) > 1:
+    share_id_records = share_id_data.get("records", [])
+    if len(share_id_records) > 1:
         raise RuntimeError("Multiple Uplaud rows match the persisted Share_Id")
-    if existing_records:
-        existing = existing_records[0]
-        existing_share_id = existing.get("fields", {}).get("Share_Id") or ""
-        if existing_share_id and existing_share_id != share_id:
+    if share_id_records:
+        existing = share_id_records[0]
+        existing_fields = existing.get("fields", {})
+        if existing_fields.get("Share_Id") != share_id:
             raise RuntimeError("Uplaud Share_Id collision detected")
+        if (existing_fields.get("business_name") or "") != (business_name or ""):
+            raise RuntimeError("Uplaud Share_Id collision detected across businesses")
+        updated = await _update(TABLE_UPLAUD, existing["id"], fields)
+        if not updated or not updated.get("id"):
+            raise RuntimeError("Uplaud persistence failed")
+        return updated["id"]
+
+    suffix = f"/t/{share_id}"
+    legacy_formula = (
+        f'AND({{business_name}}="{_escape(business_name)}",'
+        "{Share_Id}=BLANK(),"
+        f'RIGHT({{Share Link}},{len(suffix)})="{_escape(suffix)}")'
+    )
+    legacy_data = await _get(
+        TABLE_UPLAUD, {"filterByFormula": legacy_formula, "maxRecords": 2}
+    )
+    legacy_records = legacy_data.get("records", [])
+    if len(legacy_records) > 1:
+        raise RuntimeError("Multiple legacy Uplaud rows match the persisted Share_Id")
+    if legacy_records:
+        existing = legacy_records[0]
+        existing_fields = existing.get("fields", {})
+        if (
+            (existing_fields.get("business_name") or "") != (business_name or "")
+            or existing_fields.get("Share_Id")
+            or not (existing_fields.get("Share Link") or "").endswith(suffix)
+        ):
+            raise RuntimeError("Uplaud legacy Share Link collision detected")
         updated = await _update(TABLE_UPLAUD, existing["id"], fields)
         if not updated or not updated.get("id"):
             raise RuntimeError("Uplaud persistence failed")
