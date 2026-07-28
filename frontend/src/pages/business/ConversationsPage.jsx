@@ -155,6 +155,11 @@ export default function ConversationsPage() {
     return { totalBuying, totalPain, approvedCount, draftedCount };
   }, [conversations]);
 
+  const latestApproved = useMemo(
+    () => conversations.find((c) => c.draftedStory?.status === "approved") || null,
+    [conversations]
+  );
+
   const northStar = useMemo(() => {
     if (conversations.length === 0) {
       return {
@@ -182,11 +187,6 @@ export default function ConversationsPage() {
     if (conversations.length === 0) return null;
     return [...conversations].sort((a, b) => b.signalScore - a.signalScore)[0];
   }, [conversations]);
-
-  const latestApproved = useMemo(
-    () => conversations.find((c) => c.draftedStory?.status === "approved") || null,
-    [conversations]
-  );
 
   const smartAction = useMemo(() => {
     if (!topSignalConversation) {
