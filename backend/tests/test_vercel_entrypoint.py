@@ -248,6 +248,7 @@ def test_vercel_entrypoint_serves_api_root_and_representative_routes():
     route_paths = {route.path for route in app.routes}
     assert {
         "/api/auth/login",
+        "/api/session/login",
         "/api/sources",
         "/api/blog",
         "/api/public/testimonial/{share_id}",
@@ -264,7 +265,7 @@ def test_vercel_catch_all_entrypoint_serves_nested_api_routes():
 
     assert module.app is server_app
 
-    response = TestClient(module.app).get("/api/auth/me")
+    response = TestClient(module.app).get("/api/session/me")
     assert response.status_code == 401
     assert response.json()["detail"] == "Not authenticated"
 

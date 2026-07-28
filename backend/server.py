@@ -807,6 +807,7 @@ async def root():
     return {"message": "Uplaud Growth Engine API"}
 
 
+@api_router.post("/session/login", response_model=LoginResponse)
 @api_router.post("/auth/login", response_model=LoginResponse)
 async def login(body: LoginRequest):
     email = body.email.lower().strip()
@@ -871,6 +872,7 @@ async def login(body: LoginRequest):
     )
 
 
+@api_router.get("/session/me", response_model=UserOut)
 @api_router.get("/auth/me", response_model=UserOut)
 async def me(current=Depends(get_current_user)):
     return user_to_out(current)

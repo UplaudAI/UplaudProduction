@@ -21,7 +21,9 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   (error) => {
-    const isLoginCall = error.config?.url?.includes("/auth/login");
+    const isLoginCall =
+      error.config?.url?.includes("/auth/login") ||
+      error.config?.url?.includes("/session/login");
     if (error.response?.status === 401 && typeof window !== "undefined" && !isLoginCall) {
       clearAuth();
       if (window.location.pathname !== "/business") {

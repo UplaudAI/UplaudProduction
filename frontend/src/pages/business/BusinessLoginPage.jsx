@@ -110,7 +110,7 @@ export default function BusinessLoginPage() {
         if (authError) {
           // Fall back to local MongoDB login if user is not in Supabase yet (e.g. initial demo/test users)
           try {
-            const { data } = await api.post("/auth/login", { email, password });
+            const { data } = await api.post("/session/login", { email, password });
             setAuth({
               email: data.user.email,
               name: data.user.name,
@@ -131,9 +131,9 @@ export default function BusinessLoginPage() {
         // Successfully logged in to Supabase!
         const token = sessionData.session.access_token;
 
-        // Query `/auth/me` on FastAPI backend to fetch profile & verify approval status
+        // Query FastAPI backend to fetch profile & verify approval status
         try {
-          const userProfileRes = await api.get("/auth/me", {
+          const userProfileRes = await api.get("/session/me", {
             headers: { Authorization: `Bearer ${token}` },
           });
           const profile = userProfileRes.data;
