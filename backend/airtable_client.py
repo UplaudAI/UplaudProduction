@@ -1084,21 +1084,38 @@ async def update_source_by_share_id(share_id: str, fields: dict) -> Optional[dic
         existing.get("fields", {}).get("Testimonial_Status") or "draft"
     ).strip().lower()
     if existing_status == "approved":
+        existing_fields = existing.get("fields", {})
         if "Testimonial_Draft" in fields:
             raise AirtableSourceConflictError("Approved testimonial is immutable")
-        if (
-            "Approved_Testimonial" in fields
-            and not existing.get("fields", {}).get("Approved_Testimonial")
-        ):
+        allows_legacy_backfill = False
+        if "Approved_Testimonial" in fields:
             proposed_snapshot = (fields.get("Approved_Testimonial") or "").strip()
-            current_draft = (
-                existing.get("fields", {}).get("Testimonial_Draft") or ""
+            current_snapshot = (
+                existing_fields.get("Approved_Testimonial") or ""
             ).strip()
-            if not proposed_snapshot or proposed_snapshot != current_draft:
-                raise AirtableSourceConflictError(
-                    "Legacy approval snapshot no longer matches its draft"
-                )
-        elif any(
+            if current_snapshot:
+                if proposed_snapshot != current_snapshot:
+                    return existing
+            else:
+                current_draft = (
+                    existing_fields.get("Testimonial_Draft") or ""
+                ).strip()
+                if not proposed_snapshot or proposed_snapshot != current_draft:
+                    raise AirtableSourceConflictError(
+                        "Legacy approval snapshot no longer matches its draft"
+                    )
+                allows_legacy_backfill = True
+        if "Approved_At" in fields:
+            proposed_approved_at = (fields.get("Approved_At") or "").strip()
+            current_approved_at = (existing_fields.get("Approved_At") or "").strip()
+            if current_approved_at:
+                if proposed_approved_at != current_approved_at:
+                    return existing
+            elif proposed_approved_at:
+                allows_legacy_backfill = True
+            else:
+                return existing
+        if not allows_legacy_backfill and any(
             field in fields
             for field in ("Testimonial_Status", "Approved_Testimonial", "Approved_At")
         ):

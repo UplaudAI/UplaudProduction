@@ -82,6 +82,25 @@ def install_business(monkeypatch):
     )
 
 
+@pytest.fixture(autouse=True)
+def install_blob_boundary(monkeypatch):
+    async def fake_store_source(*args, **kwargs):
+        return "https://private.blob.example/source"
+
+    async def fake_receipt(**kwargs):
+        return {
+            "share_id": kwargs["share_id"],
+            "source_id": kwargs["source_id"],
+            "testimonial": kwargs["testimonial"],
+            "approved_at": kwargs["approved_at"],
+        }
+
+    monkeypatch.setattr(server.blob_storage, "store_source", fake_store_source)
+    monkeypatch.setattr(
+        server.blob_storage, "get_or_create_approval_receipt", fake_receipt
+    )
+
+
 def test_create_uploaded_source_writes_exact_growth_signal_fields(monkeypatch):
     calls = []
 

@@ -122,6 +122,7 @@ typing_extensions==4.16.0
 tzdata==2026.3
 uritemplate==4.2.0
 urllib3==2.7.0
+vercel>=0.5.0
 uvicorn==0.25.0
 watchfiles==1.2.0
 websockets==16.1.1

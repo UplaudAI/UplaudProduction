@@ -26,6 +26,7 @@ from starlette.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field
 
 from docx import Document as DocxDocument
+from PIL import Image, UnidentifiedImageError
 from pypdf import PdfReader
 from openai import OpenAI
 from bs4 import BeautifulSoup
@@ -33,6 +34,7 @@ from urllib.parse import urljoin
 from collections import Counter
 
 import airtable_client
+import blob_storage
 from airtable_client import (
     AirtableSourceCollisionError,
     AirtableSourceConflictError,
@@ -52,6 +54,21 @@ LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-4o")
 MAX_AIRTABLE_TRANSCRIPT_CHARS = 90_000
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 MAX_SHARE_TOKEN_ATTEMPTS = 5
+ALLOWED_BLOG_IMAGE_TYPES = {
+    ".avif": "image/avif",
+    ".gif": "image/gif",
+    ".jpeg": "image/jpeg",
+    ".jpg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+}
+BLOG_IMAGE_FORMAT_TYPES = {
+    "AVIF": "image/avif",
+    "GIF": "image/gif",
+    "JPEG": "image/jpeg",
+    "PNG": "image/png",
+    "WEBP": "image/webp",
+}
 
 # Official OpenAI SDK client (user-provided key). Created once and reused.
 openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
@@ -1167,6 +1184,21 @@ async def upload_source(file: UploadFile = File(...), current=Depends(get_curren
             status_code=503, detail="Source storage is temporarily unavailable."
         ) from None
     try:
+        blob_url = await blob_storage.store_source(
+            source_id,
+            filename,
+            content,
+            file.content_type or "application/octet-stream",
+        )
+    except blob_storage.BlobStorageUnavailable:
+        raise HTTPException(
+            status_code=503, detail="File storage is temporarily unavailable."
+        ) from None
+    except blob_storage.BlobStorageError:
+        raise HTTPException(
+            status_code=502, detail="Could not persist the uploaded file."
+        ) from None
+    try:
         rec = await airtable_client.create_uploaded_source(
             source_id=source_id,
             business_name=business_name,
@@ -1177,9 +1209,11 @@ async def upload_source(file: UploadFile = File(...), current=Depends(get_curren
             word_count=word_count,
             share_id=share_id,
             created_at=datetime.now(timezone.utc).isoformat(),
+            blob_url=blob_url,
         )
     except Exception as exc:
         logger.warning("Source upload persistence failed: %s", exc)
+        await blob_storage.delete_blob(blob_url)
         raise HTTPException(
             status_code=502, detail="Could not persist the uploaded source."
         ) from None
@@ -1617,22 +1651,52 @@ async def public_approve_testimonial(share_id: str, request: Request):
             status_code=409, detail="A nonempty testimonial is required for approval."
         )
 
+    candidate_approved_at = (
+        doc.get("approved_at") or datetime.now(timezone.utc).isoformat()
+    )
+    try:
+        receipt = await blob_storage.get_or_create_approval_receipt(
+            share_id=share_id,
+            source_id=doc.get("id") or "",
+            testimonial=testimonial,
+            approved_at=candidate_approved_at,
+        )
+    except blob_storage.InvalidApprovalReceipt:
+        raise HTTPException(
+            status_code=409, detail="Approval receipt validation failed."
+        ) from None
+    except blob_storage.BlobStorageUnavailable:
+        raise HTTPException(
+            status_code=503, detail="Approval storage is temporarily unavailable."
+        ) from None
+    except blob_storage.BlobStorageError:
+        raise HTTPException(
+            status_code=502, detail="Could not persist testimonial approval."
+        ) from None
+
+    receipt_testimonial = receipt["testimonial"]
+    receipt_approved_at = receipt["approved_at"]
+    already_reconciled = (
+        status == "approved"
+        and testimonial == receipt_testimonial
+        and doc.get("approved_at") == receipt_approved_at
+        and not doc.get("approved_snapshot_missing")
+    )
     approved_doc = doc
-    if status == "sent":
-        now = datetime.now(timezone.utc).isoformat()
+    if not already_reconciled:
         try:
             updated = await airtable_client.update_source_by_share_id(
                 share_id,
                 {
                     "Testimonial_Status": "approved",
-                    "Approved_Testimonial": testimonial,
-                    "Approved_At": now,
+                    "Approved_Testimonial": receipt_testimonial,
+                    "Approved_At": receipt_approved_at,
                 },
             )
         except AirtableSourceConflictError:
             raise HTTPException(
                 status_code=409,
-                detail="Source lifecycle changed; reload and try again.",
+                detail="Source approval does not match its immutable receipt.",
             ) from None
         except AirtableSourceLookupError:
             raise HTTPException(
@@ -1647,31 +1711,26 @@ async def public_approve_testimonial(share_id: str, request: Request):
         if not updated:
             raise HTTPException(status_code=404, detail="Testimonial not found")
         approved_doc = _growth_signal_record_to_pub_doc(updated)
-    elif approved_doc.get("approved_snapshot_missing"):
-        try:
-            updated = await airtable_client.update_source_by_share_id(
-                share_id, {"Approved_Testimonial": testimonial}
-            )
-        except AirtableSourceConflictError:
-            raise HTTPException(
-                status_code=409,
-                detail="Approved testimonial content changed; reload and try again.",
-            ) from None
-        except AirtableSourceLookupError:
-            raise HTTPException(
-                status_code=503,
-                detail="Source storage is temporarily unavailable.",
-            ) from None
-        except Exception as exc:
-            logger.warning("Legacy approval snapshot backfill failed: %s", exc)
-            raise HTTPException(
-                status_code=502, detail="Could not approve testimonial."
-            ) from None
-        if not updated:
-            raise HTTPException(status_code=404, detail="Testimonial not found")
-        approved_doc = _growth_signal_record_to_pub_doc(updated)
+
+    if (
+        approved_doc.get("lifecycle_state") != "approved"
+        or approved_doc.get("testimonial_draft") != receipt_testimonial
+        or approved_doc.get("approved_at") != receipt_approved_at
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Source approval does not match its immutable receipt.",
+        )
 
     reconciled_doc = await _sync_canonical_approval_to_uplaud(share_id, request)
+    if (
+        reconciled_doc.get("testimonial_draft") != receipt_testimonial
+        or reconciled_doc.get("approved_at") != receipt_approved_at
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Source approval does not match its immutable receipt.",
+        )
     return _public_payload(reconciled_doc)
 
 
@@ -2265,15 +2324,50 @@ async def delete_blog_post(slug: str, token: str = Depends(check_admin_token)):
 
 @api_router.post("/admin/upload")
 async def admin_upload(file: UploadFile = File(...), token: str = Depends(check_admin_token)):
-    uploads_dir = "/app/frontend/public/uploads"
-    os.makedirs(uploads_dir, exist_ok=True)
-    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
-    filename = f"{uuid.uuid4().hex[:12]}.{ext}" if ext else uuid.uuid4().hex[:12]
-    filepath = os.path.join(uploads_dir, filename)
-    content = await file.read()
-    with open(filepath, "wb") as f:
-        f.write(content)
-    url = f"/uploads/{filename}"
+    filename = file.filename or ""
+    extension = f".{filename.rsplit('.', 1)[-1].lower()}" if "." in filename else ""
+    content_type = (file.content_type or "").split(";", 1)[0].strip().lower()
+    if ALLOWED_BLOG_IMAGE_TYPES.get(extension) != content_type:
+        raise HTTPException(
+            status_code=400,
+            detail="Upload a supported image with a matching file extension.",
+        )
+    content = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File is too large. Maximum size is {MAX_UPLOAD_BYTES} bytes.",
+        )
+    try:
+        with Image.open(io.BytesIO(content)) as image:
+            detected_content_type = BLOG_IMAGE_FORMAT_TYPES.get(image.format or "")
+            image.verify()
+    except (
+        Image.DecompressionBombError,
+        UnidentifiedImageError,
+        NotImplementedError,
+        OSError,
+        SyntaxError,
+        ValueError,
+    ):
+        raise HTTPException(
+            status_code=400, detail="The uploaded file is not a valid image."
+        ) from None
+    if detected_content_type != content_type:
+        raise HTTPException(
+            status_code=400,
+            detail="The uploaded image content does not match its declared type.",
+        )
+    try:
+        url = await blob_storage.store_blog_image(filename, content, content_type)
+    except blob_storage.BlobStorageUnavailable:
+        raise HTTPException(
+            status_code=503, detail="Image storage is temporarily unavailable."
+        ) from None
+    except blob_storage.BlobStorageError:
+        raise HTTPException(
+            status_code=502, detail="Could not persist the uploaded image."
+        ) from None
     return {"url": url}
 
 

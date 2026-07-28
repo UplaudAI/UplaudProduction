@@ -87,6 +87,25 @@ def install_business(monkeypatch):
     )
 
 
+@pytest.fixture(autouse=True)
+def install_blob_boundary(monkeypatch):
+    async def fake_store_source(*args, **kwargs):
+        return "https://private.blob.example/source"
+
+    async def fake_receipt(**kwargs):
+        return {
+            "share_id": kwargs["share_id"],
+            "source_id": kwargs["source_id"],
+            "testimonial": kwargs["testimonial"],
+            "approved_at": kwargs["approved_at"],
+        }
+
+    monkeypatch.setattr(server.blob_storage, "store_source", fake_store_source)
+    monkeypatch.setattr(
+        server.blob_storage, "get_or_create_approval_receipt", fake_receipt
+    )
+
+
 @pytest.mark.parametrize("operation", ["get", "update"])
 def test_blank_owner_uploaded_source_is_not_business_shared(monkeypatch, operation):
     uploaded = source_record(source_status="uploaded", owner="")
@@ -845,10 +864,52 @@ def test_repeated_legacy_approval_backfills_snapshot_without_changing_timestamp(
     result = run(server.public_approve_testimonial("share-1", request()))
 
     assert source_writes == [
-        {"Approved_Testimonial": "Legacy approved words"}
+        {
+            "Testimonial_Status": "approved",
+            "Approved_Testimonial": "Legacy approved words",
+            "Approved_At": "2026-07-27T09:15:00+00:00",
+        }
     ]
     assert approved["fields"]["Approved_At"] == "2026-07-27T09:15:00+00:00"
     assert result.testimonial == "Legacy approved words"
+
+
+def test_approved_source_backfills_missing_timestamp_from_receipt(monkeypatch):
+    approved = source_record(
+        testimonial_status="approved",
+        approved_testimonial="Frozen approval",
+    )
+    writes = []
+
+    async def fake_lookup(share_id):
+        return approved
+
+    async def fake_update(table, record_id, fields):
+        writes.append(fields)
+        approved["fields"].update(fields)
+        return approved
+
+    async def fake_user(**kwargs):
+        return "rec-user"
+
+    async def fake_uplaud(**kwargs):
+        return "rec-uplaud"
+
+    monkeypatch.setattr(airtable_client, "_enabled", lambda: True)
+    monkeypatch.setattr(
+        airtable_client, "get_growth_signal_by_share_id", fake_lookup
+    )
+    monkeypatch.setattr(airtable_client, "_update", fake_update)
+    monkeypatch.setattr(server.airtable_client, "find_or_create_user", fake_user)
+    monkeypatch.setattr(server.airtable_client, "upsert_uplaud_record", fake_uplaud)
+
+    result = run(server.public_approve_testimonial("share-1", request()))
+
+    assert len(writes) == 1
+    assert writes[0]["Approved_Testimonial"] == "Frozen approval"
+    assert writes[0]["Approved_At"]
+    assert result.testimonial == "Frozen approval"
+    assert result.approved_at == writes[0]["Approved_At"]
 
 
 def test_uplaud_failure_after_source_approval_is_retryable_and_idempotent(monkeypatch):
@@ -901,7 +962,8 @@ def test_concurrent_approvals_reconcile_uplaud_to_canonical_snapshot(monkeypatch
     initial_reads = 0
     both_updates_ready = asyncio.Event()
     approval_updates = 0
-    b_uplaud_written = asyncio.Event()
+    winning_receipt = None
+    receipt_lock = asyncio.Lock()
     uplaud_writes = []
 
     async def fake_lookup(share_id):
@@ -918,8 +980,6 @@ def test_concurrent_approvals_reconcile_uplaud_to_canonical_snapshot(monkeypatch
         if approval_updates == 2:
             both_updates_ready.set()
         await both_updates_ready.wait()
-        if fields["Approved_Testimonial"] == "Approval B":
-            await asyncio.sleep(0.01)
         persisted = source_record(
             testimonial_status="approved",
             draft=fields["Approved_Testimonial"],
@@ -928,19 +988,30 @@ def test_concurrent_approvals_reconcile_uplaud_to_canonical_snapshot(monkeypatch
         )
         return persisted
 
+    async def fake_receipt(**kwargs):
+        nonlocal winning_receipt
+        async with receipt_lock:
+            if winning_receipt is None:
+                winning_receipt = {
+                    "share_id": kwargs["share_id"],
+                    "source_id": kwargs["source_id"],
+                    "testimonial": kwargs["testimonial"],
+                    "approved_at": kwargs["approved_at"],
+                }
+            return dict(winning_receipt)
+
     async def fake_user(**kwargs):
         return "rec-user"
 
     async def fake_uplaud(**kwargs):
-        if kwargs["testimonial"] == "Approval A" and not b_uplaud_written.is_set():
-            await b_uplaud_written.wait()
         uplaud_writes.append(kwargs["testimonial"])
-        if kwargs["testimonial"] == "Approval B":
-            b_uplaud_written.set()
         return "rec-uplaud"
 
     monkeypatch.setattr(
         server.airtable_client, "get_growth_signal_by_share_id", fake_lookup
+    )
+    monkeypatch.setattr(
+        server.blob_storage, "get_or_create_approval_receipt", fake_receipt
     )
     monkeypatch.setattr(server.airtable_client, "update_source_by_share_id", fake_update)
     monkeypatch.setattr(server.airtable_client, "find_or_create_user", fake_user)
@@ -955,9 +1026,10 @@ def test_concurrent_approvals_reconcile_uplaud_to_canonical_snapshot(monkeypatch
     first, second = run(approve_both())
 
     canonical = persisted["fields"]["Approved_Testimonial"]
-    assert canonical == "Approval B"
-    assert uplaud_writes[-1] == canonical
+    assert canonical == winning_receipt["testimonial"]
+    assert set(uplaud_writes) == {canonical}
     assert first.testimonial == second.testimonial == canonical
+    assert first.approved_at == second.approved_at == winning_receipt["approved_at"]
 
 
 def test_uplaud_upsert_identity_is_share_id_across_request_hosts(monkeypatch):
