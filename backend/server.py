@@ -7,8 +7,11 @@ load_dotenv(ROOT_DIR / ".env")
 import os
 import io
 import re
+import base64
 import hashlib
+import hmac
 import json
+import secrets
 import uuid
 import asyncio
 import logging
@@ -30,7 +33,11 @@ from urllib.parse import urljoin
 from collections import Counter
 
 import airtable_client
-from airtable_client import AirtableSourceLookupError
+from airtable_client import (
+    AirtableSourceCollisionError,
+    AirtableSourceConflictError,
+    AirtableSourceLookupError,
+)
 
 # ---------------------------------------------------------------------------
 # Config
@@ -43,6 +50,8 @@ LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-4o")
 # Airtable long-text cells support up to 100,000 characters. Keep a 10% safety
 # margin so uploads fail clearly before a record write rather than at Airtable.
 MAX_AIRTABLE_TRANSCRIPT_CHARS = 90_000
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+MAX_SHARE_TOKEN_ATTEMPTS = 5
 
 # Official OpenAI SDK client (user-provided key). Created once and reused.
 openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
@@ -949,6 +958,38 @@ def _record_source_status(fields: dict) -> str:
     return "uploaded"
 
 
+def _testimonial_status(fields: dict) -> str:
+    persisted_status = (fields.get("Testimonial_Status") or "draft").strip().lower()
+    if persisted_status == "draft" and fields.get("Approval_Requested_At"):
+        return "sent"
+    return persisted_status
+
+
+def _source_lifecycle_state(fields: dict) -> str:
+    source_status = _record_source_status(fields)
+    testimonial_status = _testimonial_status(fields)
+    if source_status == "uploaded" and testimonial_status == "draft":
+        return "uploaded"
+    if source_status == "analyzed" and testimonial_status in {
+        "draft",
+        "sent",
+        "approved",
+    }:
+        return "analyzed" if testimonial_status == "draft" else testimonial_status
+    return "invalid"
+
+
+def _display_testimonial(fields: dict) -> str:
+    """Use the immutable approval snapshot whenever the source is approved."""
+    if _testimonial_status(fields) == "approved":
+        return (
+            fields.get("Approved_Testimonial")
+            or fields.get("Testimonial_Draft")
+            or ""
+        )
+    return fields.get("Testimonial_Draft") or ""
+
+
 def _record_client_name(fields: dict) -> str:
     if fields.get("Company") or fields.get("Person"):
         return fields.get("Company") or fields.get("Person")
@@ -988,7 +1029,7 @@ def record_to_source_out(rec: dict) -> SourceOut:
             "faqs": [faq for faq in faqs if faq],
         }
 
-    testimonial_draft = f.get("Testimonial_Draft") or None
+    testimonial_draft = _display_testimonial(f) or None
     if status == "analyzed" and not testimonial_draft and customer_language:
         testimonial_draft = " ".join(customer_language[:3]).strip()
     filename = f.get("Filename") or f.get("Name") or "Transcript.txt"
@@ -1010,7 +1051,7 @@ def record_to_source_out(rec: dict) -> SourceOut:
         testimonial_draft=testimonial_draft,
         testimonial_is_verbatim=True,
         share_id=f.get("Share_Id") or "",
-        testimonial_status=f.get("Testimonial_Status") or "draft",
+        testimonial_status=_testimonial_status(f),
         approved_at=f.get("Approved_At") or None,
         approval_requested_at=f.get("Approval_Requested_At") or None,
     )
@@ -1032,14 +1073,76 @@ def _growth_signal_record_to_doc(rec: dict) -> dict:
 
 
 def _legacy_source_share_id(source_id: str, business_name: str) -> str:
-    """Derive one stable public ID for a legacy row without exposing its record ID."""
+    """Derive a stable high-entropy token without exposing its Airtable record ID."""
     identity = f"uplaud-source:{business_name}:{source_id}"
-    return uuid.uuid5(uuid.NAMESPACE_URL, identity).hex[:12]
+    digest = hmac.new(
+        JWT_SECRET.encode("utf-8"), identity.encode("utf-8"), hashlib.sha256
+    ).digest()
+    return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+
+
+async def _unique_source_share_id(
+    *,
+    preferred: str = "",
+    source_id: str = "",
+    business_name: str = "",
+) -> str:
+    """Allocate a globally unique capability token through strict Airtable reads."""
+    for attempt in range(MAX_SHARE_TOKEN_ATTEMPTS):
+        candidate = preferred if attempt == 0 and preferred else secrets.token_urlsafe(32)
+        try:
+            existing = await airtable_client.get_growth_signal_by_share_id(candidate)
+        except AirtableSourceCollisionError:
+            continue
+        if not existing:
+            return candidate
+        fields = existing.get("fields", {})
+        if (
+            source_id
+            and fields.get("Source_Id") == source_id
+            and fields.get("Business_Name") == business_name
+        ):
+            return candidate
+    raise AirtableSourceCollisionError("Could not allocate a unique source Share_Id")
+
+
+async def _verify_persisted_source_share_id(
+    rec: dict, *, business_name: str, owner_id: str
+) -> dict:
+    """Post-verify a persisted token and repair a collision on this source row."""
+    current = rec
+    for _ in range(MAX_SHARE_TOKEN_ATTEMPTS):
+        fields = current.get("fields", {})
+        share_id = fields.get("Share_Id") or ""
+        try:
+            matched = await airtable_client.get_growth_signal_by_share_id(share_id)
+        except AirtableSourceCollisionError:
+            matched = None
+        if matched and matched.get("id") == current.get("id"):
+            return current
+        replacement = await _unique_source_share_id(
+            source_id=fields.get("Source_Id") or "",
+            business_name=business_name,
+        )
+        current = await airtable_client.update_source_by_id(
+            fields.get("Source_Id") or "",
+            business_name,
+            {"Share_Id": replacement},
+            owner_id=owner_id,
+        )
+        if not current:
+            raise AirtableSourceLookupError("Persisted source disappeared")
+    raise AirtableSourceCollisionError("Could not verify a unique source Share_Id")
 
 
 @api_router.post("/sources", response_model=SourceOut)
 async def upload_source(file: UploadFile = File(...), current=Depends(get_current_user)):
-    content = await file.read()
+    content = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File is too large. Maximum size is {MAX_UPLOAD_BYTES} bytes.",
+        )
     filename = file.filename or "Transcript.txt"
     text = extract_text(filename, content)
     if not text.strip():
@@ -1054,22 +1157,39 @@ async def upload_source(file: UploadFile = File(...), current=Depends(get_curren
         )
     word_count = len(text.split())
     business_name = await _current_business_name(current)
+    source_id = str(uuid.uuid4())
+    try:
+        share_id = await _unique_source_share_id(
+            source_id=source_id, business_name=business_name
+        )
+    except RuntimeError:
+        raise HTTPException(
+            status_code=503, detail="Source storage is temporarily unavailable."
+        ) from None
     try:
         rec = await airtable_client.create_uploaded_source(
-            source_id=str(uuid.uuid4()),
+            source_id=source_id,
             business_name=business_name,
             owner_id=current["id"],
             filename=filename,
             file_type=filename.rsplit(".", 1)[-1].lower(),
             transcript_text=text,
             word_count=word_count,
-            share_id=uuid.uuid4().hex[:12],
+            share_id=share_id,
             created_at=datetime.now(timezone.utc).isoformat(),
         )
     except Exception as exc:
         logger.warning("Source upload persistence failed: %s", exc)
         raise HTTPException(
             status_code=502, detail="Could not persist the uploaded source."
+        ) from None
+    try:
+        rec = await _verify_persisted_source_share_id(
+            rec, business_name=business_name, owner_id=current["id"]
+        )
+    except RuntimeError:
+        raise HTTPException(
+            status_code=503, detail="Source storage is temporarily unavailable."
         ) from None
     return record_to_source_out(rec)
 
@@ -1120,10 +1240,15 @@ async def analyze_source(source_id: str, request: Request, regenerate: bool = Fa
     fields = rec.get("fields", {})
     if not fields.get("Share_Id"):
         try:
+            share_id = await _unique_source_share_id(
+                preferred=_legacy_source_share_id(source_id, business_name),
+                source_id=source_id,
+                business_name=business_name,
+            )
             rec = await airtable_client.update_source_by_id(
                 source_id,
                 business_name,
-                {"Share_Id": _legacy_source_share_id(source_id, business_name)},
+                {"Share_Id": share_id},
                 owner_id=current["id"],
             )
         except AirtableSourceLookupError:
@@ -1138,8 +1263,25 @@ async def analyze_source(source_id: str, request: Request, regenerate: bool = Fa
             ) from None
         if not rec:
             raise HTTPException(status_code=404, detail="Source not found")
+        try:
+            rec = await _verify_persisted_source_share_id(
+                rec, business_name=business_name, owner_id=current["id"]
+            )
+        except RuntimeError:
+            raise HTTPException(
+                status_code=503,
+                detail="Source storage is temporarily unavailable.",
+            ) from None
         fields = rec.get("fields", {})
-    if _record_source_status(fields) == "analyzed" and not regenerate:
+    lifecycle_state = _source_lifecycle_state(fields)
+    if lifecycle_state == "invalid":
+        raise HTTPException(status_code=409, detail="Source lifecycle state is invalid.")
+    if regenerate and lifecycle_state in {"sent", "approved"}:
+        raise HTTPException(
+            status_code=409,
+            detail="This testimonial can no longer be regenerated.",
+        )
+    if lifecycle_state in {"analyzed", "sent", "approved"} and not regenerate:
         return record_to_source_out(rec)
 
     transcript_text = (fields.get("Transcript_Text") or "").strip()
@@ -1194,28 +1336,9 @@ async def analyze_source(source_id: str, request: Request, regenerate: bool = Fa
         "Product_Feedback": "\n".join(insight_values["product_feedback"]),
         "FAQs": "\n".join(insight_values["faqs"]),
         "Testimonial_Draft": testimonial,
-        "Testimonial_Status": fields.get("Testimonial_Status") or "draft",
         "Share_Id": share_id,
         "Source_Status": "analyzed",
     }
-    try:
-        speaker_name = insights.speaker_name or _record_client_name(fields) or "Customer"
-        reviewer_id = await airtable_client.find_or_create_user(
-            name=speaker_name, email=fields.get("Client_Email") or None
-        )
-        share_link = f"{str(request.base_url).rstrip('/')}/t/{share_id}"
-        await airtable_client.upsert_uplaud_record(
-            business_name=business_name,
-            testimonial=testimonial,
-            reviewer_record_id=reviewer_id,
-            share_link=share_link,
-            date_added=datetime.now(timezone.utc).date().isoformat(),
-        )
-    except Exception as exc:
-        logger.warning("Source testimonial sync failed: %s", exc)
-        raise HTTPException(
-            status_code=502, detail="Could not persist the source analysis."
-        ) from None
     try:
         updated_rec = await airtable_client.update_source_by_id(
             source_id,
@@ -1223,6 +1346,10 @@ async def analyze_source(source_id: str, request: Request, regenerate: bool = Fa
             analysis_fields,
             owner_id=current["id"],
         )
+    except AirtableSourceConflictError:
+        raise HTTPException(
+            status_code=409, detail="Source lifecycle changed; reload and try again."
+        ) from None
     except AirtableSourceLookupError:
         raise HTTPException(
             status_code=503, detail="Source storage is temporarily unavailable."
@@ -1251,6 +1378,16 @@ async def update_testimonial(source_id: str, body: TestimonialUpdate, current=De
         ) from None
     if not existing:
         raise HTTPException(status_code=404, detail="Source not found")
+    existing_fields = existing.get("fields", {})
+    lifecycle_state = _source_lifecycle_state(existing_fields)
+    if lifecycle_state == "approved":
+        raise HTTPException(
+            status_code=409, detail="Approved testimonial content is immutable."
+        )
+    if lifecycle_state not in {"analyzed", "sent"}:
+        raise HTTPException(
+            status_code=409, detail="Analyze this source before editing its testimonial."
+        )
     try:
         updated = await airtable_client.update_source_by_id(
             source_id,
@@ -1258,6 +1395,10 @@ async def update_testimonial(source_id: str, body: TestimonialUpdate, current=De
             {"Testimonial_Draft": body.testimonial_draft},
             owner_id=current["id"],
         )
+    except AirtableSourceConflictError:
+        raise HTTPException(
+            status_code=409, detail="Source lifecycle changed; reload and try again."
+        ) from None
     except AirtableSourceLookupError:
         raise HTTPException(
             status_code=503, detail="Source storage is temporarily unavailable."
@@ -1327,8 +1468,13 @@ def _growth_signal_record_to_pub_doc(rec: dict) -> dict:
         "client_name": _record_client_name(f),
         "client_email": f.get("Client_Email") or "",
         "insights": insights,
-        "testimonial_draft": f.get("Testimonial_Draft") or "",
-        "testimonial_status": f.get("Testimonial_Status") or "draft",
+        "testimonial_draft": _display_testimonial(f),
+        "testimonial_status": _testimonial_status(f),
+        "lifecycle_state": _source_lifecycle_state(f),
+        "approved_snapshot_missing": (
+            _testimonial_status(f) == "approved"
+            and not bool(f.get("Approved_Testimonial"))
+        ),
         "approved_at": f.get("Approved_At") or None,
     }
 
@@ -1360,6 +1506,62 @@ def _public_payload(doc: dict) -> PublicTestimonial:
     )
 
 
+def _approval_fingerprint(doc: dict) -> tuple:
+    return (
+        doc.get("testimonial_status"),
+        doc.get("testimonial_draft"),
+        doc.get("approved_at"),
+    )
+
+
+async def _sync_canonical_approval_to_uplaud(
+    share_id: str, request: Request
+) -> dict:
+    """Reconcile Uplaud from the latest approved source, including race retries."""
+    canonical = await find_public_source(share_id)
+    for _ in range(3):
+        if not canonical:
+            raise HTTPException(status_code=404, detail="Testimonial not found")
+        if canonical.get("lifecycle_state") != "approved":
+            raise HTTPException(
+                status_code=409, detail="Testimonial approval did not persist."
+            )
+        testimonial = (canonical.get("testimonial_draft") or "").strip()
+        approved_at = canonical.get("approved_at")
+        if not testimonial or not approved_at:
+            raise HTTPException(
+                status_code=409, detail="Approved testimonial is incomplete."
+            )
+        business_name = canonical.get("brand") or "PayRewards"
+        ins = canonical.get("insights") or {}
+        speaker_name = ins.get("speaker_name") or canonical.get("client_name", "")
+        try:
+            reviewer_id = await airtable_client.find_or_create_user(
+                name=speaker_name, email=canonical.get("client_email") or None
+            )
+            share_link = f"{str(request.base_url).rstrip('/')}/t/{share_id}"
+            await airtable_client.upsert_uplaud_record(
+                business_name=business_name,
+                testimonial=testimonial,
+                reviewer_record_id=reviewer_id,
+                share_id=share_id,
+                share_link=share_link,
+                date_added=approved_at[:10],
+            )
+        except Exception as exc:
+            logger.warning("Approved testimonial sync failed: %s", exc)
+            raise HTTPException(
+                status_code=502, detail="Could not approve testimonial."
+            ) from None
+        latest = await find_public_source(share_id)
+        if latest and _approval_fingerprint(latest) == _approval_fingerprint(canonical):
+            return latest
+        canonical = latest
+    raise HTTPException(
+        status_code=503, detail="Testimonial approval is changing; please retry."
+    )
+
+
 @api_router.get("/public/testimonial/{share_id}", response_model=PublicTestimonial)
 async def public_get_testimonial(share_id: str):
     doc = await find_public_source(share_id)
@@ -1373,13 +1575,20 @@ async def public_update_testimonial(share_id: str, body: PublicUpdate):
     doc = await find_public_source(share_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Testimonial not found")
-    if doc.get("testimonial_status") == "approved":
-        raise HTTPException(status_code=400, detail="This testimonial is already approved and locked.")
+    if doc.get("lifecycle_state") != "sent":
+        raise HTTPException(
+            status_code=409,
+            detail="Only a testimonial awaiting approval can be edited.",
+        )
     try:
         updated = await airtable_client.update_source_by_share_id(
             share_id,
             {"Testimonial_Draft": body.testimonial_draft},
         )
+    except AirtableSourceConflictError:
+        raise HTTPException(
+            status_code=409, detail="Approved testimonial content is immutable."
+        ) from None
     except AirtableSourceLookupError:
         raise HTTPException(
             status_code=503, detail="Source storage is temporarily unavailable."
@@ -1389,8 +1598,7 @@ async def public_update_testimonial(share_id: str, body: PublicUpdate):
         raise HTTPException(status_code=502, detail="Could not update testimonial.") from None
     if not updated:
         raise HTTPException(status_code=404, detail="Testimonial not found")
-    doc["testimonial_draft"] = body.testimonial_draft
-    return _public_payload(doc)
+    return _public_payload(_growth_signal_record_to_pub_doc(updated))
 
 
 @api_router.post("/public/testimonial/{share_id}/approve", response_model=PublicTestimonial)
@@ -1398,42 +1606,73 @@ async def public_approve_testimonial(share_id: str, request: Request):
     doc = await find_public_source(share_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Testimonial not found")
-    now = datetime.now(timezone.utc).isoformat()
-    business_name = doc.get("brand") or "PayRewards"
-    ins = doc.get("insights") or {}
-    speaker_name = ins.get("speaker_name") or doc.get("client_name", "")
-    try:
-        reviewer_id = await airtable_client.find_or_create_user(
-            name=speaker_name, email=doc.get("client_email") or None
-        )
-        share_link = f"{str(request.base_url).rstrip('/')}/t/{share_id}"
-        await airtable_client.upsert_uplaud_record(
-            business_name=business_name,
-            testimonial=doc.get("testimonial_draft") or "",
-            reviewer_record_id=reviewer_id,
-            share_link=share_link,
-            date_added=now[:10],
-        )
-    except Exception as exc:
-        logger.warning("Approved testimonial sync failed: %s", exc)
-        raise HTTPException(status_code=502, detail="Could not approve testimonial.") from None
-    try:
-        updated = await airtable_client.update_source_by_share_id(
-            share_id,
-            {"Testimonial_Status": "approved", "Approved_At": now},
-        )
-    except AirtableSourceLookupError:
+    status = doc.get("lifecycle_state") or "invalid"
+    if status not in {"sent", "approved"}:
         raise HTTPException(
-            status_code=503, detail="Source storage is temporarily unavailable."
-        ) from None
-    except Exception as exc:
-        logger.warning("Public testimonial approval failed: %s", exc)
-        raise HTTPException(status_code=502, detail="Could not approve testimonial.") from None
-    if not updated:
-        raise HTTPException(status_code=404, detail="Testimonial not found")
-    doc["testimonial_status"] = "approved"
-    doc["approved_at"] = now
-    return _public_payload(doc)
+            status_code=409, detail="This testimonial is not awaiting approval."
+        )
+    testimonial = (doc.get("testimonial_draft") or "").strip()
+    if not testimonial:
+        raise HTTPException(
+            status_code=409, detail="A nonempty testimonial is required for approval."
+        )
+
+    approved_doc = doc
+    if status == "sent":
+        now = datetime.now(timezone.utc).isoformat()
+        try:
+            updated = await airtable_client.update_source_by_share_id(
+                share_id,
+                {
+                    "Testimonial_Status": "approved",
+                    "Approved_Testimonial": testimonial,
+                    "Approved_At": now,
+                },
+            )
+        except AirtableSourceConflictError:
+            raise HTTPException(
+                status_code=409,
+                detail="Source lifecycle changed; reload and try again.",
+            ) from None
+        except AirtableSourceLookupError:
+            raise HTTPException(
+                status_code=503,
+                detail="Source storage is temporarily unavailable.",
+            ) from None
+        except Exception as exc:
+            logger.warning("Public testimonial approval failed: %s", exc)
+            raise HTTPException(
+                status_code=502, detail="Could not approve testimonial."
+            ) from None
+        if not updated:
+            raise HTTPException(status_code=404, detail="Testimonial not found")
+        approved_doc = _growth_signal_record_to_pub_doc(updated)
+    elif approved_doc.get("approved_snapshot_missing"):
+        try:
+            updated = await airtable_client.update_source_by_share_id(
+                share_id, {"Approved_Testimonial": testimonial}
+            )
+        except AirtableSourceConflictError:
+            raise HTTPException(
+                status_code=409,
+                detail="Approved testimonial content changed; reload and try again.",
+            ) from None
+        except AirtableSourceLookupError:
+            raise HTTPException(
+                status_code=503,
+                detail="Source storage is temporarily unavailable.",
+            ) from None
+        except Exception as exc:
+            logger.warning("Legacy approval snapshot backfill failed: %s", exc)
+            raise HTTPException(
+                status_code=502, detail="Could not approve testimonial."
+            ) from None
+        if not updated:
+            raise HTTPException(status_code=404, detail="Testimonial not found")
+        approved_doc = _growth_signal_record_to_pub_doc(updated)
+
+    reconciled_doc = await _sync_canonical_approval_to_uplaud(share_id, request)
+    return _public_payload(reconciled_doc)
 
 
 @api_router.post("/sources/{source_id}/send-approval")
@@ -1450,24 +1689,49 @@ async def send_approval(source_id: str, current=Depends(get_current_user)):
     if not rec:
         raise HTTPException(status_code=404, detail="Source not found")
     fields = rec.get("fields", {})
-    share_id = fields.get("Share_Id") or _legacy_source_share_id(
-        source_id, business_name
-    )
+    lifecycle_state = _source_lifecycle_state(fields)
+    if lifecycle_state == "approved":
+        raise HTTPException(
+            status_code=409, detail="This testimonial has already been approved."
+        )
+    if lifecycle_state not in {"analyzed", "sent"}:
+        raise HTTPException(
+            status_code=409, detail="Analyze this source before requesting approval."
+        )
+    testimonial = (fields.get("Testimonial_Draft") or "").strip()
+    if not testimonial:
+        raise HTTPException(
+            status_code=409, detail="A nonempty testimonial is required for approval."
+        )
+    share_id = fields.get("Share_Id")
+    materialized_share_id = not bool(share_id)
+    if not share_id:
+        try:
+            share_id = await _unique_source_share_id(
+                preferred=_legacy_source_share_id(source_id, business_name),
+                source_id=source_id,
+                business_name=business_name,
+            )
+        except RuntimeError:
+            raise HTTPException(
+                status_code=503,
+                detail="Source storage is temporarily unavailable.",
+            ) from None
     now = datetime.now(timezone.utc).isoformat()
-    new_status = (
-        "approved" if fields.get("Testimonial_Status") == "approved" else "sent"
-    )
     try:
         updated = await airtable_client.update_source_by_id(
             source_id,
             business_name,
             {
-                "Testimonial_Status": new_status,
                 "Approval_Requested_At": now,
                 "Share_Id": share_id,
             },
             owner_id=current["id"],
         )
+    except AirtableSourceConflictError:
+        raise HTTPException(
+            status_code=409, detail="Source lifecycle changed; reload and try again."
+        ) from None
     except AirtableSourceLookupError:
         raise HTTPException(
             status_code=503, detail="Source storage is temporarily unavailable."
@@ -1477,6 +1741,17 @@ async def send_approval(source_id: str, current=Depends(get_current_user)):
         raise HTTPException(status_code=502, detail="Could not send approval.") from None
     if not updated:
         raise HTTPException(status_code=404, detail="Source not found")
+    if materialized_share_id:
+        try:
+            updated = await _verify_persisted_source_share_id(
+                updated, business_name=business_name, owner_id=current["id"]
+            )
+        except RuntimeError:
+            raise HTTPException(
+                status_code=503,
+                detail="Source storage is temporarily unavailable.",
+            ) from None
+        share_id = updated.get("fields", {}).get("Share_Id") or share_id
     return {"share_id": share_id, "public_path": f"/t/{share_id}"}
 
 

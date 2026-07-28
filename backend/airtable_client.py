@@ -20,6 +20,14 @@ class AirtableSourceLookupError(RuntimeError):
 class AirtableSourcePersistenceError(RuntimeError):
     """A source could not be written to Airtable."""
 
+
+class AirtableSourceCollisionError(AirtableSourceLookupError):
+    """A supposedly unique source capability matched multiple records."""
+
+
+class AirtableSourceConflictError(RuntimeError):
+    """A source mutation conflicts with its current immutable state."""
+
 AIRTABLE_PAT = os.environ.get("AIRTABLE_PAT", "")
 AIRTABLE_BASE_ID = os.environ.get("AIRTABLE_BASE_ID", "")
 AIRTABLE_API_URL = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}"
@@ -464,19 +472,45 @@ async def upsert_uplaud_record(
     business_name: str,
     testimonial: str,
     reviewer_record_id: Optional[str] = None,
+    share_id: str = "",
     share_link: str = "",
     date_added: Optional[str] = None,
 ) -> str:
-    """Atomically create/update the analyzed testimonial by its public link."""
-    if not share_link:
-        raise RuntimeError("A persisted share link is required")
-    fields = {"business_name": business_name or "", "Uplaud": testimonial or ""}
+    """Atomically create/update an approved testimonial by stable Share_Id."""
+    if not share_id:
+        raise RuntimeError("A persisted Share_Id is required")
+    fields = {
+        "business_name": business_name or "",
+        "Uplaud": testimonial or "",
+        "Share_Id": share_id,
+    }
     if reviewer_record_id:
         fields["Reviewer"] = [reviewer_record_id]
     fields["Share Link"] = share_link
     if date_added:
         fields["Date_Added"] = date_added
-    record = await _upsert_by_fields(TABLE_UPLAUD, fields, ["Share Link"])
+    suffix = f"/t/{share_id}"
+    formula = (
+        f'AND({{business_name}}="{_escape(business_name)}",OR('
+        f'{{Share_Id}}="{_escape(share_id)}",'
+        f'RIGHT({{Share Link}},{len(suffix)})="{_escape(suffix)}"))'
+    )
+    existing_data = await _get(
+        TABLE_UPLAUD, {"filterByFormula": formula, "maxRecords": 2}
+    )
+    existing_records = existing_data.get("records", [])
+    if len(existing_records) > 1:
+        raise RuntimeError("Multiple Uplaud rows match the persisted Share_Id")
+    if existing_records:
+        existing = existing_records[0]
+        existing_share_id = existing.get("fields", {}).get("Share_Id") or ""
+        if existing_share_id and existing_share_id != share_id:
+            raise RuntimeError("Uplaud Share_Id collision detected")
+        updated = await _update(TABLE_UPLAUD, existing["id"], fields)
+        if not updated or not updated.get("id"):
+            raise RuntimeError("Uplaud persistence failed")
+        return updated["id"]
+    record = await _upsert_by_fields(TABLE_UPLAUD, fields, ["Share_Id"])
     return record["id"]
 
 
@@ -741,6 +775,77 @@ def _source_scope_formula(
     return f"AND({','.join(clauses)})"
 
 
+def _is_analyzed_source_fields(fields: dict) -> bool:
+    """Identify analyzed rows, including legacy rows predating Source_Status."""
+    explicit_status = (fields.get("Source_Status") or "").strip().lower()
+    if explicit_status:
+        return explicit_status == "analyzed"
+    legacy_analysis_fields = (
+        "Person",
+        "Company",
+        "Signal_Score",
+        "Testimonial_Draft",
+        "Customer_Language",
+    )
+    return any(fields.get(field) not in (None, "") for field in legacy_analysis_fields)
+
+
+def _source_visible_to_owner(fields: dict, owner_id: str) -> bool:
+    """Allow owned rows, plus analyzed blank-owner rows shared by the business."""
+    persisted_owner = (fields.get("Owner_Id") or "").strip()
+    if persisted_owner:
+        return persisted_owner == owner_id
+    return _is_analyzed_source_fields(fields)
+
+
+def _source_lifecycle_state(fields: dict) -> str:
+    source_status = (
+        "analyzed" if _is_analyzed_source_fields(fields) else "uploaded"
+    )
+    persisted_testimonial_status = (
+        fields.get("Testimonial_Status") or "draft"
+    ).strip().lower()
+    testimonial_status = (
+        "sent"
+        if persisted_testimonial_status == "draft"
+        and fields.get("Approval_Requested_At")
+        else persisted_testimonial_status
+    )
+    if source_status == "uploaded" and testimonial_status == "draft":
+        return "uploaded"
+    if source_status == "analyzed" and testimonial_status in {
+        "draft",
+        "sent",
+        "approved",
+    }:
+        return "analyzed" if testimonial_status == "draft" else testimonial_status
+    return "invalid"
+
+
+def _assert_valid_source_transition(existing_fields: dict, updates: dict) -> None:
+    """Reject stale writes that skip or reverse the persisted lifecycle."""
+    current_state = _source_lifecycle_state(existing_fields)
+    next_state = _source_lifecycle_state({**existing_fields, **updates})
+    allowed = {
+        "uploaded": {"uploaded", "analyzed"},
+        "analyzed": {"analyzed", "sent"},
+        "sent": {"sent", "approved"},
+        "approved": {"approved"},
+    }
+    if current_state in {"sent", "approved"} and "Source_Status" in updates:
+        raise AirtableSourceConflictError(
+            "Analyzed source content cannot change after approval is requested"
+        )
+    if current_state == "approved" and "Testimonial_Draft" in updates:
+        raise AirtableSourceConflictError("Approved testimonial is immutable")
+    if current_state == "approved" and "Approval_Requested_At" in updates:
+        raise AirtableSourceConflictError("Approved source cannot be sent again")
+    if current_state not in allowed or next_state not in allowed[current_state]:
+        raise AirtableSourceConflictError(
+            f"Invalid source transition from {current_state} to {next_state}"
+        )
+
+
 async def create_uploaded_source(
     *,
     source_id: str,
@@ -824,8 +929,7 @@ async def get_source_by_id(
         or fields.get("Business_Name") != business_name
     ):
         return None
-    persisted_owner = fields.get("Owner_Id")
-    if owner_id and persisted_owner and persisted_owner != owner_id:
+    if not _source_visible_to_owner(fields, owner_id):
         return None
     return record
 
@@ -856,6 +960,7 @@ async def update_source_by_id(
         raise AirtableSourceLookupError("Airtable source lookup failed") from None
     if not existing:
         return None
+    _assert_valid_source_transition(existing.get("fields", {}), fields)
     try:
         updated = await _update(TABLE_GROWTH_SIGNALS, existing["id"], fields)
     except Exception as exc:
@@ -915,14 +1020,23 @@ async def get_growth_signal_by_share_id(share_id: str) -> Optional[dict]:
         return None
     try:
         formula = f'{{Share_Id}}="{_escape(share_id)}"'
-        data = await _get(TABLE_GROWTH_SIGNALS, {"filterByFormula": formula, "maxRecords": 1})
+        data = await _get(
+            TABLE_GROWTH_SIGNALS,
+            {"filterByFormula": formula, "maxRecords": 2},
+        )
         records = data.get("records", [])
+        if len(records) > 1:
+            raise AirtableSourceCollisionError(
+                "Airtable source Share_Id collision detected"
+            )
         if not records:
             return None
         record = records[0]
         if record.get("fields", {}).get("Share_Id") != share_id:
             return None
         return record
+    except AirtableSourceCollisionError:
+        raise
     except Exception as e:
         logger.warning("Airtable growth signal lookup by share_id failed: %s", e)
         raise AirtableSourceLookupError("Airtable source lookup failed") from None
@@ -943,6 +1057,30 @@ async def update_source_by_share_id(share_id: str, fields: dict) -> Optional[dic
         raise AirtableSourceLookupError("Airtable source lookup failed") from None
     if not existing:
         return None
+    existing_status = (
+        existing.get("fields", {}).get("Testimonial_Status") or "draft"
+    ).strip().lower()
+    if existing_status == "approved":
+        if "Testimonial_Draft" in fields:
+            raise AirtableSourceConflictError("Approved testimonial is immutable")
+        if (
+            "Approved_Testimonial" in fields
+            and not existing.get("fields", {}).get("Approved_Testimonial")
+        ):
+            proposed_snapshot = (fields.get("Approved_Testimonial") or "").strip()
+            current_draft = (
+                existing.get("fields", {}).get("Testimonial_Draft") or ""
+            ).strip()
+            if not proposed_snapshot or proposed_snapshot != current_draft:
+                raise AirtableSourceConflictError(
+                    "Legacy approval snapshot no longer matches its draft"
+                )
+        elif any(
+            field in fields
+            for field in ("Testimonial_Status", "Approved_Testimonial", "Approved_At")
+        ):
+            return existing
+    _assert_valid_source_transition(existing.get("fields", {}), fields)
     try:
         updated = await _update(TABLE_GROWTH_SIGNALS, existing["id"], fields)
     except Exception as exc:
@@ -994,7 +1132,7 @@ async def list_growth_signals_by_business(
             record
             for record in records
             if record.get("fields", {}).get("Business_Name") == business_name
-            and record.get("fields", {}).get("Owner_Id") in (None, "", owner_id)
+            and _source_visible_to_owner(record.get("fields", {}), owner_id)
         ]
     except Exception as e:
         logger.warning("Airtable growth signals list failed: %s", e)

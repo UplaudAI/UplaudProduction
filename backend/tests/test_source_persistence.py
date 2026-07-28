@@ -475,7 +475,9 @@ def test_source_update_maps_mid_request_airtable_outage_to_503(
     availability = iter([True, False])
 
     async def fake_get(table, params):
-        return {"records": [record(status="analyzed")]}
+        persisted = record(status="analyzed")
+        persisted["fields"]["Testimonial_Status"] = "sent"
+        return {"records": [persisted]}
 
     monkeypatch.setattr(
         server.airtable_client, "_enabled", lambda: next(availability)
@@ -573,7 +575,11 @@ def test_list_growth_signals_scopes_business_owner_and_legacy_rows(monkeypatch):
 
     async def fake_get_all(table, params):
         calls.append((table, params))
-        return [record(), record(owner=""), record(owner="other-user")]
+        return [
+            record(),
+            record(status="analyzed", owner=""),
+            record(owner="other-user"),
+        ]
 
     monkeypatch.setattr(airtable_client, "_enabled", lambda: True)
     monkeypatch.setattr(airtable_client, "_get_all", fake_get_all)
@@ -591,7 +597,7 @@ def test_list_growth_signals_scopes_business_owner_and_legacy_rows(monkeypatch):
     assert "{Owner_Id}=BLANK()" in formula
 
 
-def test_upsert_uplaud_record_is_atomic_by_share_link(monkeypatch):
+def test_upsert_uplaud_record_is_atomic_by_share_id(monkeypatch):
     calls = []
 
     async def fake_upsert(table, fields, merge_fields):
@@ -605,6 +611,7 @@ def test_upsert_uplaud_record_is_atomic_by_share_link(monkeypatch):
             business_name=BUSINESS,
             testimonial="Durable quote",
             reviewer_record_id="rec-user",
+            share_id="share-1",
             share_link="https://example.test/t/share-1",
             date_added="2026-07-28",
         )
@@ -618,10 +625,11 @@ def test_upsert_uplaud_record_is_atomic_by_share_link(monkeypatch):
                 "business_name": BUSINESS,
                 "Uplaud": "Durable quote",
                 "Reviewer": ["rec-user"],
+                "Share_Id": "share-1",
                 "Share Link": "https://example.test/t/share-1",
                 "Date_Added": "2026-07-28",
             },
-            ["Share Link"],
+            ["Share_Id"],
         )
     ]
 
@@ -654,12 +662,25 @@ def test_source_writes_fail_strictly_when_airtable_is_disabled(monkeypatch, oper
 def test_upload_persists_transcript_before_returning_success(monkeypatch):
     install_business(monkeypatch)
     writes = []
+    persisted = None
 
     async def fake_create(**kwargs):
+        nonlocal persisted
         writes.append(kwargs)
-        return record(transcript=kwargs["transcript_text"])
+        persisted = record(transcript=kwargs["transcript_text"])
+        persisted["fields"]["Source_Id"] = kwargs["source_id"]
+        persisted["fields"]["Share_Id"] = kwargs["share_id"]
+        return persisted
+
+    async def fake_share_lookup(share_id):
+        if persisted and persisted["fields"].get("Share_Id") == share_id:
+            return persisted
+        return None
 
     monkeypatch.setattr(server.airtable_client, "create_uploaded_source", fake_create)
+    monkeypatch.setattr(
+        server.airtable_client, "get_growth_signal_by_share_id", fake_share_lookup
+    )
     upload = UploadFile(
         filename="customer-call.txt",
         file=io.BytesIO(b"Customer says the product saves our entire team hours."),
@@ -672,7 +693,7 @@ def test_upload_persists_transcript_before_returning_success(monkeypatch):
     assert writes[0]["owner_id"] == "user-1"
     assert writes[0]["transcript_text"].startswith("Customer says")
     assert result.status == "uploaded"
-    assert result.id == "source-1"
+    assert result.id == writes[0]["source_id"]
 
 
 def test_upload_failure_is_sanitized_and_never_returns_success(monkeypatch):
@@ -681,7 +702,13 @@ def test_upload_failure_is_sanitized_and_never_returns_success(monkeypatch):
     async def failed_create(**kwargs):
         raise RuntimeError("secret Airtable transport detail")
 
+    async def fake_share_lookup(share_id):
+        return None
+
     monkeypatch.setattr(server.airtable_client, "create_uploaded_source", failed_create)
+    monkeypatch.setattr(
+        server.airtable_client, "get_growth_signal_by_share_id", fake_share_lookup
+    )
     upload = UploadFile(filename="call.txt", file=io.BytesIO(b"usable transcript"))
 
     with pytest.raises(HTTPException) as exc_info:
@@ -764,7 +791,6 @@ def test_analyze_uses_full_persisted_transcript_and_updates_same_record(monkeypa
     source_record = record(transcript=transcript)
     generated_with = []
     updates = []
-    uplaud_upserts = []
 
     async def fake_get(source_id, business_name, owner_id=None):
         assert (source_id, business_name, owner_id) == (
@@ -793,21 +819,19 @@ def test_analyze_uses_full_persisted_transcript_and_updates_same_record(monkeypa
             "fields": {**source_record["fields"], **fields},
         }
 
-    async def fake_user(**kwargs):
-        return "rec-user"
-
-    async def fake_uplaud_upsert(**kwargs):
-        uplaud_upserts.append(kwargs)
-        return "rec-uplaud"
+    async def unexpected_preapproval_write(**kwargs):
+        raise AssertionError("analysis must not create User or Uplaud rows")
 
     monkeypatch.setattr(server.airtable_client, "get_source_by_id", fake_get)
     monkeypatch.setattr(server, "generate_insights", fake_generate)
     monkeypatch.setattr(server.airtable_client, "update_source_by_id", fake_update)
-    monkeypatch.setattr(server.airtable_client, "find_or_create_user", fake_user)
+    monkeypatch.setattr(
+        server.airtable_client, "find_or_create_user", unexpected_preapproval_write
+    )
     monkeypatch.setattr(
         server.airtable_client,
         "upsert_uplaud_record",
-        fake_uplaud_upsert,
+        unexpected_preapproval_write,
         raising=False,
     )
 
@@ -820,7 +844,6 @@ def test_analyze_uses_full_persisted_transcript_and_updates_same_record(monkeypa
     assert updates[0][2]["Share_Id"] == "share-1"
     assert updates[0][2]["Summary"] == "A useful call."
     assert updates[0][2]["AE_Name"] == "Alex AE"
-    assert uplaud_upserts[0]["share_link"].endswith("/t/share-1")
     assert result.status == "analyzed"
     assert result.share_id == "share-1"
     assert result.insights.summary == "A useful call."
@@ -919,7 +942,7 @@ def test_legacy_regeneration_materializes_one_stable_share_id(monkeypatch):
     legacy = record(status="analyzed", transcript="Legacy persisted transcript.")
     legacy["fields"].pop("Share_Id")
     source_updates = []
-    uplaud_links = []
+    persisted = legacy
 
     async def fake_get(*args, **kwargs):
         return legacy
@@ -927,21 +950,24 @@ def test_legacy_regeneration_materializes_one_stable_share_id(monkeypatch):
     async def fake_generate(*args, **kwargs):
         return {"summary": "Legacy summary", "testimonial": "Legacy quote"}
 
-    async def fake_user(**kwargs):
-        return "rec-user"
-
-    async def fake_uplaud(**kwargs):
-        uplaud_links.append(kwargs["share_link"])
-        return "rec-uplaud"
+    async def fake_public_lookup(share_id):
+        if persisted.get("fields", {}).get("Share_Id") == share_id:
+            return persisted
+        return None
 
     async def fake_update(source_id, business_name, fields, owner_id=None):
+        nonlocal persisted
         source_updates.append(fields)
-        return {**legacy, "fields": {**legacy["fields"], **fields}}
+        persisted = {**legacy, "fields": {**legacy["fields"], **fields}}
+        return persisted
 
     monkeypatch.setattr(server.airtable_client, "get_source_by_id", fake_get)
     monkeypatch.setattr(server, "generate_insights", fake_generate)
-    monkeypatch.setattr(server.airtable_client, "find_or_create_user", fake_user)
-    monkeypatch.setattr(server.airtable_client, "upsert_uplaud_record", fake_uplaud)
+    monkeypatch.setattr(
+        server.airtable_client,
+        "get_growth_signal_by_share_id",
+        fake_public_lookup,
+    )
     monkeypatch.setattr(server.airtable_client, "update_source_by_id", fake_update)
     result = run(
         server.analyze_source(
@@ -952,7 +978,6 @@ def test_legacy_regeneration_materializes_one_stable_share_id(monkeypatch):
     persisted_share_id = source_updates[0]["Share_Id"]
     assert persisted_share_id == server._legacy_source_share_id("source-1", BUSINESS)
     assert persisted_share_id != legacy["id"]
-    assert uplaud_links == [f"https://example.test/t/{persisted_share_id}"]
     assert result.share_id == persisted_share_id
 
 
@@ -961,7 +986,6 @@ def test_concurrent_legacy_regeneration_uses_one_deterministic_share_id(monkeypa
     legacy = record(status="analyzed", transcript="Concurrent legacy transcript.")
     legacy["fields"].pop("Share_Id")
     share_writes = []
-    uplaud_links = []
 
     async def stale_get(*args, **kwargs):
         return {**legacy, "fields": dict(legacy["fields"])}
@@ -974,18 +998,19 @@ def test_concurrent_legacy_regeneration_uses_one_deterministic_share_id(monkeypa
     async def fake_generate(*args, **kwargs):
         return {"summary": "Concurrent summary", "testimonial": "Concurrent quote"}
 
-    async def fake_user(**kwargs):
-        return "rec-user"
-
-    async def fake_uplaud(**kwargs):
-        uplaud_links.append(kwargs["share_link"])
-        return "rec-uplaud"
+    async def fake_public_lookup(share_id):
+        if share_id in share_writes:
+            return {**legacy, "fields": {**legacy["fields"], "Share_Id": share_id}}
+        return None
 
     monkeypatch.setattr(server.airtable_client, "get_source_by_id", stale_get)
     monkeypatch.setattr(server.airtable_client, "update_source_by_id", fake_update)
     monkeypatch.setattr(server, "generate_insights", fake_generate)
-    monkeypatch.setattr(server.airtable_client, "find_or_create_user", fake_user)
-    monkeypatch.setattr(server.airtable_client, "upsert_uplaud_record", fake_uplaud)
+    monkeypatch.setattr(
+        server.airtable_client,
+        "get_growth_signal_by_share_id",
+        fake_public_lookup,
+    )
 
     async def invoke_concurrently():
         return await asyncio.gather(
@@ -1003,7 +1028,6 @@ def test_concurrent_legacy_regeneration_uses_one_deterministic_share_id(monkeypa
     assert len(set(share_writes)) == 1
     assert share_writes[0] != legacy["id"]
     assert first.share_id == second.share_id == share_writes[0]
-    assert len(set(uplaud_links)) == 1
 
 
 def test_analyze_write_failure_leaves_persisted_source_retryable(monkeypatch):
@@ -1107,6 +1131,16 @@ def test_upload_then_analyze_survives_independent_route_invocations(monkeypatch)
         async def get_source_business_name_by_email_domain(self, email):
             return BUSINESS
 
+        async def get_growth_signal_by_share_id(self, share_id):
+            return next(
+                (
+                    rec
+                    for rec in self.boundary.records.values()
+                    if rec["fields"].get("Share_Id") == share_id
+                ),
+                None,
+            )
+
         async def create_uploaded_source(self, **kwargs):
             rec = {
                 "id": "rec-independent",
@@ -1203,7 +1237,6 @@ def test_failed_analysis_can_retry_then_becomes_idempotent(monkeypatch):
     persisted = record(transcript="Retry this full transcript.")
     update_attempts = 0
     generation_attempts = 0
-    uplaud_upserts = 0
 
     async def fake_get(*args, **kwargs):
         return persisted
@@ -1221,19 +1254,20 @@ def test_failed_analysis_can_retry_then_becomes_idempotent(monkeypatch):
         persisted["fields"].update(fields)
         return persisted
 
-    async def fake_user(**kwargs):
-        return "rec-user"
-
-    async def fake_uplaud(**kwargs):
-        nonlocal uplaud_upserts
-        uplaud_upserts += 1
-        return "rec-uplaud"
+    async def unexpected_preapproval_write(**kwargs):
+        raise AssertionError("analysis must not write User or Uplaud rows")
 
     monkeypatch.setattr(server.airtable_client, "get_source_by_id", fake_get)
     monkeypatch.setattr(server, "generate_insights", fake_generate)
     monkeypatch.setattr(server.airtable_client, "update_source_by_id", fake_update)
-    monkeypatch.setattr(server.airtable_client, "find_or_create_user", fake_user)
-    monkeypatch.setattr(server.airtable_client, "upsert_uplaud_record", fake_uplaud)
+    monkeypatch.setattr(
+        server.airtable_client, "find_or_create_user", unexpected_preapproval_write
+    )
+    monkeypatch.setattr(
+        server.airtable_client,
+        "upsert_uplaud_record",
+        unexpected_preapproval_write,
+    )
 
     with pytest.raises(HTTPException) as first_error:
         run(server.analyze_source("source-1", request(), current=USER))
@@ -1244,7 +1278,6 @@ def test_failed_analysis_can_retry_then_becomes_idempotent(monkeypatch):
     assert second.status == third.status == "analyzed"
     assert generation_attempts == 2
     assert update_attempts == 2
-    assert uplaud_upserts == 2
     assert len({persisted["id"]}) == 1
 
 
@@ -1275,7 +1308,7 @@ def test_openai_failure_does_not_update_source_state(monkeypatch):
     assert writes == []
 
 
-def test_uplaud_sync_failure_leaves_source_uploaded_and_retryable(monkeypatch):
+def test_analysis_ignores_uplaud_availability_until_approval(monkeypatch):
     install_business(monkeypatch)
     persisted = record(transcript="Atomic sync transcript.")
     source_updates = []
@@ -1286,28 +1319,24 @@ def test_uplaud_sync_failure_leaves_source_uploaded_and_retryable(monkeypatch):
     async def fake_generate(*args, **kwargs):
         return {"summary": "Generated", "testimonial": "Generated quote"}
 
-    async def fake_user(**kwargs):
-        return "rec-user"
-
     async def failed_uplaud(**kwargs):
-        raise RuntimeError("secret Uplaud failure")
+        raise AssertionError("analysis must not attempt Uplaud sync")
 
-    async def fake_update(*args, **kwargs):
-        source_updates.append((args, kwargs))
+    async def fake_update(source_id, business_name, fields, owner_id=None):
+        source_updates.append(fields)
+        persisted["fields"].update(fields)
+        return persisted
 
     monkeypatch.setattr(server.airtable_client, "get_source_by_id", fake_get)
     monkeypatch.setattr(server, "generate_insights", fake_generate)
-    monkeypatch.setattr(server.airtable_client, "find_or_create_user", fake_user)
     monkeypatch.setattr(server.airtable_client, "upsert_uplaud_record", failed_uplaud)
     monkeypatch.setattr(server.airtable_client, "update_source_by_id", fake_update)
 
-    with pytest.raises(HTTPException) as exc_info:
-        run(server.analyze_source("source-1", request(), current=USER))
+    result = run(server.analyze_source("source-1", request(), current=USER))
 
-    assert exc_info.value.status_code == 502
-    assert "secret Uplaud failure" not in exc_info.value.detail
-    assert persisted["fields"]["Source_Status"] == "uploaded"
-    assert source_updates == []
+    assert result.status == "analyzed"
+    assert persisted["fields"]["Source_Status"] == "analyzed"
+    assert source_updates[0]["Testimonial_Draft"] == "Generated quote"
 
 
 def test_email_draft_and_send_approval_use_scoped_persisted_source(monkeypatch):
@@ -1337,12 +1366,14 @@ def test_email_draft_and_send_approval_use_scoped_persisted_source(monkeypatch):
     assert draft.attachment_name == "Customer Co - Conversation Summary.pdf"
     assert approval == {"share_id": "share-1", "public_path": "/t/share-1"}
     assert updates[0][0:2] == ("source-1", BUSINESS)
-    assert updates[0][2]["Testimonial_Status"] == "sent"
+    assert "Testimonial_Status" not in updates[0][2]
+    assert updates[0][2]["Approval_Requested_At"]
     assert updates[0][3] == "user-1"
 
 
 def test_public_edit_and_approval_update_the_persisted_source(monkeypatch):
     analyzed = record(status="analyzed")
+    analyzed["fields"]["Testimonial_Status"] = "sent"
     writes = []
     uplaud_upserts = []
 
@@ -1400,12 +1431,14 @@ def test_public_edit_and_approval_update_the_persisted_source(monkeypatch):
     )
     assert writes[1][0] == "share-1"
     assert writes[1][1]["Testimonial_Status"] == "approved"
+    assert writes[1][1]["Approved_Testimonial"] == "Public edit"
     assert uplaud_upserts == [
         {
             "business_name": BUSINESS,
             "testimonial": "Public edit",
             "reviewer_record_id": "rec-user",
+            "share_id": "share-1",
             "share_link": "https://example.test/t/share-1",
-            "date_added": uplaud_upserts[0]["date_added"],
+            "date_added": writes[1][1]["Approved_At"][:10],
         }
     ]
