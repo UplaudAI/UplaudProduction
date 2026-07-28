@@ -39,6 +39,9 @@ JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_HOURS = 168
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-4o")
+# Airtable long-text cells support up to 100,000 characters. Keep a 10% safety
+# margin so uploads fail clearly before a record write rather than at Airtable.
+MAX_AIRTABLE_TRANSCRIPT_CHARS = 90_000
 
 # Official OpenAI SDK client (user-provided key). Created once and reused.
 openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
@@ -917,10 +920,40 @@ async def get_business_profile(current=Depends(get_current_user)):
 # ---------------------------------------------------------------------------
 # Routes: sources (Purely Airtable-driven, No MongoDB!)
 # ---------------------------------------------------------------------------
-TEMP_SOURCES = {}
+async def _current_business_name(current: dict) -> str:
+    return (
+        await airtable_client.get_business_name_by_email_domain(current["email"])
+        or current["company"]
+    )
+
+
+def _record_source_status(fields: dict) -> str:
+    explicit_status = (fields.get("Source_Status") or "").strip().lower()
+    if explicit_status in {"uploaded", "analyzed"}:
+        return explicit_status
+    legacy_analysis_fields = (
+        "Person",
+        "Company",
+        "Signal_Score",
+        "Testimonial_Draft",
+        "Customer_Language",
+    )
+    if any(fields.get(field) not in (None, "") for field in legacy_analysis_fields):
+        return "analyzed"
+    return "uploaded"
+
+
+def _record_client_name(fields: dict) -> str:
+    if fields.get("Company") or fields.get("Person"):
+        return fields.get("Company") or fields.get("Person")
+    filename = fields.get("Filename") or fields.get("Name") or "Customer"
+    stem = filename.rsplit(".", 1)[0]
+    return stem.replace("_", " ").replace("-", " ").title()
+
 
 def record_to_source_out(rec: dict) -> SourceOut:
     f = rec.get("fields", {})
+    status = _record_source_status(f)
     motivations = f.get("Motivations", "").split("\n") if f.get("Motivations") else []
     pain_points = f.get("Pain_Points", "").split("\n") if f.get("Pain_Points") else []
     buying_signals = f.get("Buying_Signals", "").split("\n") if f.get("Buying_Signals") else []
@@ -929,38 +962,43 @@ def record_to_source_out(rec: dict) -> SourceOut:
     product_feedback = f.get("Product_Feedback", "").split("\n") if f.get("Product_Feedback") else []
     faqs = f.get("FAQs", "").split("\n") if f.get("FAQs") else []
     
-    insights = {
-        "company_name": f.get("Company", ""),
-        "speaker_name": f.get("Person", ""),
-        "speaker_role": f.get("Role", ""),
-        "ae_name": "",
-        "sentiment_label": f.get("Sentiment") or "Positive",
-        "signal_score": int(f.get("Signal_Score") or 0),
-        "call_type": f.get("Call_Type") or "Demo",
-        "summary": "",
-        "motivations": [m for m in motivations if m],
-        "pain_points": [p for p in pain_points if p],
-        "buying_signals": [b for b in buying_signals if b],
-        "objections": [o for o in objections if o],
-        "customer_language": [c for c in customer_language if c],
-        "product_feedback": [pf for pf in product_feedback if pf],
-        "faqs": [faq for faq in faqs if faq],
-    }
-    
-    testimonial_draft = f.get("Testimonial_Draft") or ""
-    if not testimonial_draft:
-        testimonial_draft = " ".join(customer_language[:3]).strip() if customer_language else f.get("Name", "Customer testimonial")
+    insights = None
+    if status == "analyzed":
+        insights = {
+            "company_name": f.get("Company", ""),
+            "speaker_name": f.get("Person", ""),
+            "speaker_role": f.get("Role", ""),
+            "ae_name": f.get("AE_Name", ""),
+            "sentiment_label": f.get("Sentiment") or "Positive",
+            "signal_score": int(f.get("Signal_Score") or 0),
+            "call_type": f.get("Call_Type") or "Demo",
+            "summary": f.get("Summary", ""),
+            "motivations": [m for m in motivations if m],
+            "pain_points": [p for p in pain_points if p],
+            "buying_signals": [b for b in buying_signals if b],
+            "objections": [o for o in objections if o],
+            "customer_language": [c for c in customer_language if c],
+            "product_feedback": [pf for pf in product_feedback if pf],
+            "faqs": [faq for faq in faqs if faq],
+        }
+
+    testimonial_draft = f.get("Testimonial_Draft") or None
+    if status == "analyzed" and not testimonial_draft and customer_language:
+        testimonial_draft = " ".join(customer_language[:3]).strip()
+    filename = f.get("Filename") or f.get("Name") or "Transcript.txt"
+    transcript = f.get("Transcript_Text") or ""
+    word_count = int(f.get("Word_Count") or len(transcript.split()))
         
     return SourceOut(
         id=f.get("Source_Id") or rec.get("id"),
-        filename=f.get("Name", "Transcript.txt"),
-        file_type="txt",
-        client_name=f.get("Company") or f.get("Person") or "Customer",
+        filename=filename,
+        file_type=f.get("File_Type") or filename.rsplit(".", 1)[-1].lower(),
+        client_name=_record_client_name(f),
         conversation_code="CV_001",
         source_name="Upload",
-        duration_min=30,
-        word_count=5000,
-        status="analyzed",
+        duration_min=max(1, round(word_count / 140)) if word_count else 0,
+        word_count=word_count,
+        status=status,
         created_at=f.get("Created_At") or rec.get("createdTime", ""),
         insights=insights,
         testimonial_draft=testimonial_draft,
@@ -972,156 +1010,117 @@ def record_to_source_out(rec: dict) -> SourceOut:
     )
 
 
-def source_to_out(doc: dict) -> SourceOut:
-    return SourceOut(
-        id=doc["id"],
-        filename=doc["filename"],
-        file_type=doc["file_type"],
-        client_name=doc["client_name"],
-        conversation_code=doc.get("conversation_code", "CV_001"),
-        source_name=doc.get("source_name", "Upload"),
-        duration_min=doc.get("duration_min", 0),
-        word_count=doc["word_count"],
-        status=doc["status"],
-        created_at=doc["created_at"],
-        insights=doc.get("insights"),
-        testimonial_draft=doc.get("testimonial_draft"),
-        testimonial_is_verbatim=doc.get("testimonial_is_verbatim", True),
-        share_id=doc.get("share_id", ""),
-        testimonial_status=doc.get("testimonial_status", "draft"),
-        approved_at=doc.get("approved_at"),
-        approval_requested_at=doc.get("approval_requested_at"),
+def _growth_signal_record_to_doc(rec: dict) -> dict:
+    f = rec.get("fields", {})
+    doc = record_to_source_out(rec).model_dump()
+    doc.update(
+        {
+            "brand": f.get("Business_Name") or "PayRewards",
+            "owner": f.get("Owner_Id") or "",
+            "transcript": f.get("Transcript_Text") or "",
+            "client_email": f.get("Client_Email") or "",
+            "airtable_record_id": rec.get("id") or "",
+        }
     )
+    return doc
 
 
 @api_router.post("/sources", response_model=SourceOut)
 async def upload_source(file: UploadFile = File(...), current=Depends(get_current_user)):
     content = await file.read()
-    text = extract_text(file.filename, content)
+    filename = file.filename or "Transcript.txt"
+    text = extract_text(filename, content)
     if not text.strip():
         raise HTTPException(status_code=400, detail="Could not extract any text from the file.")
-    client_name = file.filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ").title()
+    if len(text) > MAX_AIRTABLE_TRANSCRIPT_CHARS:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                "Transcript is too large to store safely. "
+                f"Maximum size is {MAX_AIRTABLE_TRANSCRIPT_CHARS:,} characters."
+            ),
+        )
     word_count = len(text.split())
-    seq = len(TEMP_SOURCES) + 1
-    doc = {
-        "id": str(uuid.uuid4()),
-        "owner": current["id"],
-        "filename": file.filename,
-        "file_type": file.filename.rsplit(".", 1)[-1].lower(),
-        "client_name": client_name,
-        "brand": current.get("company", "PayRewards"),
-        "conversation_code": f"CV_{seq:03d}",
-        "source_name": "Upload",
-        "duration_min": max(1, round(word_count / 140)),
-        "transcript": text,
-        "word_count": word_count,
-        "status": "uploaded",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "insights": None,
-        "testimonial_draft": None,
-        "testimonial_is_verbatim": True,
-        "share_id": uuid.uuid4().hex[:12],
-        "testimonial_status": "draft",
-        "approved_at": None,
-        "approval_requested_at": None,
-    }
-    # Save to memory cache only (No MongoDB!)
-    TEMP_SOURCES[doc["id"]] = doc
-    return source_to_out(doc)
+    business_name = await _current_business_name(current)
+    try:
+        rec = await airtable_client.create_uploaded_source(
+            source_id=str(uuid.uuid4()),
+            business_name=business_name,
+            owner_id=current["id"],
+            filename=filename,
+            file_type=filename.rsplit(".", 1)[-1].lower(),
+            transcript_text=text,
+            word_count=word_count,
+            share_id=uuid.uuid4().hex[:12],
+            created_at=datetime.now(timezone.utc).isoformat(),
+        )
+    except Exception as exc:
+        logger.warning("Source upload persistence failed: %s", exc)
+        raise HTTPException(
+            status_code=502, detail="Could not persist the uploaded source."
+        ) from None
+    return record_to_source_out(rec)
 
 
 @api_router.get("/sources", response_model=List[SourceOut])
 async def list_sources(current=Depends(get_current_user)):
-    business_name = (
-        await airtable_client.get_business_name_by_email_domain(current["email"])
-        or current["company"]
+    business_name = await _current_business_name(current)
+    records = await airtable_client.list_growth_signals_by_business(
+        business_name, owner_id=current["id"]
     )
-    
-    # 1. Fetch analyzed records directly from Airtable (No MongoDB!)
-    records = await airtable_client.list_growth_signals_by_business(business_name)
-    list_out = []
-    for rec in records:
-        list_out.append(record_to_source_out(rec))
-        
-    # 2. Append unanalyzed sources from temp memory cache
-    for tid, tdoc in TEMP_SOURCES.items():
-        if tdoc.get("owner") == current["id"] and tdoc.get("status") == "uploaded":
-            list_out.append(source_to_out(tdoc))
-            
-    return list_out
+    return [record_to_source_out(rec) for rec in records]
 
 
 @api_router.get("/sources/{source_id}", response_model=SourceOut)
 async def get_source(source_id: str, current=Depends(get_current_user)):
-    # Check cache first
-    if source_id in TEMP_SOURCES:
-        return source_to_out(TEMP_SOURCES[source_id])
-        
-    # Fetch from Airtable Growth_Signals
-    business_name = (
-        await airtable_client.get_business_name_by_email_domain(current["email"])
-        or current["company"]
-    )
-    records = await airtable_client.list_growth_signals_by_business(business_name)
-    for rec in records:
-        f = rec.get("fields", {})
-        if f.get("Source_Id") == source_id:
-            return record_to_source_out(rec)
-            
+    business_name = await _current_business_name(current)
+    try:
+        rec = await airtable_client.get_source_by_id(
+            source_id, business_name, owner_id=current["id"]
+        )
+    except RuntimeError:
+        raise HTTPException(status_code=502, detail="Could not retrieve source.") from None
+    if rec:
+        return record_to_source_out(rec)
     raise HTTPException(status_code=404, detail="Source not found")
 
 
 @api_router.post("/sources/{source_id}/analyze", response_model=SourceOut)
 async def analyze_source(source_id: str, request: Request, regenerate: bool = False, current=Depends(get_current_user)):
-    doc = TEMP_SOURCES.get(source_id)
-    if not doc:
-        # Fallback query from Airtable if they want to regenerate
-        business_name = (
-            await airtable_client.get_business_name_by_email_domain(current["email"])
-            or current["company"]
+    business_name = await _current_business_name(current)
+    try:
+        rec = await airtable_client.get_source_by_id(
+            source_id, business_name, owner_id=current["id"]
         )
-        records = await airtable_client.list_growth_signals_by_business(business_name)
-        for rec in records:
-            f = rec.get("fields", {})
-            if f.get("Source_Id") == source_id:
-                doc = {
-                    "id": source_id,
-                    "owner": current["id"],
-                    "filename": f.get("Name", "Transcript.txt"),
-                    "file_type": "txt",
-                    "client_name": f.get("Company", "Customer"),
-                    "brand": business_name,
-                    "conversation_code": "CV_001",
-                    "source_name": "Upload",
-                    "duration_min": 30,
-                    "transcript": f.get("Motivations", ""),
-                    "word_count": 5000,
-                    "status": "analyzed",
-                    "created_at": f.get("Created_At", ""),
-                    "insights": None,
-                    "testimonial_draft": f.get("Testimonial_Draft", ""),
-                    "testimonial_is_verbatim": True,
-                    "share_id": f.get("Share_Id") or rec.get("id")[:12],
-                    "testimonial_status": f.get("Testimonial_Status") or "draft",
-                    "approved_at": None,
-                    "approval_requested_at": None,
-                }
-                break
-
-    if not doc:
+    except RuntimeError:
+        raise HTTPException(status_code=502, detail="Could not retrieve source.") from None
+    if not rec:
         raise HTTPException(status_code=404, detail="Source not found")
-        
-    count = doc.get("analyze_count", 0)
-    is_regen = regenerate or count > 0
-    variation = count if is_regen else 0
-    avoid = (doc.get("testimonial_draft") or "") if is_regen else ""
-    
-    # Analyze transcript
-    transcript_text = doc.get("transcript") or "Happy with the product"
-    result = await generate_insights(transcript_text, doc["client_name"], variation=variation, avoid=avoid)
+    fields = rec.get("fields", {})
+    if _record_source_status(fields) == "analyzed" and not regenerate:
+        return record_to_source_out(rec)
+
+    transcript_text = (fields.get("Transcript_Text") or "").strip()
+    if not transcript_text:
+        raise HTTPException(
+            status_code=409,
+            detail="This source has no persisted transcript and cannot be regenerated.",
+        )
+    avoid = (fields.get("Testimonial_Draft") or "") if regenerate else ""
+    try:
+        result = await generate_insights(
+            transcript_text,
+            _record_client_name(fields),
+            variation=1 if regenerate else 0,
+            avoid=avoid,
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(
+            status_code=502, detail="The language model request failed. Please try again."
+        ) from None
     crafted = (result.pop("testimonial", "") or "").strip()
-    
-    # Only keep keys the Insights model knows about, convert None to empty string for string fields
     clean_result = {}
     for k, v in result.items():
         if k in Insights.model_fields:
@@ -1134,95 +1133,104 @@ async def analyze_source(source_id: str, request: Request, regenerate: bool = Fa
     testimonial = crafted or (
         " ".join(insights.customer_language[:3]).strip() if insights.customer_language else insights.summary
     )
-    is_verbatim = False
-    
-    doc.update({
-        "insights": insights.model_dump(),
-        "testimonial_draft": testimonial,
-        "testimonial_is_verbatim": is_verbatim,
-        "status": "analyzed",
-        "analyze_count": count + 1,
-    })
-    
-    # Save back to memory cache
-    TEMP_SOURCES[source_id] = doc
-    
-    business_name = (
-        await airtable_client.get_business_name_by_email_domain(current["email"])
-        or current["company"]
-    )
-    
-    # Upsert directly to Airtable (No MongoDB!)
-    await airtable_client.upsert_growth_signal(
-        source_id, business_name, insights.model_dump(), doc.get("testimonial_status", "draft"),
-        testimonial_draft=testimonial, share_id=doc["share_id"]
-    )
-    
-    # Sync the testimonial to Airtable's Uplaud table immediately upon transcript analysis
+    insight_values = insights.model_dump()
+    share_id = fields.get("Share_Id") or (rec.get("id") or "")[:12]
+    if not share_id:
+        share_id = uuid.uuid4().hex[:12]
+    analysis_fields = {
+        "Person": insight_values["speaker_name"],
+        "Role": insight_values["speaker_role"],
+        "AE_Name": insight_values["ae_name"],
+        "Company": insight_values["company_name"],
+        "Sentiment": insight_values["sentiment_label"],
+        "Signal_Score": insight_values["signal_score"],
+        "Call_Type": insight_values["call_type"],
+        "Summary": insight_values["summary"],
+        "Motivations": "\n".join(insight_values["motivations"]),
+        "Pain_Points": "\n".join(insight_values["pain_points"]),
+        "Buying_Signals": "\n".join(insight_values["buying_signals"]),
+        "Objections": "\n".join(insight_values["objections"]),
+        "Customer_Language": "\n".join(insight_values["customer_language"]),
+        "Product_Feedback": "\n".join(insight_values["product_feedback"]),
+        "FAQs": "\n".join(insight_values["faqs"]),
+        "Testimonial_Draft": testimonial,
+        "Testimonial_Status": fields.get("Testimonial_Status") or "draft",
+        "Share_Id": share_id,
+        "Source_Status": "analyzed",
+    }
     try:
-        speaker_name = insights.speaker_name or doc.get("client_name") or "Customer"
-        reviewer_id = await airtable_client.find_or_create_user(name=speaker_name, email=doc.get("client_email") or None)
-        share_link = f"{str(request.base_url).rstrip('/')}/t/{doc['share_id']}"
-        await airtable_client.create_uplaud_record(
+        speaker_name = insights.speaker_name or _record_client_name(fields) or "Customer"
+        reviewer_id = await airtable_client.find_or_create_user(
+            name=speaker_name, email=fields.get("Client_Email") or None
+        )
+        share_link = f"{str(request.base_url).rstrip('/')}/t/{share_id}"
+        await airtable_client.upsert_uplaud_record(
             business_name=business_name,
             testimonial=testimonial,
             reviewer_record_id=reviewer_id,
             share_link=share_link,
-            date_added=datetime.now(timezone.utc).date().isoformat()
+            date_added=datetime.now(timezone.utc).date().isoformat(),
         )
-    except Exception as ae:
-        logger.warning(f"Failed to sync testimonial to Airtable Uplaud table on analysis: {ae}")
-        
-    return source_to_out(doc)
+    except Exception as exc:
+        logger.warning("Source testimonial sync failed: %s", exc)
+        raise HTTPException(
+            status_code=502, detail="Could not persist the source analysis."
+        ) from None
+    try:
+        updated_rec = await airtable_client.update_source_by_id(
+            source_id,
+            business_name,
+            analysis_fields,
+            owner_id=current["id"],
+        )
+    except Exception as exc:
+        logger.warning("Source analysis persistence failed: %s", exc)
+        raise HTTPException(
+            status_code=502, detail="Could not persist the source analysis."
+        ) from None
+    if not updated_rec:
+        raise HTTPException(status_code=404, detail="Source not found")
+
+    return record_to_source_out(updated_rec)
 
 
 @api_router.put("/sources/{source_id}/testimonial", response_model=SourceOut)
 async def update_testimonial(source_id: str, body: TestimonialUpdate, current=Depends(get_current_user)):
-    # 1. Update memory cache
-    doc = TEMP_SOURCES.get(source_id)
-    if doc:
-        doc["testimonial_draft"] = body.testimonial_draft
-        TEMP_SOURCES[source_id] = doc
-        
-    # 2. Update Airtable (No MongoDB!)
-    business_name = (
-        await airtable_client.get_business_name_by_email_domain(current["email"])
-        or current["company"]
-    )
-    recs = []
+    business_name = await _current_business_name(current)
     try:
-        formula = f'LOWER({{Source_Id}})="{airtable_client._escape(source_id)}"'
-        existing = await airtable_client._get(airtable_client.TABLE_GROWTH_SIGNALS, {"filterByFormula": formula, "pageSize": 1})
-        recs = existing.get("records", [])
-        if recs:
-            await airtable_client._update(airtable_client.TABLE_GROWTH_SIGNALS, recs[0]["id"], {"Testimonial_Draft": body.testimonial_draft})
-    except Exception as e:
-        logger.warning(f"Failed to update testimonial in Airtable: {e}")
-        
-    if not doc and not recs:
+        existing = await airtable_client.get_source_by_id(
+            source_id, business_name, owner_id=current["id"]
+        )
+        if not existing:
+            raise HTTPException(status_code=404, detail="Source not found")
+        updated = await airtable_client.update_source_by_id(
+            source_id,
+            business_name,
+            {"Testimonial_Draft": body.testimonial_draft},
+            owner_id=current["id"],
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("Failed to update source testimonial: %s", exc)
+        raise HTTPException(status_code=502, detail="Could not update testimonial.") from None
+    if not updated:
         raise HTTPException(status_code=404, detail="Source not found")
-        
-    return record_to_source_out(recs[0]) if recs else source_to_out(doc)
+    return record_to_source_out(updated)
 
 
 @api_router.get("/sources/{source_id}/email-draft", response_model=EmailDraft)
 async def email_draft(source_id: str, current=Depends(get_current_user)):
-    doc = TEMP_SOURCES.get(source_id)
-    if not doc:
-        business_name = (
-            await airtable_client.get_business_name_by_email_domain(current["email"])
-            or current["company"]
+    business_name = await _current_business_name(current)
+    try:
+        rec = await airtable_client.get_source_by_id(
+            source_id, business_name, owner_id=current["id"]
         )
-        records = await airtable_client.list_growth_signals_by_business(business_name)
-        for rec in records:
-            f = rec.get("fields", {})
-            if f.get("Source_Id") == source_id:
-                doc = record_to_source_out(rec).model_dump()
-                break
-                
-    if not doc:
+    except RuntimeError:
+        raise HTTPException(status_code=502, detail="Could not retrieve source.") from None
+    if not rec:
         raise HTTPException(status_code=404, detail="Source not found")
-        
+    doc = _growth_signal_record_to_doc(rec)
     client_name = doc["client_name"]
     ins = doc.get("insights") or {}
     company = ins.get("company_name") or client_name
@@ -1249,8 +1257,7 @@ async def email_draft(source_id: str, current=Depends(get_current_user)):
 
 
 def _growth_signal_record_to_pub_doc(rec: dict) -> dict:
-    """Adapt a raw Airtable Growth_Signals record into the doc shape the public
-    testimonial endpoints expect (mirrors a TEMP_SOURCES entry)."""
+    """Adapt a raw Airtable Growth_Signals record for public testimonial routes."""
     f = rec.get("fields", {})
     insights = {
         "company_name": f.get("Company", ""),
@@ -1264,7 +1271,8 @@ def _growth_signal_record_to_pub_doc(rec: dict) -> dict:
         "id": f.get("Source_Id") or rec.get("id"),
         "share_id": f.get("Share_Id") or "",
         "brand": f.get("Business_Name") or "PayRewards",
-        "client_name": f.get("Company") or f.get("Person") or "Customer",
+        "client_name": _record_client_name(f),
+        "client_email": f.get("Client_Email") or "",
         "insights": insights,
         "testimonial_draft": f.get("Testimonial_Draft") or "",
         "testimonial_status": f.get("Testimonial_Status") or "draft",
@@ -1273,12 +1281,7 @@ def _growth_signal_record_to_pub_doc(rec: dict) -> dict:
 
 
 async def find_public_source(share_id: str) -> Optional[dict]:
-    """Locate a source by its public share_id — checks the in-memory TEMP_SOURCES cache
-    first (freshly uploaded, not-yet-analyzed sources), then falls back to Airtable
-    Growth_Signals (the system of record once a source has been analyzed)."""
-    for doc in TEMP_SOURCES.values():
-        if doc.get("share_id") == share_id:
-            return doc
+    """Locate a source by its persisted public Share_Id."""
     rec = await airtable_client.get_growth_signal_by_share_id(share_id)
     if rec:
         return _growth_signal_record_to_pub_doc(rec)
@@ -1314,10 +1317,18 @@ async def public_update_testimonial(share_id: str, body: PublicUpdate):
         raise HTTPException(status_code=404, detail="Testimonial not found")
     if doc.get("testimonial_status") == "approved":
         raise HTTPException(status_code=400, detail="This testimonial is already approved and locked.")
+    try:
+        updated = await airtable_client.update_source_by_id(
+            doc["id"],
+            doc.get("brand") or "PayRewards",
+            {"Testimonial_Draft": body.testimonial_draft},
+        )
+    except Exception as exc:
+        logger.warning("Public testimonial update failed: %s", exc)
+        raise HTTPException(status_code=502, detail="Could not update testimonial.") from None
+    if not updated:
+        raise HTTPException(status_code=404, detail="Testimonial not found")
     doc["testimonial_draft"] = body.testimonial_draft
-    if doc["id"] in TEMP_SOURCES:
-        TEMP_SOURCES[doc["id"]]["testimonial_draft"] = body.testimonial_draft
-    await airtable_client.update_growth_signal_by_source_id(doc["id"], {"Testimonial_Draft": body.testimonial_draft})
     return _public_payload(doc)
 
 
@@ -1327,54 +1338,73 @@ async def public_approve_testimonial(share_id: str, request: Request):
     if not doc:
         raise HTTPException(status_code=404, detail="Testimonial not found")
     now = datetime.now(timezone.utc).isoformat()
-    doc["testimonial_status"] = "approved"
-    doc["approved_at"] = now
-    if doc["id"] in TEMP_SOURCES:
-        TEMP_SOURCES[doc["id"]].update({"testimonial_status": "approved", "approved_at": now})
-    await airtable_client.update_growth_signal_by_source_id(
-        doc["id"], {"Testimonial_Status": "approved", "Approved_At": now}
-    )
-
-    # Sync the approved testimonial to Airtable (User + Uplaud tables)
     business_name = doc.get("brand") or "PayRewards"
     ins = doc.get("insights") or {}
     speaker_name = ins.get("speaker_name") or doc.get("client_name", "")
-    reviewer_id = await airtable_client.find_or_create_user(name=speaker_name, email=doc.get("client_email") or None)
-    share_link = f"{str(request.base_url).rstrip('/')}/t/{share_id}"
-    await airtable_client.create_uplaud_record(
-        business_name=business_name,
-        testimonial=doc.get("testimonial_draft") or "",
-        reviewer_record_id=reviewer_id,
-        share_link=share_link,
-        date_added=now[:10],
-    )
+    try:
+        reviewer_id = await airtable_client.find_or_create_user(
+            name=speaker_name, email=doc.get("client_email") or None
+        )
+        share_link = f"{str(request.base_url).rstrip('/')}/t/{share_id}"
+        await airtable_client.upsert_uplaud_record(
+            business_name=business_name,
+            testimonial=doc.get("testimonial_draft") or "",
+            reviewer_record_id=reviewer_id,
+            share_link=share_link,
+            date_added=now[:10],
+        )
+    except Exception as exc:
+        logger.warning("Approved testimonial sync failed: %s", exc)
+        raise HTTPException(status_code=502, detail="Could not approve testimonial.") from None
+    try:
+        updated = await airtable_client.update_source_by_id(
+            doc["id"],
+            business_name,
+            {"Testimonial_Status": "approved", "Approved_At": now},
+        )
+    except Exception as exc:
+        logger.warning("Public testimonial approval failed: %s", exc)
+        raise HTTPException(status_code=502, detail="Could not approve testimonial.") from None
+    if not updated:
+        raise HTTPException(status_code=404, detail="Testimonial not found")
+    doc["testimonial_status"] = "approved"
+    doc["approved_at"] = now
     return _public_payload(doc)
 
 
 @api_router.post("/sources/{source_id}/send-approval")
 async def send_approval(source_id: str, current=Depends(get_current_user)):
-    doc = TEMP_SOURCES.get(source_id)
-    share_id = doc.get("share_id") if doc else None
-    if not share_id:
-        business_name = (
-            await airtable_client.get_business_name_by_email_domain(current["email"])
-            or current["company"]
+    business_name = await _current_business_name(current)
+    try:
+        rec = await airtable_client.get_source_by_id(
+            source_id, business_name, owner_id=current["id"]
         )
-        records = await airtable_client.list_growth_signals_by_business(business_name)
-        rec = next((r for r in records if r.get("fields", {}).get("Source_Id") == source_id), None)
-        if not doc and not rec:
-            raise HTTPException(status_code=404, detail="Source not found")
-        if rec:
-            share_id = rec.get("fields", {}).get("Share_Id") or rec.get("id")[:12]
-    share_id = share_id or uuid.uuid4().hex[:12]
+    except RuntimeError:
+        raise HTTPException(status_code=502, detail="Could not retrieve source.") from None
+    if not rec:
+        raise HTTPException(status_code=404, detail="Source not found")
+    fields = rec.get("fields", {})
+    share_id = fields.get("Share_Id") or uuid.uuid4().hex[:12]
     now = datetime.now(timezone.utc).isoformat()
-    new_status = "sent" if (not doc or doc.get("testimonial_status") != "approved") else "approved"
-    if doc:
-        doc.update({"testimonial_status": new_status, "approval_requested_at": now, "share_id": share_id})
-        TEMP_SOURCES[source_id] = doc
-    await airtable_client.update_growth_signal_by_source_id(
-        source_id, {"Testimonial_Status": new_status, "Approval_Requested_At": now, "Share_Id": share_id}
+    new_status = (
+        "approved" if fields.get("Testimonial_Status") == "approved" else "sent"
     )
+    try:
+        updated = await airtable_client.update_source_by_id(
+            source_id,
+            business_name,
+            {
+                "Testimonial_Status": new_status,
+                "Approval_Requested_At": now,
+                "Share_Id": share_id,
+            },
+            owner_id=current["id"],
+        )
+    except Exception as exc:
+        logger.warning("Approval-request persistence failed: %s", exc)
+        raise HTTPException(status_code=502, detail="Could not send approval.") from None
+    if not updated:
+        raise HTTPException(status_code=404, detail="Source not found")
     return {"share_id": share_id, "public_path": f"/t/{share_id}"}
 
 

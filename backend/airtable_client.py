@@ -438,6 +438,26 @@ async def create_uplaud_record(
         return None
 
 
+async def upsert_uplaud_record(
+    business_name: str,
+    testimonial: str,
+    reviewer_record_id: Optional[str] = None,
+    share_link: str = "",
+    date_added: Optional[str] = None,
+) -> str:
+    """Atomically create/update the analyzed testimonial by its public link."""
+    if not share_link:
+        raise RuntimeError("A persisted share link is required")
+    fields = {"business_name": business_name or "", "Uplaud": testimonial or ""}
+    if reviewer_record_id:
+        fields["Reviewer"] = [reviewer_record_id]
+    fields["Share Link"] = share_link
+    if date_added:
+        fields["Date_Added"] = date_added
+    record = await _upsert_by_fields(TABLE_UPLAUD, fields, ["Share Link"])
+    return record["id"]
+
+
 async def create_circle_record(
     initiator: str,
     receiver: str,
@@ -680,6 +700,126 @@ async def list_uplaud_by_business(business_name: str) -> list:
 TABLE_GROWTH_SIGNALS = "Growth_Signals"
 
 
+def _source_scope_formula(
+    source_id: str, business_name: str, owner_id: Optional[str] = None
+) -> str:
+    clauses = [
+        f'{{Source_Id}}="{_escape(source_id)}"',
+        f'{{Business_Name}}="{_escape(business_name)}"',
+    ]
+    if owner_id:
+        # Legacy analyzed rows may predate Owner_Id. They remain available to the
+        # owning business, while rows with an owner are restricted to that owner.
+        clauses.append(
+            "OR("
+            f'{{Owner_Id}}="{_escape(owner_id)}",'
+            "{Owner_Id}=BLANK()"
+            ")"
+        )
+    return f"AND({','.join(clauses)})"
+
+
+async def create_uploaded_source(
+    *,
+    source_id: str,
+    business_name: str,
+    owner_id: str,
+    filename: str,
+    file_type: str,
+    transcript_text: str,
+    word_count: int,
+    share_id: str,
+    created_at: str,
+    blob_url: str = "",
+) -> dict:
+    """Strictly create the durable Growth_Signals row for an upload."""
+    if not _enabled():
+        raise RuntimeError("Airtable source persistence is unavailable")
+    fields = {
+        "Source_Id": source_id,
+        "Business_Name": business_name,
+        "Owner_Id": owner_id,
+        # Growth_Signals already has Name, so it is reused for the filename.
+        "Name": filename,
+        "File_Type": file_type,
+        "Transcript_Text": transcript_text,
+        "Word_Count": word_count,
+        "Source_Status": "uploaded",
+        "Share_Id": share_id,
+        "Created_At": created_at,
+    }
+    if blob_url:
+        fields["Blob_Url"] = blob_url
+    try:
+        record = await _create(TABLE_GROWTH_SIGNALS, fields)
+    except Exception as exc:
+        logger.warning("Airtable uploaded-source create failed: %s", exc)
+        raise RuntimeError("Airtable source persistence failed") from None
+    if not isinstance(record, dict) or not record.get("id"):
+        raise RuntimeError("Airtable source persistence failed")
+    return record
+
+
+async def get_source_by_id(
+    source_id: str, business_name: str, *, owner_id: Optional[str] = None
+) -> Optional[dict]:
+    """Fetch one source within its business and optional owner boundary."""
+    if not source_id or not business_name:
+        return None
+    try:
+        data = await _get(
+            TABLE_GROWTH_SIGNALS,
+            {
+                "filterByFormula": _source_scope_formula(
+                    source_id, business_name, owner_id
+                ),
+                "maxRecords": 1,
+            },
+        )
+    except Exception as exc:
+        logger.warning("Airtable scoped source lookup failed: %s", exc)
+        raise RuntimeError("Airtable source lookup failed") from None
+    records = data.get("records", []) if isinstance(data, dict) else []
+    if not records:
+        return None
+    record = records[0]
+    fields = record.get("fields", {})
+    if (
+        fields.get("Source_Id") != source_id
+        or fields.get("Business_Name") != business_name
+    ):
+        return None
+    persisted_owner = fields.get("Owner_Id")
+    if owner_id and persisted_owner and persisted_owner != owner_id:
+        return None
+    return record
+
+
+async def update_source_by_id(
+    source_id: str,
+    business_name: str,
+    fields: dict,
+    *,
+    owner_id: Optional[str] = None,
+) -> Optional[dict]:
+    """Strictly update an existing, tenant-scoped Growth_Signals row."""
+    if not _enabled():
+        raise RuntimeError("Airtable source persistence is unavailable")
+    try:
+        existing = await get_source_by_id(
+            source_id, business_name, owner_id=owner_id
+        )
+        if not existing:
+            return None
+        updated = await _update(TABLE_GROWTH_SIGNALS, existing["id"], fields)
+    except Exception as exc:
+        logger.warning("Airtable scoped source update failed: %s", exc)
+        raise RuntimeError("Airtable source persistence failed") from None
+    if not isinstance(updated, dict) or not updated.get("id"):
+        raise RuntimeError("Airtable source persistence failed")
+    return updated
+
+
 async def upsert_growth_signal(source_id: str, business_name: str, insights: dict, testimonial_status: str, testimonial_draft: str = "", share_id: str = "") -> None:
     """Persist AI-extracted growth signals for a conversation to Airtable (create or update by Source_Id)."""
     if not _enabled():
@@ -747,13 +887,32 @@ async def update_growth_signal_by_source_id(source_id: str, fields: dict) -> boo
     return False
 
 
-async def list_growth_signals_by_business(business_name: str) -> list:
+async def list_growth_signals_by_business(
+    business_name: str, *, owner_id: Optional[str] = None
+) -> list:
     """Return Growth_Signals records for the given business from Airtable."""
     if not business_name:
         return []
     try:
-        formula = f'{{Business_Name}}="{_escape(business_name)}"'
-        return await _get_all(TABLE_GROWTH_SIGNALS, {"filterByFormula": formula, "pageSize": 100})
+        business_clause = f'{{Business_Name}}="{_escape(business_name)}"'
+        formula = business_clause
+        if owner_id:
+            formula = (
+                f"AND({business_clause},"
+                f'OR({{Owner_Id}}="{_escape(owner_id)}",{{Owner_Id}}=BLANK()))'
+            )
+        records = await _get_all(
+            TABLE_GROWTH_SIGNALS,
+            {"filterByFormula": formula, "pageSize": 100},
+        )
+        if not owner_id:
+            return records
+        return [
+            record
+            for record in records
+            if record.get("fields", {}).get("Business_Name") == business_name
+            and record.get("fields", {}).get("Owner_Id") in (None, "", owner_id)
+        ]
     except Exception as e:
         logger.warning("Airtable growth signals list failed: %s", e)
         return []
