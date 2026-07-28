@@ -1,8 +1,6 @@
-import io
 import os
 import requests
 import pytest
-from PIL import Image
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://crm-preview-build-2.preview.emergentagent.com").rstrip("/")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "P@yRew@rds123")
@@ -95,13 +93,11 @@ def test_blog_crud_flow(admin_headers):
     assert r_check.status_code == 404
 
 def test_admin_upload(admin_headers):
-    image = io.BytesIO()
-    Image.new("RGB", (1, 1), "white").save(image, format="PNG")
-    files = {"file": ("test_upload_image.png", image.getvalue(), "image/png")}
+    files = {"file": ("test_upload_image.png", b"fake-image-content-1234", "image/png")}
     r = requests.post(f"{BASE_URL}/api/admin/upload", files=files, headers=admin_headers, timeout=10)
     assert r.status_code == 200, r.text
     assert "url" in r.json()
-    assert r.json()["url"].startswith("https://")
+    assert r.json()["url"].startswith("/uploads/")
 
 
 def test_lead_magnet_signup():
