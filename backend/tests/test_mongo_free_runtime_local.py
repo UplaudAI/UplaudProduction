@@ -102,6 +102,16 @@ def referral_payload():
     }
 
 
+def enable_airtable(monkeypatch):
+    monkeypatch.setattr(server.airtable_client, "AIRTABLE_PAT", "test-pat")
+    monkeypatch.setattr(server.airtable_client, "AIRTABLE_BASE_ID", "test-base")
+    monkeypatch.setattr(
+        server.airtable_client,
+        "AIRTABLE_API_URL",
+        "https://api.airtable.com/v0/test-base",
+    )
+
+
 def test_server_imports_without_mongo_environment_or_network_clients():
     env = os.environ.copy()
     for name in (
@@ -258,7 +268,7 @@ def test_referral_key_is_deterministic_for_normalized_item_values():
 
 def test_referral_retry_after_partial_failure_does_not_duplicate_circles(monkeypatch):
     stored_by_key = {}
-    create_attempts = Counter()
+    upsert_attempts = Counter()
     second_key_failed_once = False
 
     async def fake_find_public_source(share_id):
@@ -270,29 +280,28 @@ def test_referral_retry_after_partial_failure_does_not_duplicate_circles(monkeyp
     async def persisted_user(**kwargs):
         return f"rec-user-{kwargs['name'].split()[0].lower()}"
 
-    async def fake_get(table, params):
-        assert table == server.airtable_client.TABLE_CIRCLES
-        referral_key = params["filterByFormula"].split('"')[1]
-        record = stored_by_key.get(referral_key)
-        return {"records": [record] if record else []}
-
-    async def fake_create(table, fields):
+    async def fake_request(method, url, **kwargs):
         nonlocal second_key_failed_once
-        assert table == server.airtable_client.TABLE_CIRCLES
+        assert method == "PATCH"
+        assert url.endswith("/Circles")
+        fields = kwargs["json"]["records"][0]["fields"]
         referral_key = fields["Referral_Key"]
-        create_attempts[referral_key] += 1
-        if len(create_attempts) == 2 and not second_key_failed_once:
+        upsert_attempts[referral_key] += 1
+        if len(upsert_attempts) == 2 and not second_key_failed_once:
             second_key_failed_once = True
             raise RuntimeError("second Circle failed once")
-        record = {"id": f"rec-circle-{len(stored_by_key) + 1}", "fields": fields}
-        stored_by_key[referral_key] = record
-        return record
+        record = stored_by_key.setdefault(
+            referral_key,
+            {"id": f"rec-circle-{len(stored_by_key) + 1}", "fields": fields},
+        )
+        request = httpx.Request(method, url)
+        return httpx.Response(200, json={"records": [record]}, request=request)
 
     monkeypatch.setattr(server, "find_public_source", fake_find_public_source)
     monkeypatch.setattr(server.airtable_client, "enrich_person_pdl", no_enrichment)
     monkeypatch.setattr(server.airtable_client, "find_or_create_user", persisted_user)
-    monkeypatch.setattr(server.airtable_client, "_get", fake_get)
-    monkeypatch.setattr(server.airtable_client, "_create", fake_create)
+    enable_airtable(monkeypatch)
+    monkeypatch.setattr(server.airtable_client, "_request", fake_request)
 
     first_response = run(
         post("/api/public/testimonial/share-1/referrals", referral_payload())
@@ -305,20 +314,132 @@ def test_referral_retry_after_partial_failure_does_not_duplicate_circles(monkeyp
     assert retry_response.status_code == 200
     assert retry_response.json() == {"count": 2}
     assert len(stored_by_key) == 2
-    assert sorted(create_attempts.values()) == [1, 2]
+    assert sorted(upsert_attempts.values()) == [2, 2]
+
+
+def test_upsert_by_fields_sends_exact_airtable_payload_and_returns_first_record(
+    monkeypatch,
+):
+    calls = []
+    expected_record = {"id": "rec-circle-1", "fields": {"Referral_Key": "key-1"}}
+
+    async def fake_request(method, url, **kwargs):
+        calls.append((method, url, kwargs))
+        request = httpx.Request(method, url)
+        return httpx.Response(
+            200,
+            json={"records": [expected_record]},
+            request=request,
+        )
+
+    enable_airtable(monkeypatch)
+    monkeypatch.setattr(server.airtable_client, "_request", fake_request)
+
+    result = run(
+        server.airtable_client._upsert_by_fields(
+            server.airtable_client.TABLE_CIRCLES,
+            {"Referral_Key": "key-1", "Receiver": "Ada"},
+            ["Referral_Key"],
+        )
+    )
+
+    assert result == expected_record
+    assert calls == [
+        (
+            "PATCH",
+            "https://api.airtable.com/v0/test-base/Circles",
+            {
+                "json": {
+                    "performUpsert": {"fieldsToMergeOn": ["Referral_Key"]},
+                    "records": [
+                        {"fields": {"Referral_Key": "key-1", "Receiver": "Ada"}}
+                    ],
+                }
+            },
+        )
+    ]
+
+
+@pytest.mark.parametrize("payload", [{}, {"records": []}, {"records": None}])
+def test_upsert_by_fields_rejects_missing_or_empty_records(monkeypatch, payload):
+    async def fake_request(method, url, **kwargs):
+        request = httpx.Request(method, url)
+        return httpx.Response(200, json=payload, request=request)
+
+    enable_airtable(monkeypatch)
+    monkeypatch.setattr(server.airtable_client, "_request", fake_request)
+
+    with pytest.raises(RuntimeError, match="upsert returned no records"):
+        run(
+            server.airtable_client._upsert_by_fields(
+                server.airtable_client.TABLE_CIRCLES,
+                {"Referral_Key": "key-1"},
+                ["Referral_Key"],
+            )
+        )
+
+
+def test_concurrent_circle_upserts_with_same_key_create_one_logical_record(
+    monkeypatch,
+):
+    stored_by_key = {}
+    arrivals = 0
+
+    async def scenario():
+        barrier = asyncio.Event()
+        lock = asyncio.Lock()
+
+        async def fake_request(method, url, **kwargs):
+            nonlocal arrivals
+            arrivals += 1
+            if arrivals == 2:
+                barrier.set()
+            await barrier.wait()
+            fields = kwargs["json"]["records"][0]["fields"]
+            referral_key = fields["Referral_Key"]
+            async with lock:
+                record = stored_by_key.setdefault(
+                    referral_key,
+                    {"id": "rec-circle-shared", "fields": fields},
+                )
+            request = httpx.Request(method, url)
+            return httpx.Response(200, json={"records": [record]}, request=request)
+
+        monkeypatch.setattr(server.airtable_client, "_request", fake_request)
+        return await asyncio.gather(
+            server.airtable_client.create_circle_record(
+                initiator="Rita",
+                receiver="Ada",
+                referral_key="shared-key",
+                strict_persistence=True,
+            ),
+            server.airtable_client.create_circle_record(
+                initiator="Rita",
+                receiver="Ada",
+                referral_key="shared-key",
+                strict_persistence=True,
+            ),
+        )
+
+    enable_airtable(monkeypatch)
+    record_ids = run(scenario())
+
+    assert record_ids == ["rec-circle-shared", "rec-circle-shared"]
+    assert len(stored_by_key) == 1
 
 
 def test_circle_upsert_missing_referral_key_field_fails_loudly(monkeypatch):
-    request = httpx.Request("GET", "https://api.airtable.com/v0/base/Circles")
+    request = httpx.Request("PATCH", "https://api.airtable.com/v0/base/Circles")
     response = httpx.Response(422, request=request)
     missing_field_error = httpx.HTTPStatusError(
         "Unknown field name: Referral_Key", request=request, response=response
     )
 
-    async def failing_get(table, params):
+    async def failing_request(method, url, **kwargs):
         raise missing_field_error
 
-    monkeypatch.setattr(server.airtable_client, "_get", failing_get)
+    enable_airtable(monkeypatch)
+    monkeypatch.setattr(server.airtable_client, "_request", failing_request)
 
     with pytest.raises(httpx.HTTPStatusError, match="Referral_Key"):
         run(

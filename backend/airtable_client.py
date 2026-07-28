@@ -168,6 +168,28 @@ async def _create(table: str, fields: dict) -> Optional[dict]:
     return response.json()
 
 
+async def _upsert_by_fields(
+    table: str,
+    fields: dict,
+    fields_to_merge_on: list[str],
+) -> dict:
+    if not _enabled():
+        raise RuntimeError("Airtable is not configured")
+    response = await _request(
+        "PATCH",
+        _table_url(table),
+        json={
+            "performUpsert": {"fieldsToMergeOn": fields_to_merge_on},
+            "records": [{"fields": fields}],
+        },
+    )
+    data = response.json()
+    records = data.get("records") if isinstance(data, dict) else None
+    if not isinstance(records, list) or not records or not isinstance(records[0], dict):
+        raise RuntimeError("Airtable upsert returned no records")
+    return records[0]
+
+
 async def _update(table: str, record_id: str, fields: dict) -> Optional[dict]:
     if not _enabled():
         return None
@@ -429,21 +451,6 @@ async def create_circle_record(
     strict_persistence: bool = False,
 ) -> Optional[str]:
     try:
-        if referral_key:
-            formula = f'{{Referral_Key}}="{_escape(referral_key)}"'
-            data = await _get(
-                TABLE_CIRCLES,
-                {"filterByFormula": formula, "maxRecords": 1},
-            )
-            if strict_persistence and data is None:
-                raise RuntimeError("Airtable Circle lookup returned no response")
-            records = (data or {}).get("records", [])
-            if records:
-                existing_id = records[0].get("id")
-                if strict_persistence and not existing_id:
-                    raise RuntimeError("Airtable Circle lookup returned no record ID")
-                return existing_id
-
         fields = {
             "Initiator": initiator or "",
             "Receiver": receiver or "",
@@ -462,7 +469,14 @@ async def create_circle_record(
         if referral_key:
             fields["Referral_Key"] = referral_key
 
-        rec = await _create(TABLE_CIRCLES, fields)
+        if referral_key:
+            rec = await _upsert_by_fields(
+                TABLE_CIRCLES,
+                fields,
+                ["Referral_Key"],
+            )
+        else:
+            rec = await _create(TABLE_CIRCLES, fields)
         record_id = rec.get("id") if rec else None
         if strict_persistence and not record_id:
             raise RuntimeError("Airtable Circle create returned no record ID")
