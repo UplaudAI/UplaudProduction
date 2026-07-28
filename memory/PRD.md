@@ -177,6 +177,27 @@ available code so the user can see how much progress has been made.
   Verified via testing_agent end-to-end (upload → analyze → approve → refer a friend → confirmed
   the referral now appears in Warm Pipeline / `GET /api/warm-leads`).
 
+## What's been implemented (2026-07-27, cont'd — UI tightening + CTA polish)
+- Sources page: "Signals Synced" hero box now has a "View Growth Signals" CTA
+  (`northStar.cta` prop added to `PageHero`/`NorthStarBlock`, reused generically) linking to
+  `/business/conversations` — also fills the box's previously-empty bottom whitespace.
+- Sources page decluttered: dropzone moved directly under the hero/personalize card (visible
+  without scrolling), "Customer feedback" (G2/Capterra) source list hidden, tightened padding/
+  font sizes across hero, personalize card, dropzone, and the bottom info panel.
+- "Connect integration" button now shows a "Please contact admin" toast instead of a generic
+  simulated-integration message.
+- Growth Signals page (`/business/conversations`): "Explore individual conversations" (list +
+  detail split view) moved directly under the hero; the full-width "Latest approved testimonial"
+  block was replaced with a compact `CompactLatestTestimonial` card (smaller font) shown inside
+  the right-hand detail column instead of occupying the mid-page.
+- Warm Pipeline (`/business/referrals`) and `PageHero` (used site-wide) spacing tightened
+  (reduced section/heading padding and margins).
+- Login now redirects straight to Warm Pipeline (`/business/referrals`) if there are unseen new
+  warm leads (`getSeenLeadsCount`/`setSeenLeadsCount` in `business-storage.js`, compared against
+  `GET /api/warm-leads` count at login; marked "seen" when the Warm Pipeline page is visited),
+  falling back to the normal destination otherwise.
+- Verified via testing_agent: all 5 changes pass, no console errors introduced, no broken layout.
+
 ## What's been implemented (2026-07-27, cont'd — "keeps reverting to Sources page")
 - **Warm Pipeline (and any non-whitelisted page) kept redirecting back to Sources**: root cause
   was `DashboardLayout.jsx`'s zero-source redirect `useEffect` had `loc.pathname` in its
