@@ -21,21 +21,15 @@ export default function Navbar() {
         <a
           href="/#top"
           data-testid="brand-logo"
-          className="flex items-center gap-2 text-[#6d46c6]"
+          className="flex items-center"
           aria-label="Uplaud home"
         >
-          <span
-            data-testid="brand-wordmark"
-            className="font-display text-[22px] leading-none tracking-[-0.04em]"
-          >
-            uplaud
-          </span>
-          <span
-            aria-hidden
-            className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-[#d9d1ee]/70 bg-transparent text-[13px] leading-none"
-          >
-            ◔
-          </span>
+          <img
+            src="/assets/uplaud-logo-purple-transparent.png"
+            alt="Uplaud"
+            className="h-11 w-auto object-contain"
+            style={{ maxWidth: 128 }}
+          />
         </a>
 
         <nav className="hidden md:flex items-center gap-8">
@@ -55,14 +49,14 @@ export default function Navbar() {
           <a
             href="/business"
             data-testid="nav-sign-in-link"
-            className="btn-secondary h-11 px-5"
+            className="inline-flex h-11 items-center justify-center rounded-2xl border border-[#d9d1ee] bg-white/45 px-5 text-[13px] font-medium text-[#261c4d] shadow-[0_14px_34px_-24px_rgba(38,28,77,0.55)] transition-all hover:-translate-y-0.5 hover:border-[#6d46c6]/40 hover:bg-white/75"
           >
             Log in
           </a>
           <a
             href="/#demo"
             data-testid="nav-book-demo-btn"
-            className="btn-primary h-11 px-5"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#6d46c6] px-5 text-[13px] font-semibold text-white shadow-[0_14px_34px_-18px_rgba(109,70,198,0.8)] transition-all hover:-translate-y-0.5 hover:bg-[#5f35bf]"
           >
             Book a demo
             <ArrowUpRight className="w-4 h-4" strokeWidth={1.75} />
@@ -100,7 +94,7 @@ export default function Navbar() {
               href="/business"
               data-testid="nav-sign-in-link-mobile"
               onClick={() => setOpen(false)}
-              className="btn-secondary justify-center"
+              className="inline-flex h-11 items-center justify-center rounded-2xl border border-[#d9d1ee] bg-white px-5 text-[14px] font-medium text-[#261c4d]"
             >
               Log in
             </a>
@@ -108,7 +102,7 @@ export default function Navbar() {
               href="/#demo"
               data-testid="nav-book-demo-btn-mobile"
               onClick={() => setOpen(false)}
-              className="btn-primary mt-2 justify-center"
+              className="mt-2 inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#6d46c6] px-5 text-[14px] font-semibold text-white shadow-[0_14px_34px_-18px_rgba(109,70,198,0.8)]"
             >
               Book a demo
             </a>

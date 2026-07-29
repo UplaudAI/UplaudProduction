@@ -19,7 +19,7 @@ import {
 const VERTICALS = [
   {
     id: "b2b-saas",
-    label: "B2B SaaS",
+    label: "SaaS",
     copy: "Turn demo calls, customer wins and product love into more pipeline &mdash; for SaaS teams selling into crowded markets.",
     icon: Sparkles,
     ad: {

@@ -54,7 +54,7 @@ test("business login hero highlights the full Every Interaction phrase", () => {
   expect(css).toContain("box-decoration-break: clone");
 });
 
-test("landing navbar stays transparent and uses a non-image wordmark", () => {
+test("landing navbar stays transparent and uses the transparent logo asset", () => {
   const navbar = fs.readFileSync(
     path.join(__dirname, "components/landing/Navbar.jsx"),
     "utf8"
@@ -64,10 +64,22 @@ test("landing navbar stays transparent and uses a non-image wordmark", () => {
   expect(navbar).toContain("bg-transparent border-b border-transparent");
   expect(navbar).not.toContain("bg-white/85");
   expect(navbar).not.toContain("scrolled");
-  expect(navbar).not.toContain("<img");
-  expect(navbar).toContain('data-testid="brand-wordmark"');
+  expect(navbar).toContain("<img");
+  expect(navbar).toContain('src="/assets/uplaud-logo-purple-transparent.png"');
+  expect(navbar).not.toContain("logo_white_background");
   expect(navbar).toContain('data-testid="nav-sign-in-link"');
-  expect(navbar).toContain("btn-secondary");
+});
+
+test("landing navbar CTAs use modern non-pill button shapes", () => {
+  const navbar = fs.readFileSync(
+    path.join(__dirname, "components/landing/Navbar.jsx"),
+    "utf8"
+  );
+
+  expect(navbar).toContain("rounded-2xl");
+  expect(navbar).toContain("shadow-[0_14px_34px_-18px_rgba(109,70,198,0.8)]");
+  expect(navbar).not.toContain('className="btn-secondary h-11 px-5"');
+  expect(navbar).not.toContain('className="btn-primary h-11 px-5"');
 });
 
 test("landing sections do not show deck-style numbered labels", () => {
@@ -86,15 +98,16 @@ test("landing sections do not show deck-style numbered labels", () => {
   }
 });
 
-test("built for selector starts with B2B SaaS", () => {
+test("built for selector starts with SaaS while keeping the SaaS mock content intact", () => {
   const hero = fs.readFileSync(
     path.join(__dirname, "components/landing/Hero.jsx"),
     "utf8"
   );
 
   expect(hero).toContain('const [activeVertical, setActiveVertical] = useState("b2b-saas")');
-  expect(hero).toMatch(/id: "b2b-saas",\s+label: "B2B SaaS"/);
-  expect(hero.indexOf('label: "B2B SaaS"')).toBeLessThan(
+  expect(hero).toMatch(/id: "b2b-saas",\s+label: "SaaS"/);
+  expect(hero).toContain("Best onboarding platform for B2B SaaS?");
+  expect(hero.indexOf('label: "SaaS"')).toBeLessThan(
     hero.indexOf('label: "Education"')
   );
 });
