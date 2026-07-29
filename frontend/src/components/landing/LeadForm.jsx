@@ -100,7 +100,7 @@ export default function LeadForm() {
                   Thanks, we are on it.
                 </h3>
                 <p className="text-[14px] text-[#4b5563] max-w-md">
-                  Your request was captured for Deepthi at{" "}
+                  Your request was emailed to Deepthi at{" "}
                   <a
                     href="mailto:deepthi@uplaud.ai"
                     className="text-[#6d46c6] hover:underline font-medium"

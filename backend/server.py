@@ -7,6 +7,7 @@ load_dotenv(ROOT_DIR / ".env")
 import os
 import io
 import re
+import html
 import base64
 import hashlib
 import hmac
@@ -67,6 +68,7 @@ ACCESS_TOKEN_HOURS = 168
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-4o")
 DEMO_REQUEST_RECIPIENT = "deepthi@uplaud.ai"
+DEMO_REQUEST_FROM_EMAIL = "Uplaud Website <demo@uplaud.ai>"
 # Airtable long-text cells support up to 100,000 characters. Keep a 10% safety
 # margin so uploads fail clearly before a record write rather than at Airtable.
 MAX_AIRTABLE_TRANSCRIPT_CHARS = 90_000
@@ -238,6 +240,82 @@ class BlogListResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # Auth helpers
 # ---------------------------------------------------------------------------
+def _lead_email_text(body: LeadRequest) -> str:
+    parts = [
+        "New Uplaud demo request",
+        "",
+        f"Name: {body.name.strip()}",
+        f"Email: {str(body.email).strip()}",
+        f"Company: {body.company.strip() or 'Not provided'}",
+        f"Website: {body.website.strip() or 'Not provided'}",
+        "",
+        "Message:",
+        body.message.strip() or "Not provided",
+    ]
+    return "\n".join(parts)
+
+
+def _lead_email_html(body: LeadRequest) -> str:
+    rows = [
+        ("Name", body.name.strip()),
+        ("Email", str(body.email).strip()),
+        ("Company", body.company.strip() or "Not provided"),
+        ("Website", body.website.strip() or "Not provided"),
+        ("Message", body.message.strip() or "Not provided"),
+    ]
+    row_html = "".join(
+        f"<tr><td style='padding:8px 12px;font-weight:600;border-bottom:1px solid #eee'>{html.escape(label)}</td>"
+        f"<td style='padding:8px 12px;border-bottom:1px solid #eee'>{html.escape(value)}</td></tr>"
+        for label, value in rows
+    )
+    return (
+        "<div style='font-family:Inter,Arial,sans-serif;color:#111827'>"
+        "<h2>New Uplaud demo request</h2>"
+        "<table style='border-collapse:collapse;width:100%;max-width:640px'>"
+        f"{row_html}"
+        "</table>"
+        "</div>"
+    )
+
+
+async def send_demo_request_email(body: LeadRequest) -> str:
+    api_key = os.environ.get("RESEND_API_KEY", "").strip()
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Email delivery is not configured. Add RESEND_API_KEY in Vercel before using the demo form.",
+        )
+
+    from_email = os.environ.get("DEMO_REQUEST_FROM_EMAIL", DEMO_REQUEST_FROM_EMAIL).strip()
+    subject_company = body.company.strip() or body.name.strip()
+    payload = {
+        "from": from_email,
+        "to": [DEMO_REQUEST_RECIPIENT],
+        "reply_to": str(body.email).strip(),
+        "subject": f"New Uplaud demo request: {subject_company}",
+        "html": _lead_email_html(body),
+        "text": _lead_email_text(body),
+    }
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.post(
+                "https://api.resend.com/emails",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+            response.raise_for_status()
+            data = response.json()
+            return str(data.get("id") or "")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Demo request email delivery failed")
+        raise HTTPException(status_code=502, detail="Demo request email delivery failed.") from e
+
+
 def is_work_email(email: str) -> bool:
     parts = email.lower().strip().split("@")
     if len(parts) < 2:
@@ -2290,9 +2368,12 @@ async def create_lead(body: LeadRequest, request: Request):
         details=details,
         user_email=str(body.email).strip(),
     )
+    email_id = await send_demo_request_email(body)
     return {
         "ok": True,
-        "message": "Thanks — Deepthi will follow up within one business day.",
+        "email_sent": True,
+        "email_id": email_id,
+        "message": "Thanks — your request was emailed to Deepthi.",
         "recipient": DEMO_REQUEST_RECIPIENT,
     }
 
