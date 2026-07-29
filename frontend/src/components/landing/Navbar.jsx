@@ -39,8 +39,8 @@ export default function Navbar() {
           <img
             src="/assets/uplaud-logo-purple-transparent.png"
             alt="Uplaud"
-            className="h-11 w-auto object-contain"
-            style={{ maxWidth: 128 }}
+            className="h-14 w-auto object-contain"
+            style={{ maxWidth: 172 }}
           />
         </a>
 

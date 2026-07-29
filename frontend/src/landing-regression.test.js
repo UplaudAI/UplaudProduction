@@ -76,6 +76,8 @@ test("landing navbar uses the transparent logo asset", () => {
 
   expect(navbar).toContain("<img");
   expect(navbar).toContain('src="/assets/uplaud-logo-purple-transparent.png"');
+  expect(navbar).toContain("h-14");
+  expect(navbar).toContain("maxWidth: 172");
   expect(navbar).not.toContain("logo_white_background");
   expect(navbar).toContain('data-testid="nav-sign-in-link"');
 });
