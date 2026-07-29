@@ -65,10 +65,9 @@ export default function HowItWorks() {
     >
       <div className="max-w-[1240px] mx-auto px-6 md:px-10">
         <div className="max-w-3xl mb-12 md:mb-16">
-          <span className="section-label">02 / how uplaud works</span>
           <h2
             data-testid="how-headline"
-            className="mt-4 font-display text-[36px] sm:text-[48px] lg:text-[60px] leading-[1.02] font-semibold tracking-tight text-[#111827]"
+            className="font-display text-[36px] sm:text-[48px] lg:text-[60px] leading-[1.02] font-semibold tracking-tight text-[#111827]"
           >
             The Uplaud
             <br />

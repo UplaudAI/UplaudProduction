@@ -55,10 +55,9 @@ export default function Surfaces() {
     >
       <div className="max-w-[1240px] mx-auto px-6 md:px-10">
         <div className="max-w-3xl mb-14">
-          <span className="section-label">03 / activation</span>
           <h2
             data-testid="surfaces-headline"
-            className="mt-4 font-display text-[36px] sm:text-[48px] lg:text-[60px] leading-[1.02] font-semibold tracking-tight text-[#111827]"
+            className="font-display text-[36px] sm:text-[48px] lg:text-[60px] leading-[1.02] font-semibold tracking-tight text-[#111827]"
           >
             One trust engine.
             <br />

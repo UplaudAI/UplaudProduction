@@ -10,10 +10,9 @@ export default function PainPoint() {
       <div className="max-w-[1240px] mx-auto px-6 md:px-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
           <div className="lg:col-span-6">
-            <span className="section-label">01 / the problem</span>
             <h2
               data-testid="pain-headline"
-              className="mt-4 font-display text-[36px] sm:text-[48px] lg:text-[58px] leading-[1.02] font-semibold tracking-tight text-[#111827]"
+              className="font-display text-[36px] sm:text-[48px] lg:text-[58px] leading-[1.02] font-semibold tracking-tight text-[#111827]"
             >
               Ads are getting
               <br />

@@ -1,8 +1,5 @@
-import { useEffect, useState } from "react";
 import { ArrowUpRight, Menu, X } from "lucide-react";
-
-const LOGO_LIGHT_URL =
-  "https://customer-assets-gfyr7b9c.emergentagent.net/job_ai-acquisition-hub-2/artifacts/24zfs0md_logo_white_background.webp";
+import { useState } from "react";
 
 const NAV_LINKS = [
   { href: "/#how", label: "How it works", testId: "nav-link-how" },
@@ -13,37 +10,32 @@ const NAV_LINKS = [
 ];
 
 export default function Navbar() {
-  const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 12);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
 
   return (
     <header
       data-testid="site-navbar"
-      className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
-        scrolled
-          ? "backdrop-blur-xl bg-white/85 border-b border-[#eeeaf6]"
-          : "bg-transparent border-b border-transparent"
-      }`}
+      className="fixed inset-x-0 top-0 z-50 bg-transparent border-b border-transparent"
     >
       <div className="max-w-[1240px] mx-auto px-6 md:px-10 h-16 flex items-center justify-between">
         <a
           href="/#top"
           data-testid="brand-logo"
-          className="flex items-center"
+          className="flex items-center gap-2 text-[#6d46c6]"
+          aria-label="Uplaud home"
         >
-          <img
-            src={LOGO_LIGHT_URL}
-            alt="Uplaud"
-            className="h-10 w-auto object-contain mix-blend-multiply"
-            style={{ maxWidth: 120 }}
-          />
+          <span
+            data-testid="brand-wordmark"
+            className="font-display text-[22px] leading-none tracking-[-0.04em]"
+          >
+            uplaud
+          </span>
+          <span
+            aria-hidden
+            className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-[#d9d1ee]/70 bg-transparent text-[13px] leading-none"
+          >
+            ◔
+          </span>
         </a>
 
         <nav className="hidden md:flex items-center gap-8">
@@ -63,14 +55,14 @@ export default function Navbar() {
           <a
             href="/business"
             data-testid="nav-sign-in-link"
-            className="text-[13px] text-[#4b5563] hover:text-[#6d46c6] transition-colors"
+            className="btn-secondary h-11 px-5"
           >
             Log in
           </a>
           <a
             href="/#demo"
             data-testid="nav-book-demo-btn"
-            className="btn-primary"
+            className="btn-primary h-11 px-5"
           >
             Book a demo
             <ArrowUpRight className="w-4 h-4" strokeWidth={1.75} />
@@ -108,7 +100,7 @@ export default function Navbar() {
               href="/business"
               data-testid="nav-sign-in-link-mobile"
               onClick={() => setOpen(false)}
-              className="text-[14px] text-[#111827] py-2"
+              className="btn-secondary justify-center"
             >
               Log in
             </a>

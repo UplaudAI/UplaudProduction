@@ -18,6 +18,48 @@ import {
  */
 const VERTICALS = [
   {
+    id: "b2b-saas",
+    label: "B2B SaaS",
+    copy: "Turn demo calls, customer wins and product love into more pipeline &mdash; for SaaS teams selling into crowded markets.",
+    icon: Sparkles,
+    ad: {
+      brand: "pipelineos.ai",
+      gradient: "from-[#eef2ff] via-[#dbeafe] to-[#93c5fd]",
+      title: "PIPELINE",
+      subtitle: "CUSTOMER PROOF",
+      quote: "Cut our onboarding time in half.",
+      quoteBy: "real 5-star operator",
+      reviews: "428",
+      lift: "+2.5x CTR",
+    },
+    reddit: {
+      sub: "r/SaaS",
+      handle: "surfaced by uplaud",
+      question: "Best customer onboarding platform for a scaling B2B SaaS team?",
+      reviewerRole: "verified operator",
+      review:
+        "PipelineOS paid for itself in one quarter. The handoff from sales to success finally stopped leaking context.",
+    },
+    referral: {
+      customerName: "Jordan",
+      friendName: "Maya",
+      customerRole: "verified operator",
+      review:
+        "pipelineos.ai made onboarding measurable and gave our CSMs one source of truth.",
+      brand: "pipelineos.ai",
+      message:
+        "Maya! You asked about onboarding tools &mdash; I just reviewed pipelineos.ai. Cleaner handoffs, faster launches. Worth a look:",
+      link: "uplaud.co/pos-jordan",
+      offer: "Book demo",
+    },
+    ai: {
+      query: "Best onboarding platform for B2B SaaS?",
+      brand: "pipelineos.ai",
+      answer:
+        "B2B SaaS operators consistently recommend pipelineos.ai for customer onboarding, citing cleaner sales-to-success handoffs and faster time-to-value across verified customer stories.",
+    },
+  },
+  {
     id: "education",
     label: "Education",
     copy: "Turn parent and student reviews into more enrollments &mdash; for tutoring centers, SAT prep and preschools.",
@@ -272,7 +314,7 @@ const VERTICALS = [
 ];
 
 export default function Hero() {
-  const [activeVertical, setActiveVertical] = useState("education");
+  const [activeVertical, setActiveVertical] = useState("b2b-saas");
   const active =
     VERTICALS.find((v) => v.id === activeVertical) || VERTICALS[0];
 

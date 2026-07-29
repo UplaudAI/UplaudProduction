@@ -37,12 +37,9 @@ export default function Outcomes() {
       <div className="relative max-w-[1240px] mx-auto px-6 md:px-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-end mb-12 md:mb-16">
           <div className="lg:col-span-7">
-            <span className="section-label section-label-dark">
-              04 / results
-            </span>
             <h2
               data-testid="outcomes-headline"
-              className="mt-4 font-display text-[36px] sm:text-[48px] lg:text-[60px] leading-[1.02] font-semibold tracking-tight"
+              className="font-display text-[36px] sm:text-[48px] lg:text-[60px] leading-[1.02] font-semibold tracking-tight"
             >
               Every spin makes
               <br />
