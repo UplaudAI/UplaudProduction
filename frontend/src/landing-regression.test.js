@@ -54,7 +54,7 @@ test("business login hero highlights the full Every Interaction phrase", () => {
   expect(css).toContain("box-decoration-break: clone");
 });
 
-test("landing navbar stays transparent and uses the transparent logo asset", () => {
+test("landing navbar is transparent at top and protected on scroll", () => {
   const navbar = fs.readFileSync(
     path.join(__dirname, "components/landing/Navbar.jsx"),
     "utf8"
@@ -62,8 +62,18 @@ test("landing navbar stays transparent and uses the transparent logo asset", () 
 
   expect(navbar).toContain('data-testid="site-navbar"');
   expect(navbar).toContain("bg-transparent border-b border-transparent");
+  expect(navbar).toContain("setScrolled(window.scrollY > 12)");
+  expect(navbar).toContain("backdrop-blur-xl bg-white/90");
+  expect(navbar).toContain("shadow-[0_16px_40px_-32px_rgba(38,28,77,0.55)]");
   expect(navbar).not.toContain("bg-white/85");
-  expect(navbar).not.toContain("scrolled");
+});
+
+test("landing navbar uses the transparent logo asset", () => {
+  const navbar = fs.readFileSync(
+    path.join(__dirname, "components/landing/Navbar.jsx"),
+    "utf8"
+  );
+
   expect(navbar).toContain("<img");
   expect(navbar).toContain('src="/assets/uplaud-logo-purple-transparent.png"');
   expect(navbar).not.toContain("logo_white_background");

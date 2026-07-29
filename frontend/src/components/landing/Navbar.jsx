@@ -1,5 +1,5 @@
 import { ArrowUpRight, Menu, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const NAV_LINKS = [
   { href: "/#how", label: "How it works", testId: "nav-link-how" },
@@ -10,12 +10,24 @@ const NAV_LINKS = [
 ];
 
 export default function Navbar() {
+  const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 12);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   return (
     <header
       data-testid="site-navbar"
-      className="fixed inset-x-0 top-0 z-50 bg-transparent border-b border-transparent"
+      className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
+        scrolled
+          ? "backdrop-blur-xl bg-white/90 border-b border-[#eeeaf6] shadow-[0_16px_40px_-32px_rgba(38,28,77,0.55)]"
+          : "bg-transparent border-b border-transparent"
+      }`}
     >
       <div className="max-w-[1240px] mx-auto px-6 md:px-10 h-16 flex items-center justify-between">
         <a
