@@ -1,8 +1,7 @@
 import { useState } from "react";
-import axios from "axios";
 import { toast } from "sonner";
 import { ArrowUpRight, Loader2, CheckCircle2 } from "lucide-react";
-import { API } from "@/lib/api";
+import api from "@/lib/api";
 
 export default function LeadForm() {
   const [form, setForm] = useState({
@@ -25,7 +24,13 @@ export default function LeadForm() {
     }
     setSubmitting(true);
     try {
-      const res = await axios.post(`${API}/leads`, form);
+      const res = await api.post("/leads", {
+        name: form.name.trim(),
+        email: form.email.trim(),
+        company: form.company.trim(),
+        website: form.website.trim(),
+        message: form.message.trim(),
+      });
       setSubmitted(true);
       toast.success(res.data?.message || "Thanks, we will be in touch.");
     } catch (err) {
@@ -95,8 +100,14 @@ export default function LeadForm() {
                   Thanks, we are on it.
                 </h3>
                 <p className="text-[14px] text-[#4b5563] max-w-md">
-                  Your request landed with Deepthi and the team. Expect a note
-                  from us within a day, from a real inbox.
+                  Your request was captured for Deepthi at{" "}
+                  <a
+                    href="mailto:deepthi@uplaud.ai"
+                    className="text-[#6d46c6] hover:underline font-medium"
+                  >
+                    deepthi@uplaud.ai
+                  </a>
+                  . Expect a note from us within a day, from a real inbox.
                 </p>
               </div>
             ) : (

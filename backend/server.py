@@ -66,6 +66,7 @@ JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_HOURS = 168
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-4o")
+DEMO_REQUEST_RECIPIENT = "deepthi@uplaud.ai"
 # Airtable long-text cells support up to 100,000 characters. Keep a 10% safety
 # margin so uploads fail clearly before a record write rather than at Airtable.
 MAX_AIRTABLE_TRANSCRIPT_CHARS = 90_000
@@ -188,6 +189,14 @@ class EventLogRequest(BaseModel):
     page: str = ""
     share_id: str = ""
     details: str = ""
+
+
+class LeadRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=160)
+    email: EmailStr
+    company: str = Field("", max_length=200)
+    website: str = Field("", max_length=300)
+    message: str = Field("", max_length=2000)
 
 
 class BlogPostIn(BaseModel):
@@ -2258,6 +2267,34 @@ async def submit_referrals(share_id: str, body: ReferralSubmit):
 async def log_event_endpoint(body: EventLogRequest):
     await airtable_client.log_event(event=body.event, page=body.page, share_id=body.share_id, details=body.details)
     return {"ok": True}
+
+
+@api_router.post("/leads")
+async def create_lead(body: LeadRequest, request: Request):
+    details = json.dumps(
+        {
+            "name": body.name.strip(),
+            "email": str(body.email).strip(),
+            "company": body.company.strip(),
+            "website": body.website.strip(),
+            "message": body.message.strip(),
+            "recipient": DEMO_REQUEST_RECIPIENT,
+            "user_agent": request.headers.get("user-agent", ""),
+            "source": "book_demo_form",
+        },
+        ensure_ascii=False,
+    )
+    await airtable_client.log_event(
+        event="demo_request",
+        page="landing",
+        details=details,
+        user_email=str(body.email).strip(),
+    )
+    return {
+        "ok": True,
+        "message": "Thanks — Deepthi will follow up within one business day.",
+        "recipient": DEMO_REQUEST_RECIPIENT,
+    }
 
 
 @api_router.get("/testimonials")

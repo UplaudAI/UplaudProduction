@@ -369,7 +369,7 @@ export default function BusinessLoginPage() {
           </div>
 
           <p className="mt-8 font-display text-[26px] leading-[1.15] max-w-[420px]">
-            <span className="mint-underline text-[#261c4d]">Every interaction</span>{" "}
+            <span className="mint-highlight text-[#261c4d]">Every Interaction</span>{" "}
             <span className="text-white/95">is a growth asset waiting to compound.</span>
           </p>
           <p className="mt-4 text-[13px] text-white/60 max-w-[400px]">

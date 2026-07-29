@@ -291,6 +291,16 @@ textarea:focus-visible {
     padding: 0 0.04em;
 }
 
+.mint-highlight {
+    background-image: linear-gradient(0deg, var(--mint) 0%, var(--mint) 100%);
+    background-repeat: no-repeat;
+    background-size: 100% 0.9em;
+    background-position: 0 62%;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    padding: 0 0.08em;
+}
+
 /* Star callout */
 .star {
     background: var(--purple);
