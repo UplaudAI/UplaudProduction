@@ -29,7 +29,7 @@ export default function Navbar() {
           : "bg-transparent border-b border-transparent"
       }`}
     >
-      <div className="max-w-[1240px] mx-auto px-6 md:px-10 h-16 flex items-center justify-between">
+      <div className="max-w-[1240px] mx-auto px-6 md:px-10 h-14 flex items-center justify-between">
         <a
           href="/#top"
           data-testid="brand-logo"
@@ -39,8 +39,8 @@ export default function Navbar() {
           <img
             src="/assets/uplaud-logo-purple-transparent.png"
             alt="Uplaud"
-            className="h-14 w-auto object-contain"
-            style={{ maxWidth: 172 }}
+            className="h-11 w-auto object-contain"
+            style={{ maxWidth: 140 }}
           />
         </a>
 
@@ -61,17 +61,17 @@ export default function Navbar() {
           <a
             href="/business"
             data-testid="nav-sign-in-link"
-            className="inline-flex h-11 items-center justify-center rounded-2xl border border-[#d9d1ee] bg-white/45 px-5 text-[13px] font-medium text-[#261c4d] shadow-[0_14px_34px_-24px_rgba(38,28,77,0.55)] transition-all hover:-translate-y-0.5 hover:border-[#6d46c6]/40 hover:bg-white/75"
+            className="inline-flex h-9 items-center justify-center rounded-xl border border-[#d9d1ee] bg-white/50 px-4 text-[12.5px] font-medium text-[#261c4d] shadow-[0_10px_24px_-18px_rgba(38,28,77,0.45)] transition-all hover:-translate-y-0.5 hover:border-[#6d46c6]/40 hover:bg-white/80"
           >
             Log in
           </a>
           <a
             href="/#demo"
             data-testid="nav-book-demo-btn"
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#6d46c6] px-5 text-[13px] font-semibold text-white shadow-[0_14px_34px_-18px_rgba(109,70,198,0.8)] transition-all hover:-translate-y-0.5 hover:bg-[#5f35bf]"
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-[#6d46c6] px-4 text-[12.5px] font-semibold text-white shadow-[0_10px_24px_-16px_rgba(109,70,198,0.75)] transition-all hover:-translate-y-0.5 hover:bg-[#5f35bf]"
           >
             Book a demo
-            <ArrowUpRight className="w-4 h-4" strokeWidth={1.75} />
+            <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={1.75} />
           </a>
         </div>
 
@@ -106,7 +106,7 @@ export default function Navbar() {
               href="/business"
               data-testid="nav-sign-in-link-mobile"
               onClick={() => setOpen(false)}
-              className="inline-flex h-11 items-center justify-center rounded-2xl border border-[#d9d1ee] bg-white px-5 text-[14px] font-medium text-[#261c4d]"
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-[#d9d1ee] bg-white px-4 text-[13px] font-medium text-[#261c4d]"
             >
               Log in
             </a>
@@ -114,7 +114,7 @@ export default function Navbar() {
               href="/#demo"
               data-testid="nav-book-demo-btn-mobile"
               onClick={() => setOpen(false)}
-              className="mt-2 inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#6d46c6] px-5 text-[14px] font-semibold text-white shadow-[0_14px_34px_-18px_rgba(109,70,198,0.8)]"
+              className="mt-2 inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#6d46c6] px-4 text-[13px] font-semibold text-white shadow-[0_10px_24px_-16px_rgba(109,70,198,0.75)]"
             >
               Book a demo
             </a>

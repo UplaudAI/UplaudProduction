@@ -66,6 +66,8 @@ test("landing navbar is transparent at top and protected on scroll", () => {
   expect(navbar).toContain("backdrop-blur-xl bg-white/90");
   expect(navbar).toContain("shadow-[0_16px_40px_-32px_rgba(38,28,77,0.55)]");
   expect(navbar).not.toContain("bg-white/85");
+  expect(navbar).toContain("h-14 flex items-center justify-between");
+  expect(navbar).not.toContain("h-16 flex items-center justify-between");
 });
 
 test("landing navbar uses the transparent logo asset", () => {
@@ -76,8 +78,8 @@ test("landing navbar uses the transparent logo asset", () => {
 
   expect(navbar).toContain("<img");
   expect(navbar).toContain('src="/assets/uplaud-logo-purple-transparent.png"');
-  expect(navbar).toContain("h-14");
-  expect(navbar).toContain("maxWidth: 172");
+  expect(navbar).toContain("h-11");
+  expect(navbar).toContain("maxWidth: 140");
   expect(navbar).not.toContain("logo_white_background");
   expect(navbar).toContain('data-testid="nav-sign-in-link"');
 });
@@ -88,8 +90,10 @@ test("landing navbar CTAs use modern non-pill button shapes", () => {
     "utf8"
   );
 
-  expect(navbar).toContain("rounded-2xl");
-  expect(navbar).toContain("shadow-[0_14px_34px_-18px_rgba(109,70,198,0.8)]");
+  expect(navbar).toContain("h-9");
+  expect(navbar).toContain("rounded-xl");
+  expect(navbar).toContain("shadow-[0_10px_24px_-16px_rgba(109,70,198,0.75)]");
+  expect(navbar).not.toContain("h-11 items-center justify-center rounded-2xl");
   expect(navbar).not.toContain('className="btn-secondary h-11 px-5"');
   expect(navbar).not.toContain('className="btn-primary h-11 px-5"');
 });
