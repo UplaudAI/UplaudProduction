@@ -145,6 +145,7 @@ class SourceOut(BaseModel):
     filename: str
     file_type: str
     client_name: str
+    brand: str = "PayRewards"
     conversation_code: str
     source_name: str
     duration_min: int
@@ -771,6 +772,119 @@ def _infer_preferred_channel(lead: dict, research_bullets: list) -> str:
     return "Send LinkedIn InMail" if has_linkedin else "Send Email"
 
 
+TESTIMONIAL_BLOCK_TOKEN = "[TESTIMONIAL_BLOCK]"
+OUTREACH_FULL_TESTIMONIAL_MAX_CHARS = 700
+OUTREACH_FULL_TESTIMONIAL_MAX_SENTENCES = 5
+OUTREACH_SELECTED_TESTIMONIAL_SENTENCES = 3
+
+OUTREACH_TESTIMONIAL_SIGNAL_WORDS = {
+    "appreciate",
+    "best",
+    "clunky",
+    "easy",
+    "excited",
+    "functionality",
+    "hire",
+    "impressed",
+    "intuitive",
+    "love",
+    "pricing",
+    "reasonable",
+    "recommend",
+    "refer",
+    "reward",
+    "seamless",
+    "simple",
+    "unlimited",
+    "useful",
+    "valuable",
+}
+
+
+def _clean_outreach_testimonial(testimonial: str) -> str:
+    return (
+        (testimonial or "")
+        .strip()
+        .strip('"')
+        .strip("'")
+        .strip("\u201c\u201d\u2018\u2019")
+        .strip()
+    )
+
+
+def _split_testimonial_sentences(testimonial: str) -> list:
+    text = _clean_outreach_testimonial(testimonial)
+    if not text:
+        return []
+    sentences = re.findall(r"[^.!?]+[.!?]+(?:[\"'\u201d\u2019])?|[^.!?]+$", text)
+    return [s.strip() for s in sentences if s.strip()]
+
+
+def _testimonial_sentence_score(sentence: str, index: int) -> int:
+    words = set(re.findall(r"[a-z0-9']+", sentence.lower()))
+    score = sum(3 for word in OUTREACH_TESTIMONIAL_SIGNAL_WORDS if word in words)
+    if {"refer", "recommend"} & words:
+        score += 6
+    if {"impressed", "best", "excited"} & words:
+        score += 4
+    if {"seamless", "intuitive", "clunky"} & words:
+        score += 4
+    if index == 0:
+        score += 1
+    return score
+
+
+def _select_outreach_testimonial(testimonial: str) -> str:
+    """Return the full testimonial unless it is too long for first-touch email."""
+    cleaned = _clean_outreach_testimonial(testimonial)
+    sentences = _split_testimonial_sentences(cleaned)
+    if not cleaned:
+        return ""
+    if (
+        len(cleaned) <= OUTREACH_FULL_TESTIMONIAL_MAX_CHARS
+        and len(sentences) <= OUTREACH_FULL_TESTIMONIAL_MAX_SENTENCES
+    ):
+        return cleaned
+    if not sentences:
+        return cleaned[:OUTREACH_FULL_TESTIMONIAL_MAX_CHARS].rstrip()
+
+    scored = [
+        (_testimonial_sentence_score(sentence, index), index, sentence)
+        for index, sentence in enumerate(sentences)
+    ]
+    selected = sorted(scored, key=lambda item: (-item[0], item[1]))[
+        :OUTREACH_SELECTED_TESTIMONIAL_SENTENCES
+    ]
+    selected_in_original_order = [
+        sentence for _score, _index, sentence in sorted(selected, key=lambda item: item[1])
+    ]
+    return " ".join(selected_in_original_order).strip()
+
+
+def _build_testimonial_block(testimonial: str, referrer: str) -> str:
+    selected = _select_outreach_testimonial(testimonial)
+    if not selected:
+        return ""
+    label_name = (referrer or "your contact").strip()
+    return f'{label_name} shared this testimonial:\n\n"{selected}"'
+
+
+def _apply_testimonial_block(email_body: str, testimonial: str, referrer: str) -> str:
+    body = (email_body or "").strip()
+    block = _build_testimonial_block(testimonial, referrer)
+    if not block:
+        return body.replace(TESTIMONIAL_BLOCK_TOKEN, "").strip()
+    if TESTIMONIAL_BLOCK_TOKEN in body:
+        return body.replace(TESTIMONIAL_BLOCK_TOKEN, block).strip()
+
+    paragraphs = [p.strip() for p in re.split(r"\n\s*\n", body) if p.strip()]
+    if not paragraphs:
+        return block
+    insert_at = 2 if len(paragraphs) > 2 and re.match(r"(?i)^(hi|hello|dear)\b", paragraphs[0]) else 1
+    paragraphs.insert(min(insert_at, len(paragraphs)), block)
+    return "\n\n".join(paragraphs).strip()
+
+
 def build_outreach_prompt(
     lead: dict, referrer_testimonial: str, research_bullets: list, business_name: str, preferred_channel: str
 ) -> str:
@@ -781,7 +895,7 @@ def build_outreach_prompt(
     who = name + (f" ({job_title}" + (f" at {company}" if company else "") + ")" if job_title or company else "")
     research_text = "\n".join(f"- {b}" for b in research_bullets) if research_bullets else "No reliable public findings available."
 
-    is_strong_testimonial = bool(referrer_testimonial) and len(referrer_testimonial.strip()) >= 40
+    has_testimonial = bool(_clean_outreach_testimonial(referrer_testimonial))
 
     return f"""A warm lead named {who} was just referred to {business_name} by {referrer}.
 
@@ -789,10 +903,10 @@ def build_outreach_prompt(
 
 IMPORTANT — {name} may not immediately remember who {referrer} is. Every draft (email and LinkedIn) MUST explicitly frame {referrer} as "your contact {referrer}" (or equivalent unambiguous phrasing like "your contact, {referrer}") the first time {referrer} is mentioned, so {name} instantly places them.
 
-{referrer}'s actual testimonial (quote or closely paraphrase their real words in the email — do not invent anything beyond this):
+{referrer}'s actual testimonial (use only for context; do not quote, shorten, or paraphrase it yourself in the email):
 \"\"\"{referrer_testimonial or "No testimonial text available."}\"\"\"
 
-{"This testimonial is substantive and worth showcasing directly — the email body MUST include a short, genuine excerpt of it wrapped in actual quotation marks, in " + referrer + "'s own words (verbatim or a very close, faithful paraphrase), not just a loose summary folded into your own sentence." if is_strong_testimonial else "This testimonial is thin or unavailable — keep any reference to it brief and general rather than inventing a quote."}
+{"The backend will insert the testimonial as a standalone highlighted quote block. In email_body, put the literal token " + TESTIMONIAL_BLOCK_TOKEN + " on its own line immediately after the opening referral paragraph. Do not include any other quoted testimonial text." if has_testimonial else "This testimonial is unavailable — keep any reference to it brief and general rather than inventing a quote, and do not include " + TESTIMONIAL_BLOCK_TOKEN + "."}
 
 Public web research findings about {name} / {company} (use ONLY these for personalization; if none are reliable, keep the email shorter and more general rather than inventing anything):
 {research_text}
@@ -803,7 +917,7 @@ Write a first-touch outreach package with a genuinely compelling hook — this m
 {{
   "research_headline": "one punchy sentence (under 100 characters) capturing the single most compelling, concrete, REAL finding from the research above — no links, no markdown, no fluff. If nothing concrete was found, summarize what IS genuinely known about {name}/{company} in one sentence instead.",
   "email_subject": "short, specific, non-clickbait email subject line",
-  "email_body": "a warm, confident, concise email (5-8 sentences) that: (1) opens by naming {referrer} explicitly as 'your contact {referrer}' and explaining, in your own words, that {referrer} recently experienced {business_name} (via demo unless the testimonial says otherwise) and specifically thought of {name}, (2) {"includes a short direct quote from " + referrer + "'s real testimonial in quotation marks" if is_strong_testimonial else "briefly references " + referrer + "'s experience"}, (3) includes ONE genuine, specific personalization drawn from the research findings to build a strong hook — omit this if no real findings exist, (4) makes a clear, confident case for why a demo is worth their time, (5) ends with a direct call-to-action to book a demo (not a vague 'quick call'). Sign off as 'The {business_name} team'.",
+  "email_body": "a warm, confident email that: (1) opens by naming {referrer} explicitly as 'your contact {referrer}' and explaining, in your own words, that {referrer} recently experienced {business_name} (via demo unless the testimonial says otherwise) and specifically thought of {name}, (2) {"places " + TESTIMONIAL_BLOCK_TOKEN + " on its own line as the next paragraph, with no quote or paraphrase elsewhere" if has_testimonial else "briefly references " + referrer + "'s experience"}, (3) includes ONE genuine, specific personalization drawn from the research findings to build a strong hook — omit this if no real findings exist, (4) makes a clear, confident case for why a demo is worth their time, (5) ends with a direct call-to-action to book a demo (not a vague 'quick call'). Sign off as 'The {business_name} team'.",
   "linkedin_message": "a shorter, casual LinkedIn InMail version (2-4 sentences, under 500 characters) that still opens by naming {referrer} as 'your contact {referrer}', with the same grounding rules and the same demo-booking CTA.",
   "next_action_label": "a short imperative sentence describing the single best next action for a sales rep to take on this lead, referencing a real, specific detail when available and matching the {preferred_channel} channel",
   "next_action_cta": "{preferred_channel}"
@@ -825,7 +939,13 @@ async def draft_outreach(lead: dict, referrer_testimonial: str, research_bullets
         logger.error("Outreach draft call failed: %s", e)
         raise HTTPException(status_code=502, detail="The language model request failed. Please try again.")
     try:
-        return _parse_json(text)
+        draft = _parse_json(text)
+        draft["email_body"] = _apply_testimonial_block(
+            draft.get("email_body") or "",
+            referrer_testimonial,
+            lead.get("referrer_name") or "your contact",
+        )
+        return draft
     except Exception as e:
         logger.error("Failed to parse outreach JSON: %s | raw: %s", e, text[:500])
         raise HTTPException(status_code=502, detail="Could not parse the drafted outreach.")
@@ -1020,7 +1140,13 @@ async def get_business_profile(current=Depends(get_current_user)):
     email = current.get("email", "").lower().strip()
     domain = email.split("@")[-1].lower() if "@" in email else ""
     
-    company_name = current.get("company", "My Company")
+    try:
+        company_name = (
+            await airtable_client.get_business_name_by_email_domain(current["email"])
+            or current.get("company", "My Company")
+        )
+    except RuntimeError:
+        company_name = current.get("company", "My Company")
     website = domain
     brand_color = "#6d46c6"
     logo_url = ""
@@ -1123,7 +1249,7 @@ def _record_client_name(fields: dict) -> str:
     return stem.replace("_", " ").replace("-", " ").title()
 
 
-def record_to_source_out(rec: dict) -> SourceOut:
+def record_to_source_out(rec: dict, business_name: str = "") -> SourceOut:
     f = rec.get("fields", {})
     status = _record_source_status(f)
     motivations = f.get("Motivations", "").split("\n") if f.get("Motivations") else []
@@ -1166,6 +1292,7 @@ def record_to_source_out(rec: dict) -> SourceOut:
         filename=filename,
         file_type=f.get("File_Type") or filename.rsplit(".", 1)[-1].lower(),
         client_name=_record_client_name(f),
+        brand=f.get("Business_Name") or business_name or "PayRewards",
         conversation_code="CV_001",
         source_name="Upload",
         duration_min=max(1, round(word_count / 140)) if word_count else 0,
@@ -1187,7 +1314,7 @@ def _growth_signal_record_to_doc(rec: dict) -> dict:
     doc = record_to_source_out(rec).model_dump()
     doc.update(
         {
-            "brand": f.get("Business_Name") or "PayRewards",
+            "brand": f.get("Business_Name") or doc.get("brand") or "PayRewards",
             "owner": f.get("Owner_Id") or "",
             "transcript": f.get("Transcript_Text") or "",
             "client_email": f.get("Client_Email") or "",
@@ -1195,6 +1322,23 @@ def _growth_signal_record_to_doc(rec: dict) -> dict:
         }
     )
     return doc
+
+
+def _growth_signal_regeneration_text(fields: dict) -> str:
+    """Rebuild enough context to regenerate when the original transcript was not stored."""
+    sections = [
+        ("Existing testimonial", fields.get("Testimonial_Draft", "")),
+        ("Motivations", fields.get("Motivations", "")),
+        ("Pain points", fields.get("Pain_Points", "")),
+        ("Buying signals", fields.get("Buying_Signals", "")),
+        ("Customer language", fields.get("Customer_Language", "")),
+        ("Product feedback", fields.get("Product_Feedback", "")),
+        ("FAQs", fields.get("FAQs", "")),
+    ]
+    text = "\n\n".join(
+        f"{label}:\n{value}" for label, value in sections if (value or "").strip()
+    ).strip()
+    return text or (fields.get("Testimonial_Draft") or "").strip()
 
 
 def _legacy_source_share_id(source_id: str, business_name: str) -> str:
@@ -1437,7 +1581,7 @@ async def list_sources(current=Depends(get_current_user)):
         raise HTTPException(
             status_code=503, detail="Source storage is temporarily unavailable."
         ) from None
-    return [record_to_source_out(rec) for rec in records]
+    return [record_to_source_out(rec, business_name) for rec in records]
 
 
 @api_router.get("/sources/{source_id}", response_model=SourceOut)
@@ -1512,7 +1656,7 @@ async def analyze_source(source_id: str, request: Request, regenerate: bool = Fa
         raise HTTPException(
             status_code=409, detail="Source upload is not ready for analysis."
         )
-    if regenerate and lifecycle_state in {"sent", "approved"}:
+    if regenerate and lifecycle_state == "approved":
         raise HTTPException(
             status_code=409,
             detail="This testimonial can no longer be regenerated.",
@@ -1521,6 +1665,8 @@ async def analyze_source(source_id: str, request: Request, regenerate: bool = Fa
         return record_to_source_out(rec)
 
     transcript_text = (fields.get("Transcript_Text") or "").strip()
+    if regenerate and not transcript_text:
+        transcript_text = _growth_signal_regeneration_text(fields)
     if not transcript_text:
         raise HTTPException(
             status_code=409,
@@ -1573,8 +1719,9 @@ async def analyze_source(source_id: str, request: Request, regenerate: bool = Fa
         "FAQs": "\n".join(insight_values["faqs"]),
         "Testimonial_Draft": testimonial,
         "Share_Id": share_id,
-        "Source_Status": "analyzed",
     }
+    if lifecycle_state != "sent":
+        analysis_fields["Source_Status"] = "analyzed"
     try:
         updated_rec = await airtable_client.update_source_by_id(
             source_id,
@@ -1952,9 +2099,37 @@ async def send_approval(source_id: str, current=Depends(get_current_user)):
     fields = rec.get("fields", {})
     lifecycle_state = _source_lifecycle_state(fields)
     if lifecycle_state == "approved":
-        raise HTTPException(
-            status_code=409, detail="This testimonial has already been approved."
-        )
+        share_id = fields.get("Share_Id")
+        if not share_id:
+            try:
+                share_id = await _unique_source_share_id(
+                    preferred=_legacy_source_share_id(source_id, business_name),
+                    source_id=source_id,
+                    business_name=business_name,
+                )
+                updated = await airtable_client.update_source_by_id(
+                    source_id,
+                    business_name,
+                    {"Share_Id": share_id},
+                    owner_id=current["id"],
+                )
+            except AirtableSourceConflictError:
+                raise HTTPException(
+                    status_code=409, detail="Source lifecycle changed; reload and try again."
+                ) from None
+            except AirtableSourceLookupError:
+                raise HTTPException(
+                    status_code=503, detail="Source storage is temporarily unavailable."
+                ) from None
+            except Exception as exc:
+                logger.warning("Approved source Share_Id persistence failed: %s", exc)
+                raise HTTPException(
+                    status_code=502, detail="Could not prepare approval page."
+                ) from None
+            if not updated:
+                raise HTTPException(status_code=404, detail="Source not found")
+            share_id = updated.get("fields", {}).get("Share_Id") or share_id
+        return {"share_id": share_id, "public_path": f"/t/{share_id}"}
     if lifecycle_state not in {"analyzed", "sent"}:
         raise HTTPException(
             status_code=409, detail="Analyze this source before requesting approval."
