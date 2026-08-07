@@ -2396,6 +2396,29 @@ class AgentPlanOut(BaseModel):
 _PLACEHOLDER_CONTACTS = {"n/a", "na", "none", "null", "nil", "unknown", "-"}
 
 
+def _linkedin_profile_slug(value: str) -> str:
+    text = (value or "").strip().lower()
+    if not text:
+        return ""
+    text = re.sub(r"^https?://", "", text)
+    text = re.sub(r"^www\.", "", text)
+    text = text.split("?", 1)[0].split("#", 1)[0].rstrip("/")
+    match = re.search(r"(?:^|/)in/([^/]+)$", text)
+    if match:
+        return match.group(1).strip()
+    if "linkedin.com/" not in text and "/" not in text:
+        return text.strip()
+    return ""
+
+
+def _pdl_profile_matches_submitted_linkedin(submitted_linkedin: str, pdl_data: dict) -> bool:
+    submitted_slug = _linkedin_profile_slug(submitted_linkedin)
+    if not submitted_slug:
+        return True
+    returned_slug = _linkedin_profile_slug((pdl_data or {}).get("linkedin_url") or "")
+    return bool(returned_slug and returned_slug == submitted_slug)
+
+
 def _normalize_referral_key_value(value: str) -> str:
     return " ".join((value or "").strip().casefold().split())
 
@@ -2452,7 +2475,13 @@ async def submit_referrals(share_id: str, body: ReferralSubmit):
         name_parts = r["name"].split(" ", 1)
         first_name = name_parts[0]
         last_name = name_parts[1] if len(name_parts) > 1 else ""
-        pdl = await airtable_client.enrich_person_pdl(first_name, last_name, r["company"])
+        submitted_linkedin = parsed.get("linkedin") or ""
+        pdl = await airtable_client.enrich_person_pdl(
+            first_name,
+            last_name,
+            r["company"],
+            linkedin=submitted_linkedin or None,
+        )
         extra_fields, city, state, country = {}, None, None, None
         pdl_data = (pdl or {}).get("data") or {}
 
@@ -2461,6 +2490,11 @@ async def submit_referrals(share_id: str, body: ReferralSubmit):
 
         if pdl_data and isinstance(pdl.get("likelihood"), (int, float)) and pdl.get("likelihood") < 6:
             # Below PDL's recommended confidence threshold (scale is 1-10) — treat as no reliable match
+            pdl_data = {}
+        if pdl_data and not _pdl_profile_matches_submitted_linkedin(submitted_linkedin, pdl_data):
+            logger.info(
+                "Rejecting PDL enrichment because returned LinkedIn profile does not match submitted referral contact."
+            )
             pdl_data = {}
         if pdl_data:
             extra_fields = {
@@ -2480,7 +2514,7 @@ async def submit_referrals(share_id: str, body: ReferralSubmit):
                 name=r["name"],
                 email=parsed.get("email"),
                 phone=parsed.get("phone"),
-                linkedin=parsed.get("linkedin") or _s(pdl_data.get("linkedin_url")) or None,
+                linkedin=submitted_linkedin or _s(pdl_data.get("linkedin_url")) or None,
                 city=city,
                 state=state,
                 country=country,

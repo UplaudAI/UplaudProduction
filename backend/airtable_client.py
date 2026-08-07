@@ -221,11 +221,19 @@ async def _update(table: str, record_id: str, fields: dict) -> Optional[dict]:
     return response.json()
 
 
-async def enrich_person_pdl(first_name: str, last_name: str, company: str) -> Optional[dict]:
+async def enrich_person_pdl(
+    first_name: str,
+    last_name: str,
+    company: str,
+    *,
+    linkedin: Optional[str] = None,
+) -> Optional[dict]:
     """Call People Data Labs Person Enrichment API. Returns the raw {status, likelihood, data} payload, or None."""
-    if not PDL_API_KEY or not (first_name or last_name):
+    if not PDL_API_KEY or not ((first_name or last_name) or linkedin):
         return None
     params = {}
+    if linkedin:
+        params["profile"] = linkedin
     if first_name:
         params["first_name"] = first_name
     if last_name:

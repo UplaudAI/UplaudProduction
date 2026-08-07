@@ -46,12 +46,21 @@ async def post(path: str, payload: dict) -> httpx.Response:
 def install_referral_fakes(monkeypatch, *, circle_result="rec-circle"):
     user_calls = []
     circle_calls = []
+    enrich_calls = []
 
     async def fake_find_public_source(share_id):
         assert share_id == "share-1"
         return PUBLIC_SOURCE
 
-    async def fake_enrich(first_name, last_name, company):
+    async def fake_enrich(first_name, last_name, company, **kwargs):
+        enrich_calls.append(
+            {
+                "first_name": first_name,
+                "last_name": last_name,
+                "company": company,
+                **kwargs,
+            }
+        )
         return {
             "likelihood": 9,
             "data": {
@@ -82,7 +91,7 @@ def install_referral_fakes(monkeypatch, *, circle_result="rec-circle"):
     monkeypatch.setattr(
         server.airtable_client, "create_circle_record", fake_create_circle_record
     )
-    return user_calls, circle_calls
+    return user_calls, circle_calls, enrich_calls
 
 
 def referral_payload():
@@ -144,7 +153,7 @@ def test_server_imports_without_mongo_environment_or_network_clients():
 
 
 def test_referral_batch_creates_one_enriched_circle_per_referral(monkeypatch):
-    user_calls, circle_calls = install_referral_fakes(monkeypatch)
+    user_calls, circle_calls, enrich_calls = install_referral_fakes(monkeypatch)
 
     result = run(
         server.submit_referrals(
@@ -155,6 +164,7 @@ def test_referral_batch_creates_one_enriched_circle_per_referral(monkeypatch):
     assert result == {"count": 2}
     assert len(user_calls) == 2
     assert len(circle_calls) == 2
+    assert enrich_calls[1]["linkedin"] == "https://linkedin.com/in/grace"
     assert user_calls[0]["extra_fields"]["Job_Title"] == "VP Growth"
     assert user_calls[0]["city"] == "Oakland"
     assert user_calls[0]["strict_persistence"] is True
@@ -204,7 +214,7 @@ def test_referral_maps_circle_creation_exception_without_leaking_details(monkeyp
 
 @pytest.mark.parametrize("contact", ["N/A", " null ", "None"])
 def test_referral_rejects_placeholder_contacts(monkeypatch, contact):
-    user_calls, circle_calls = install_referral_fakes(monkeypatch)
+    user_calls, circle_calls, _ = install_referral_fakes(monkeypatch)
 
     response = run(
         post(
@@ -229,7 +239,7 @@ def test_referral_rejects_placeholder_contacts(monkeypatch, contact):
 def test_referral_requires_user_persistence_before_circle(
     monkeypatch, user_result
 ):
-    _, circle_calls = install_referral_fakes(monkeypatch)
+    _, circle_calls, _ = install_referral_fakes(monkeypatch)
 
     async def failed_user_write(**kwargs):
         if isinstance(user_result, Exception):
@@ -250,6 +260,43 @@ def test_referral_requires_user_persistence_before_circle(
     assert response.status_code == 502
     assert "secret Airtable user failure" not in response.text
     assert circle_calls == []
+
+
+def test_linkedin_referral_rejects_mismatched_pdl_profile(monkeypatch):
+    user_calls, circle_calls, _ = install_referral_fakes(monkeypatch)
+
+    async def mismatched_enrich(first_name, last_name, company, **kwargs):
+        return {
+            "likelihood": 9,
+            "data": {
+                "job_title": "Vice President",
+                "job_company_name": "Bank of America",
+                "linkedin_url": "https://www.linkedin.com/in/deep-barot-98/",
+            },
+        }
+
+    monkeypatch.setattr(server.airtable_client, "enrich_person_pdl", mismatched_enrich)
+
+    result = run(
+        server.submit_referrals(
+            "share-1",
+            server.ReferralSubmit(
+                referrals=[
+                    server.ReferralItem(
+                        name="Deep Barot",
+                        contact="https://www.linkedin.com/in/deep-barot-98b7bb33/",
+                        company="ContextQA",
+                    )
+                ]
+            ),
+        )
+    )
+
+    assert result == {"count": 1}
+    assert user_calls[0]["linkedin"] == "https://www.linkedin.com/in/deep-barot-98b7bb33/"
+    assert user_calls[0]["extra_fields"] == {}
+    assert user_calls[0]["city"] is None
+    assert circle_calls[0]["receiver_company"] == "ContextQA"
 
 
 def test_referral_key_is_deterministic_for_normalized_item_values():
@@ -274,7 +321,7 @@ def test_referral_retry_after_partial_failure_does_not_duplicate_circles(monkeyp
     async def fake_find_public_source(share_id):
         return PUBLIC_SOURCE
 
-    async def no_enrichment(*args):
+    async def no_enrichment(*args, **kwargs):
         return None
 
     async def persisted_user(**kwargs):
