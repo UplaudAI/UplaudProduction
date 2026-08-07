@@ -32,9 +32,10 @@ import PageHero from "@/components/business/PageHero";
 import { toast } from "sonner";
 import api, { formatApiError } from "@/lib/api";
 
-function toConversation(s) {
+function toConversation(s, loggedInBusinessName = "") {
   const ins = s.insights || {};
   const company = ins.company_name || s.client_name;
+  const businessName = loggedInBusinessName || s.brand || "";
   const attribution = [ins.speaker_name, ins.speaker_role, company].filter(Boolean).join(", ");
   const tStatus = s.testimonial_status || "draft";
   const storyStatusMap = { draft: "draft", sent: "awaiting_approval", approved: "approved" };
@@ -45,6 +46,7 @@ function toConversation(s) {
     code: s.conversation_code || "CV_001",
     _sourceId: s.id,
     shareId: s.share_id,
+    businessName,
     title: `${company} · ${ins.call_type || "Demo"}`,
     person: ins.speaker_name || "Customer",
     role: ins.speaker_role || "—",
@@ -117,8 +119,12 @@ export default function ConversationsPage() {
 
   const load = useCallback(async () => {
     try {
-      const { data } = await api.get("/sources");
-      const list = data.map(toConversation);
+      const [{ data }, profileResult] = await Promise.all([
+        api.get("/sources"),
+        api.get("/business/profile").catch(() => ({ data: null })),
+      ]);
+      const profileBusinessName = (profileResult.data?.company_name || "").trim();
+      const list = data.map((source) => toConversation(source, profileBusinessName));
       setConversations(list);
       setSelectedId((prev) =>
         prev && list.some((c) => c.id === prev) ? prev : list[0]?.id ?? null
@@ -447,7 +453,10 @@ function ConversationDetail({ conversation: c, onChanged }) {
       });
       if (onChanged) await onChanged();
     } catch (err) {
-      toast.error(formatApiError(err.response?.data?.detail) || "Generation failed");
+      toast.error(
+        formatApiError(err.response?.data?.detail) ||
+          (regenerate ? "Could not regenerate this testimonial" : "Generation failed")
+      );
     } finally {
       setBusy(false);
     }
@@ -474,6 +483,25 @@ function ConversationDetail({ conversation: c, onChanged }) {
       description: "They can review, edit and approve on their own page.",
     });
     if (onChanged) onChanged();
+  };
+
+  const openPublicTestimonialPage = async () => {
+    if (c.shareId) {
+      window.open(`/t/${c.shareId}`, "_blank", "noreferrer");
+      return;
+    }
+    setBusy(true);
+    try {
+      const { data } = await api.post(`/sources/${c._sourceId}/send-approval`);
+      if (data?.public_path) {
+        window.open(data.public_path, "_blank", "noreferrer");
+      }
+      if (onChanged) await onChanged();
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail) || "Could not open approval page");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const SECTIONS = [
@@ -675,26 +703,27 @@ function ConversationDetail({ conversation: c, onChanged }) {
                   </button>
 
                   <div className="ml-auto flex items-center gap-2">
-                    {c.shareId && (
-                      <a
+                    {(c.shareId || currentStoryStatus === "approved") && (
+                      <button
                         data-testid="story-view-approval-page"
-                        href={`/t/${c.shareId}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="btn-secondary h-10 !py-0"
+                        onClick={openPublicTestimonialPage}
+                        disabled={busy}
+                        className="btn-secondary h-10 !py-0 disabled:opacity-60"
                       >
                         <ArrowUpRight className="w-4 h-4" strokeWidth={1.75} />
-                        View approval page
-                      </a>
+                        {currentStoryStatus === "approved" ? "View approved testimonial" : "View approval page"}
+                      </button>
                     )}
-                    <button
-                      data-testid="story-view-email-btn"
-                      onClick={() => setComposerOpen(true)}
-                      className="btn-primary h-10 !py-0"
-                    >
-                      <Send className="w-4 h-4" strokeWidth={1.75} />
-                      View draft email for customer outreach
-                    </button>
+                    {currentStoryStatus !== "approved" && (
+                      <button
+                        data-testid="story-view-email-btn"
+                        onClick={() => setComposerOpen(true)}
+                        className="btn-primary h-10 !py-0"
+                      >
+                        <Send className="w-4 h-4" strokeWidth={1.75} />
+                        View draft email for customer outreach
+                      </button>
+                    )}
                   </div>
                 </>
               )}
@@ -922,24 +951,47 @@ function firstName(person) {
   return person.split(" ")[0] || person;
 }
 
+function cleanBusinessName(name) {
+  return (name || "").trim();
+}
+
+function emailBusinessName(name) {
+  return cleanBusinessName(name) || "your company";
+}
+
+function businessHandle(name) {
+  const compact = cleanBusinessName(name).replace(/[^a-zA-Z0-9]+/g, "");
+  return compact ? `@${compact}` : "@yourcompany";
+}
+
+function deriveBusinessEmail(person, businessName) {
+  const parts = person.toLowerCase().trim().split(/\s+/);
+  const first = parts[0] || "hello";
+  return `${first}@${slugCompany(cleanBusinessName(businessName)) || "company"}.com`;
+}
+
 function generateLinkedInDraft(c) {
   const quoteLine = c.draftedStory.body.split("\n")[0].replace(/^["“]|["”]$/g, "");
+  const businessName = emailBusinessName(c.businessName);
+  const handle = businessHandle(c.businessName);
   return `I don't usually post about vendor tools, but this one earned it.
 
 ${quoteLine}
 
-If you run finance ops and haven't looked at @PayRewards yet — it's genuinely one of the cleanest ROI stories I've seen in a while. Happy to intro anyone curious.
+If you've been looking at ${handle}, this is the kind of experience that stood out to me. Happy to intro anyone curious.
 
-#Finance #APAutomation #CFO`;
+#CustomerStory #Growth #${cleanBusinessName(c.businessName).replace(/[^a-zA-Z0-9]+/g, "") || "CustomerSuccess"}`;
 }
 
 function generateEmailBody(c) {
   const fn = firstName(c.person);
   const testimonial = c.draftedStory.body;
   const link = c.shareId ? `${window.location.origin}/t/${c.shareId}` : "";
+  const businessName = emailBusinessName(c.businessName);
+  const handle = businessHandle(c.businessName);
   return `Hi ${fn},
 
-Thanks again for the demo — genuinely enjoyed hearing how you're thinking about vendor spend and rewards at ${c.company}.
+Thanks again for the demo — genuinely enjoyed hearing how you're thinking about your team's priorities at ${c.company}.
 
 Based on our conversation, we drafted a short testimonial that captures what you shared. Nothing gets published without your green light.
 
@@ -950,24 +1002,24 @@ TESTIMONIAL FOR YOUR APPROVAL
 "${testimonial}"
 — ${c.draftedStory.attribution}
 
-Once you approve on the page above, you'll get ready-to-post, PayRewards-branded assets for LinkedIn, Instagram and X — share in a couple of taps.
+Once you approve on the page above, you'll get ready-to-post, ${businessName}-branded assets for LinkedIn, Instagram and X — share in a couple of taps.
 
 A couple of ways we'd love to say thanks:
 
 TIER 1 — Approve + refer
-Approve the testimonial and share PayRewards with at least one qualified peer in your network who could benefit → we'll credit your PayRewards account with $500 in rewards + waive next quarter's platform fee.
+Approve the testimonial and share ${businessName} with at least one qualified peer in your network who could benefit → we'll credit your ${businessName} account with $500 in rewards + waive next quarter's platform fee.
 
-TIER 2 — Post on LinkedIn tagging @PayRewards
-Post the testimonial on LinkedIn tagging PayRewards → additional $500 in rewards credit + a co-branded case study we'll publish with your team.
+TIER 2 — Post on LinkedIn tagging ${handle}
+Post the testimonial on LinkedIn tagging ${handle} → additional $500 in rewards credit + a co-branded case study we'll publish with your team.
 
 Really appreciate you taking the time,
 ${c.aeName}
-PayRewards`;
+${businessName}`;
 }
 
 function ApprovalEmailComposer({ open, onClose, onSent, conversation: c }) {
   const [to, setTo] = useState(deriveEmail(c.person, c.company));
-  const [cc, setCc] = useState(`${c.aeName.split(" ")[0].toLowerCase()}@payrewards.com`);
+  const [cc, setCc] = useState(deriveBusinessEmail(c.aeName, c.businessName));
   const [subject, setSubject] = useState(
     `Thanks for the demo, ${firstName(c.person)} — a quick approval + a small thank-you`
   );
@@ -980,14 +1032,14 @@ function ApprovalEmailComposer({ open, onClose, onSent, conversation: c }) {
   useEffect(() => {
     if (!open) return;
     setTo(deriveEmail(c.person, c.company));
-    setCc(`${c.aeName.split(" ")[0].toLowerCase()}@payrewards.com`);
+    setCc(deriveBusinessEmail(c.aeName, c.businessName));
     setSubject(
       `Thanks for the demo, ${firstName(c.person)} — a quick approval + a small thank-you`
     );
     setBody(generateEmailBody(c));
     setLiDraft(generateLinkedInDraft(c));
     setSending(false);
-  }, [open, c.id]);
+  }, [open, c.id, c.businessName]);
 
   if (!open) return null;
 
@@ -1109,7 +1161,7 @@ function ApprovalEmailComposer({ open, onClose, onSent, conversation: c }) {
                 testId="tier-2"
                 icon={Linkedin}
                 tier="Tier 2"
-                title="LinkedIn post tagging PayRewards"
+                title={`LinkedIn post tagging ${businessHandle(c.businessName)}`}
                 reward="+$500 credit + co-branded case study"
                 accent="#0f9b7c"
                 bg="#ecfdf7"
@@ -1140,7 +1192,7 @@ function ApprovalEmailComposer({ open, onClose, onSent, conversation: c }) {
                     LinkedIn post — {firstName(c.person)}-testimonial.txt
                   </div>
                   <div className="text-[11px] font-mono text-[#9ca3af]">
-                    Ready-to-post draft · 342 chars · tagged @PayRewards
+                    Ready-to-post draft · {liDraft.length} chars · tagged {businessHandle(c.businessName)}
                   </div>
                 </div>
                 <span className="text-[11px] font-mono text-[#6d46c6]">
@@ -1254,4 +1306,3 @@ function RewardTierCard({ testId, icon: Icon, tier, title, reward, accent, bg })
     </div>
   );
 }
-
