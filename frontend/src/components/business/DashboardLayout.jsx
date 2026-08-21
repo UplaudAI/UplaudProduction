@@ -209,10 +209,14 @@ function NavItem({ to, label, icon: Icon, testId }) {
 }
 
 function Topbar({ user, pathname }) {
-  const initials = user.name
+  const displayName = user?.name || user?.email?.split("@")[0] || "User";
+  const initials = displayName
     .split(" ")
+    .filter(Boolean)
     .map((n) => n[0])
-    .join("");
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   const titles = {
     "/business/insights": "Growth Overview",
@@ -254,7 +258,7 @@ function Topbar({ user, pathname }) {
         <div
           data-testid="topbar-user-avatar"
           className="w-9 h-9 rounded-full bg-[#261c4d] text-white text-[12px] font-semibold flex items-center justify-center"
-          title={user.name}
+          title={displayName}
         >
           {initials}
         </div>
