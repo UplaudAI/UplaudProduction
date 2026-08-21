@@ -8,10 +8,9 @@ import api, { formatApiError } from "@/lib/api";
 const LOGO_URL =
   "https://customer-assets-gfyr7b9c.emergentagent.net/job_ai-acquisition-hub-2/artifacts/24zfs0md_logo_white_background.webp";
 
-// Land on Warm Pipeline instead of the usual destination whenever there are
-// new warm leads the user hasn't seen yet.
+// First-time users go to setup. Returning users land on Warm Pipeline.
 async function resolvePostLoginDestination() {
-  const fallback = getImported() ? "/business/insights" : "/business/import";
+  const fallback = getImported() ? "/business/referrals" : "/business/import";
   try {
     const { data } = await api.get("/warm-leads");
     const leadCount = (data.leads || []).length;

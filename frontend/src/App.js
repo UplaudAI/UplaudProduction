@@ -1,5 +1,5 @@
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import LandingPage from "@/pages/LandingPage";
 import FinanceLandingPage from "@/pages/FinanceLandingPage";
@@ -13,7 +13,6 @@ import ReviewsPage from "@/pages/business/ReviewsPage";
 import SocialAgentPage from "@/pages/business/SocialAgentPage";
 import ReferralAgentPage from "@/pages/business/ReferralAgentPage";
 import RedditAgentPage from "@/pages/business/RedditAgentPage";
-import InsightsPage from "@/pages/business/InsightsPage";
 import RoiSimulatorPage from "@/pages/business/RoiSimulatorPage";
 import SettingsPage from "@/pages/business/SettingsPage";
 import InteractionsPage from "@/pages/business/InteractionsPage";
@@ -42,7 +41,7 @@ function App() {
             <Route path="/business/social" element={<SocialAgentPage />} />
             <Route path="/business/referrals" element={<ReferralAgentPage />} />
             <Route path="/business/reddit" element={<RedditAgentPage />} />
-            <Route path="/business/insights" element={<InsightsPage />} />
+            <Route path="/business/insights" element={<Navigate to="/business/referrals" replace />} />
             <Route path="/business/roi-simulator" element={<RoiSimulatorPage />} />
             <Route path="/business/settings" element={<SettingsPage />} />
           </Route>
