@@ -184,7 +184,14 @@ async def get_business_name_by_email_domain(email: str) -> Optional[str]:
     subdomain match, so an unrelated business record can never shadow the real one."""
     if not email or "@" not in email:
         return None
-    domain = _normalize_domain(email.split("@", 1)[1])
+    return await get_business_name_by_domain(email.split("@", 1)[1])
+
+
+async def get_business_name_by_domain(domain_or_url: str) -> Optional[str]:
+    """Resolve Business Name from the Business table for an explicit selected domain."""
+    domain = _normalize_domain(domain_or_url)
+    if not domain:
+        return None
     try:
         data = await _get(TABLE_BUSINESS, {"pageSize": 100})
     except Exception as e:

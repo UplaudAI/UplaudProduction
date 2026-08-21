@@ -184,6 +184,45 @@ class BlogListResponse(BaseModel):
     posts: List[BlogPostOut]
 
 
+def normalize_business_domain(raw: str) -> str:
+    domain = (raw or "").lower().strip()
+    domain = re.sub(r"^https?://", "", domain).rstrip("/")
+    if domain.startswith("www."):
+        domain = domain[4:]
+    return domain.split("/", 1)[0]
+
+
+def email_domain(email: str) -> str:
+    return normalize_business_domain(email.split("@", 1)[1]) if email and "@" in email else ""
+
+
+def selected_brand_domain(request: Optional[Request], current: dict) -> str:
+    header_domain = ""
+    if request is not None:
+        header_domain = normalize_business_domain(request.headers.get("X-Uplaud-Brand-Domain", ""))
+    return header_domain or email_domain(current.get("email", ""))
+
+
+async def get_business_record_by_domain(domain: str) -> Optional[dict]:
+    if not airtable_client._enabled() or not domain:
+        return None
+    formula = f'LOWER({{Business Domain}})="{airtable_client._escape(domain)}"'
+    existing = await airtable_client._get(
+        airtable_client.TABLE_BUSINESS,
+        {"filterByFormula": formula, "pageSize": 1},
+    )
+    recs = existing.get("records", [])
+    return recs[0] if recs else None
+
+
+async def resolve_current_business_name(current: dict, request: Optional[Request] = None) -> str:
+    domain = selected_brand_domain(request, current)
+    return (
+        await airtable_client.get_business_name_by_domain(domain)
+        or current.get("company", "My Company")
+    )
+
+
 # ---------------------------------------------------------------------------
 # Auth helpers
 # ---------------------------------------------------------------------------
@@ -943,11 +982,7 @@ async def me(current=Depends(get_current_user)):
 
 @api_router.post("/business/profile")
 async def save_business_profile(body: BusinessProfileRequest, current=Depends(get_current_user)):
-    website = body.website.strip().lower()
-    # Remove protocol prefix if present
-    clean_website = re.sub(r"^https?://", "", website).rstrip("/")
-    if clean_website.startswith("www."):
-        clean_website = clean_website[4:]
+    clean_website = normalize_business_domain(body.website)
     
     # Derive business name
     company_name = derive_business_name("user@" + clean_website) if clean_website else current.get("company", "My Company")
@@ -958,6 +993,8 @@ async def save_business_profile(body: BusinessProfileRequest, current=Depends(ge
     
     profile = {
         "website": clean_website,
+        "selected_domain": clean_website,
+        "email_domain": email_domain(current.get("email", "")),
         "company_name": company_name,
         "brand_color": brand_color,
         "logo_url": brand.get("logo_url") or "",
@@ -991,29 +1028,24 @@ async def save_business_profile(body: BusinessProfileRequest, current=Depends(ge
 
 
 @api_router.get("/business/profile")
-async def get_business_profile(current=Depends(get_current_user)):
+async def get_business_profile(request: Request, current=Depends(get_current_user)):
     # Retrieve profile purely from Airtable (No MongoDB!)
-    email = current.get("email", "").lower().strip()
-    domain = email.split("@")[-1].lower() if "@" in email else ""
-    
-    company_name = (
-        await airtable_client.get_business_name_by_email_domain(current["email"])
-        or current.get("company", "My Company")
-    )
-    website = domain
+    selected_domain = selected_brand_domain(request, current)
+    login_email_domain = email_domain(current.get("email", ""))
+
+    company_name = await resolve_current_business_name(current, request)
+    website = selected_domain
     brand_color = "#6d46c6"
     logo_url = ""
     brand_voice = ""
     
-    if airtable_client._enabled() and domain:
+    if airtable_client._enabled() and selected_domain:
         try:
-            formula = f'LOWER({{Business Domain}})="{airtable_client._escape(domain)}"'
-            existing = await airtable_client._get(airtable_client.TABLE_BUSINESS, {"filterByFormula": formula, "pageSize": 1})
-            recs = existing.get("records", [])
-            if recs:
-                fields = recs[0].get("fields", {})
+            rec = await get_business_record_by_domain(selected_domain)
+            if rec:
+                fields = rec.get("fields", {})
                 company_name = fields.get("Business Name") or company_name
-                website = fields.get("Business Domain") or domain
+                website = fields.get("Business Domain") or selected_domain
                 brand_color = fields.get("Brand_Color") or brand_color
                 logo_url = fields.get("Logo_Url") or ""
                 brand_voice = fields.get("Brand_Voice") or ""
@@ -1022,6 +1054,8 @@ async def get_business_profile(current=Depends(get_current_user)):
             
     return {
         "website": website,
+        "selected_domain": selected_domain,
+        "email_domain": login_email_domain,
         "company_name": company_name,
         "brand_color": brand_color,
         "logo_url": logo_url,
@@ -1150,7 +1184,7 @@ def source_to_out(doc: dict) -> SourceOut:
 
 
 @api_router.post("/sources", response_model=SourceOut)
-async def upload_source(file: UploadFile = File(...), current=Depends(get_current_user)):
+async def upload_source(request: Request, file: UploadFile = File(...), current=Depends(get_current_user)):
     content = await file.read()
     text = extract_text(file.filename, content)
     if not text.strip():
@@ -1158,13 +1192,14 @@ async def upload_source(file: UploadFile = File(...), current=Depends(get_curren
     client_name = file.filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ").title()
     word_count = len(text.split())
     seq = len(TEMP_SOURCES) + 1
+    business_name = await resolve_current_business_name(current, request)
     doc = {
         "id": str(uuid.uuid4()),
         "owner": current["id"],
         "filename": file.filename,
         "file_type": file.filename.rsplit(".", 1)[-1].lower(),
         "client_name": client_name,
-        "brand": current.get("company", "PayRewards"),
+        "brand": business_name,
         "conversation_code": f"CV_{seq:03d}",
         "source_name": "Upload",
         "duration_min": max(1, round(word_count / 140)),
@@ -1186,11 +1221,8 @@ async def upload_source(file: UploadFile = File(...), current=Depends(get_curren
 
 
 @api_router.get("/sources", response_model=List[SourceOut])
-async def list_sources(current=Depends(get_current_user)):
-    business_name = (
-        await airtable_client.get_business_name_by_email_domain(current["email"])
-        or current["company"]
-    )
+async def list_sources(request: Request, current=Depends(get_current_user)):
+    business_name = await resolve_current_business_name(current, request)
     
     # 1. Fetch analyzed records directly from Airtable (No MongoDB!)
     records = await airtable_client.list_growth_signals_by_business(business_name)
@@ -1207,16 +1239,13 @@ async def list_sources(current=Depends(get_current_user)):
 
 
 @api_router.get("/sources/{source_id}", response_model=SourceOut)
-async def get_source(source_id: str, current=Depends(get_current_user)):
+async def get_source(source_id: str, request: Request, current=Depends(get_current_user)):
     # Check cache first
     if source_id in TEMP_SOURCES:
         return source_to_out(TEMP_SOURCES[source_id])
         
     # Fetch from Airtable Growth_Signals
-    business_name = (
-        await airtable_client.get_business_name_by_email_domain(current["email"])
-        or current["company"]
-    )
+    business_name = await resolve_current_business_name(current, request)
     records = await airtable_client.list_growth_signals_by_business(business_name)
     for rec in records:
         f = rec.get("fields", {})
@@ -1231,10 +1260,7 @@ async def analyze_source(source_id: str, request: Request, regenerate: bool = Fa
     doc = TEMP_SOURCES.get(source_id)
     if not doc:
         # Fallback query from Airtable if they want to regenerate
-        business_name = (
-            await airtable_client.get_business_name_by_email_domain(current["email"])
-            or current["company"]
-        )
+        business_name = await resolve_current_business_name(current, request)
         records = await airtable_client.list_growth_signals_by_business(business_name)
         for rec in records:
             f = rec.get("fields", {})
@@ -1281,10 +1307,7 @@ async def analyze_source(source_id: str, request: Request, regenerate: bool = Fa
     # Save back to memory cache
     TEMP_SOURCES[source_id] = doc
     
-    business_name = (
-        await airtable_client.get_business_name_by_email_domain(current["email"])
-        or current["company"]
-    )
+    business_name = await resolve_current_business_name(current, request)
     
     # Upsert directly to Airtable (No MongoDB!)
     await airtable_client.upsert_growth_signal(
@@ -1311,7 +1334,7 @@ async def analyze_source(source_id: str, request: Request, regenerate: bool = Fa
 
 
 @api_router.put("/sources/{source_id}/testimonial", response_model=SourceOut)
-async def update_testimonial(source_id: str, body: TestimonialUpdate, current=Depends(get_current_user)):
+async def update_testimonial(source_id: str, body: TestimonialUpdate, request: Request, current=Depends(get_current_user)):
     # 1. Update memory cache
     doc = TEMP_SOURCES.get(source_id)
     if doc:
@@ -1319,10 +1342,7 @@ async def update_testimonial(source_id: str, body: TestimonialUpdate, current=De
         TEMP_SOURCES[source_id] = doc
         
     # 2. Update Airtable (No MongoDB!)
-    business_name = (
-        await airtable_client.get_business_name_by_email_domain(current["email"])
-        or current["company"]
-    )
+    business_name = await resolve_current_business_name(current, request)
     recs = []
     try:
         formula = f'LOWER({{Source_Id}})="{airtable_client._escape(source_id)}"'
@@ -1340,13 +1360,10 @@ async def update_testimonial(source_id: str, body: TestimonialUpdate, current=De
 
 
 @api_router.get("/sources/{source_id}/email-draft", response_model=EmailDraft)
-async def email_draft(source_id: str, current=Depends(get_current_user)):
+async def email_draft(source_id: str, request: Request, current=Depends(get_current_user)):
     doc = TEMP_SOURCES.get(source_id)
+    business_name = await resolve_current_business_name(current, request)
     if not doc:
-        business_name = (
-            await airtable_client.get_business_name_by_email_domain(current["email"])
-            or current["company"]
-        )
         records = await airtable_client.list_growth_signals_by_business(business_name)
         for rec in records:
             f = rec.get("fields", {})
@@ -1372,7 +1389,7 @@ async def email_draft(source_id: str, current=Depends(get_current_user)):
         f"With your permission, we'd love to share this as a short testimonial. "
         f"I've attached a summary of our conversation for your reference. "
         f"Feel free to tweak the wording so it feels right to you — just reply to this email with your go-ahead.\n\n"
-        f"Warm regards,\n{current['name']}\n{current['company']}"
+        f"Warm regards,\n{current['name']}\n{business_name}"
     )
     return EmailDraft(
         to=doc.get("client_email") or "customer@example.com",
@@ -1494,15 +1511,12 @@ def _approval_status_after_send(doc: Optional[dict], rec: Optional[dict]) -> str
 
 
 @api_router.post("/sources/{source_id}/send-approval")
-async def send_approval(source_id: str, current=Depends(get_current_user)):
+async def send_approval(source_id: str, request: Request, current=Depends(get_current_user)):
     doc = TEMP_SOURCES.get(source_id)
     share_id = doc.get("share_id") if doc else None
     rec = None
     if not share_id:
-        business_name = (
-            await airtable_client.get_business_name_by_email_domain(current["email"])
-            or current["company"]
-        )
+        business_name = await resolve_current_business_name(current, request)
         records = await airtable_client.list_growth_signals_by_business(business_name)
         rec = next((r for r in records if r.get("fields", {}).get("Source_Id") == source_id), None)
         if not doc and not rec:
@@ -1817,21 +1831,15 @@ async def log_event_endpoint(body: EventLogRequest):
 
 
 @api_router.get("/testimonials")
-async def get_testimonials(current=Depends(get_current_user)):
-    business_name = (
-        await airtable_client.get_business_name_by_email_domain(current["email"])
-        or current["company"]
-    )
+async def get_testimonials(request: Request, current=Depends(get_current_user)):
+    business_name = await resolve_current_business_name(current, request)
     return await airtable_client.list_uplaud_by_business(business_name)
 
 
 
 @api_router.get("/warm-leads")
-async def get_warm_leads(current=Depends(get_current_user)):
-    business_name = (
-        await airtable_client.get_business_name_by_email_domain(current["email"])
-        or current["company"]
-    )
+async def get_warm_leads(request: Request, current=Depends(get_current_user)):
+    business_name = await resolve_current_business_name(current, request)
     leads = await airtable_client.list_circles_by_business(business_name)
     lead_ids = [l["id"] for l in leads]
     plans = await db.agent_plans.find({"lead_id": {"$in": lead_ids}}, {"_id": 0}).to_list(len(lead_ids) or 1)
@@ -1843,11 +1851,8 @@ async def get_warm_leads(current=Depends(get_current_user)):
 
 
 @api_router.post("/warm-leads/{lead_id}/agent-run", response_model=AgentPlanOut)
-async def run_referral_agent(lead_id: str, force: bool = False, current=Depends(get_current_user)):
-    business_name = (
-        await airtable_client.get_business_name_by_email_domain(current["email"])
-        or current["company"]
-    )
+async def run_referral_agent(lead_id: str, request: Request, force: bool = False, current=Depends(get_current_user)):
+    business_name = await resolve_current_business_name(current, request)
     lead = await airtable_client.get_circle_lead(business_name, lead_id)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")

@@ -14,10 +14,17 @@ import {
   Quote,
   Share2,
 } from "lucide-react";
-import { setImported, getAuth } from "@/lib/business-storage";
+import { setImported, getAuth, updateAuth } from "@/lib/business-storage";
 import api, { formatApiError } from "@/lib/api";
 import { REVIEW_SOURCES, CONVERSATION_SOURCES, PAGE_OUTCOMES } from "@/mocks/fintech";
 import PageHero from "@/components/business/PageHero";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const OVERVIEW_STEPS = [
   {
@@ -37,6 +44,20 @@ const OVERVIEW_STEPS = [
   },
 ];
 
+function normalizeDomain(value = "") {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/\/.*$/, "");
+}
+
+function emailDomain(email = "") {
+  const parts = email.toLowerCase().trim().split("@");
+  return parts.length > 1 ? normalizeDomain(parts[1]) : "";
+}
+
 export default function ImportReviewsPage() {
   const nav = useNavigate();
   const user = getAuth();
@@ -51,6 +72,7 @@ export default function ImportReviewsPage() {
   const [personalizing, setPersonalizing] = useState(false);
   const [profile, setProfile] = useState(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
+  const [domainChoice, setDomainChoice] = useState(null);
   const fileRef = useRef(null);
 
   const fetchSources = () => {
@@ -79,17 +101,27 @@ export default function ImportReviewsPage() {
   const handlePersonalize = async (e) => {
     e.preventDefault();
     if (!websiteInput.trim()) return;
+    const websiteDomain = normalizeDomain(websiteInput);
+    const loginDomain = emailDomain(user?.email);
+    if (websiteDomain && loginDomain && websiteDomain !== loginDomain) {
+      setDomainChoice({ websiteDomain, loginDomain });
+      return;
+    }
+    await saveBusinessProfile(websiteDomain || websiteInput);
+  };
+
+  const saveBusinessProfile = async (selectedDomain) => {
+    if (!selectedDomain) return;
     setPersonalizing(true);
     try {
-      const { data } = await api.post("/business/profile", { website: websiteInput });
+      const { data } = await api.post("/business/profile", { website: selectedDomain });
       
       // Update local storage so that we can immediately refresh user state
-      const auth = JSON.parse(localStorage.getItem("uplaud_business_auth_v1") || "{}");
-      if (auth) {
-        auth.workspace = data.profile.company_name;
-        auth.company = data.profile.company_name;
-        localStorage.setItem("uplaud_business_auth_v1", JSON.stringify(auth));
-      }
+      updateAuth({
+        workspace: data.profile.company_name,
+        company: data.profile.company_name,
+        brandDomain: data.profile.selected_domain || selectedDomain,
+      });
       
       toast.success("Workspace personalized successfully!", {
         description: `Deriving brand: ${data.profile.company_name}. Initializing colors and assets.`,
@@ -101,8 +133,13 @@ export default function ImportReviewsPage() {
     } catch (err) {
       toast.error("Personalization failed. Please try again.");
     } finally {
+      setDomainChoice(null);
       setPersonalizing(false);
     }
+  };
+
+  const chooseDomain = (selectedDomain) => {
+    saveBusinessProfile(selectedDomain);
   };
 
   const pickFile = () => fileRef.current?.click();
@@ -252,6 +289,41 @@ export default function ImportReviewsPage() {
           </div>
         </div>
       )}
+
+      <Dialog open={Boolean(domainChoice)} onOpenChange={(open) => !open && setDomainChoice(null)}>
+        <DialogContent className="max-w-md rounded-2xl border-[#e9e2f7]">
+          <DialogHeader>
+            <DialogTitle>Choose workspace domain</DialogTitle>
+            <DialogDescription>
+              Your login email and setup website use different domains. Pick the domain Uplaud should use for this workspace.
+            </DialogDescription>
+          </DialogHeader>
+          {domainChoice && (
+            <div className="space-y-3">
+              <button
+                type="button"
+                data-testid="choose-website-domain-btn"
+                disabled={personalizing}
+                onClick={() => chooseDomain(domainChoice.websiteDomain)}
+                className="w-full rounded-xl border border-[#d9d1ee] bg-white p-4 text-left transition-colors hover:border-[#6d46c6] hover:bg-[#faf9ff]"
+              >
+                <span className="block text-[13px] font-semibold text-[#111827]">Use website domain</span>
+                <span className="mt-1 block font-mono text-[12px] text-[#6d46c6]">{domainChoice.websiteDomain}</span>
+              </button>
+              <button
+                type="button"
+                data-testid="choose-email-domain-btn"
+                disabled={personalizing}
+                onClick={() => chooseDomain(domainChoice.loginDomain)}
+                className="w-full rounded-xl border border-[#d9d1ee] bg-white p-4 text-left transition-colors hover:border-[#6d46c6] hover:bg-[#faf9ff]"
+              >
+                <span className="block text-[13px] font-semibold text-[#111827]">Use email domain</span>
+                <span className="mt-1 block font-mono text-[12px] text-[#6d46c6]">{domainChoice.loginDomain}</span>
+              </button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Dropzone — kept above the fold; primary action on this page */}
       <div>

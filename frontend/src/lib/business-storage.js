@@ -15,6 +15,13 @@ export function setAuth(user) {
   localStorage.setItem(AUTH_KEY, JSON.stringify(user));
 }
 
+export function updateAuth(updates) {
+  const current = getAuth() || {};
+  const next = { ...current, ...(updates || {}) };
+  localStorage.setItem(AUTH_KEY, JSON.stringify(next));
+  return next;
+}
+
 export function clearAuth() {
   localStorage.removeItem(AUTH_KEY);
 }

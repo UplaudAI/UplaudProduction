@@ -11,6 +11,7 @@ api.interceptors.request.use((config) => {
     const raw = localStorage.getItem("uplaud_business_auth_v1");
     const auth = raw ? JSON.parse(raw) : null;
     if (auth?.token) config.headers.Authorization = `Bearer ${auth.token}`;
+    if (auth?.brandDomain) config.headers["X-Uplaud-Brand-Domain"] = auth.brandDomain;
   } catch {
     /* ignore */
   }
