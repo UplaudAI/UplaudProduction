@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import api from "@/lib/api";
+import { supabase } from "@/lib/supabase";
 import {
   Upload,
   MessagesSquare,
@@ -77,18 +78,32 @@ export default function DashboardLayout() {
 
   useEffect(() => {
     if (!user?.token) return;
-    api.get("/auth/me")
-      .then(({ data }) => {
+    let cancelled = false;
+    const refreshProfile = async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token || user.token;
+        const { data } = await api.get("/auth/me", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (cancelled) return;
         const nextUser = updateAuth({
           email: data.email,
           name: data.name,
           role: data.role,
           workspace: data.company,
           company: data.company,
+          token,
         });
         setUser(nextUser);
-      })
-      .catch(() => {});
+      } catch {
+        /* handled by the API interceptor when the token is invalid */
+      }
+    };
+    refreshProfile();
+    return () => {
+      cancelled = true;
+    };
   }, [user?.token]);
 
   // Only redirect brand-new (zero-source) users to Sources ONCE, right after login —
