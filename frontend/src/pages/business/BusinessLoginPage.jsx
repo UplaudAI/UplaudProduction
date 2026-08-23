@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowUpRight, Lock, Mail, Sparkles, ShieldCheck } from "lucide-react";
-import { setAuth, getAuth, getImported, getSeenLeadsCount } from "@/lib/business-storage";
+import { setAuth, getAuth, getImported, getSeenLeadsCount, clearAuth } from "@/lib/business-storage";
 import { supabase } from "@/lib/supabase";
 import api, { formatApiError } from "@/lib/api";
 
@@ -64,6 +64,7 @@ export default function BusinessLoginPage() {
     }
 
     setLoading(true);
+    clearAuth();
 
     if (isSignUp) {
       // ----------------------------------------------------

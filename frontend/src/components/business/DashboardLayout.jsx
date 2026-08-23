@@ -16,7 +16,7 @@ import {
   Radio,
   Mic,
 } from "lucide-react";
-import { getAuth, clearAuth } from "@/lib/business-storage";
+import { getAuth, clearAuth, updateAuth } from "@/lib/business-storage";
 import { BRAND } from "@/mocks/fintech";
 
 const LOGO_URL =
@@ -74,6 +74,22 @@ export default function DashboardLayout() {
       nav("/business", { replace: true });
     }
   }, [user, nav]);
+
+  useEffect(() => {
+    if (!user?.token) return;
+    api.get("/auth/me")
+      .then(({ data }) => {
+        const nextUser = updateAuth({
+          email: data.email,
+          name: data.name,
+          role: data.role,
+          workspace: data.company,
+          company: data.company,
+        });
+        setUser(nextUser);
+      })
+      .catch(() => {});
+  }, [user?.token]);
 
   // Only redirect brand-new (zero-source) users to Sources ONCE, right after login —
   // not on every subsequent navigation, otherwise the app would keep bouncing a user
