@@ -979,7 +979,14 @@ async def login(body: LoginRequest):
 
 
 @api_router.get("/auth/me", response_model=UserOut)
-async def me(current=Depends(get_current_user)):
+async def me(request: Request, current=Depends(get_current_user)):
+    selected_domain = normalize_business_domain(request.headers.get("X-Uplaud-Brand-Domain", ""))
+    if selected_domain:
+        rec = await get_business_record_by_domain(selected_domain)
+        if rec:
+            company_name = rec.get("fields", {}).get("Business Name")
+            if company_name:
+                current = {**current, "company": company_name}
     return user_to_out(current)
 
 

@@ -26,7 +26,7 @@ sys.modules.setdefault("motor", motor_module)
 sys.modules.setdefault("motor.motor_asyncio", motor_asyncio_module)
 
 import airtable_client  # noqa: E402
-from server import get_business_profile  # noqa: E402
+from server import get_business_profile, me  # noqa: E402
 
 
 class _Request:
@@ -88,3 +88,39 @@ def test_get_business_profile_uses_selected_brand_domain_over_email_domain(monke
     assert profile["brand_color"] == "#123456"
     assert profile["selected_domain"] == "websitebrand.com"
     assert profile["email_domain"] == "emailbrand.com"
+
+
+def test_auth_me_uses_selected_brand_domain_over_email_domain(monkeypatch):
+    async def fake_get(table, params=None):
+        formula = (params or {}).get("filterByFormula", "")
+        if '"websitebrand.com"' in formula:
+            return {
+                "records": [
+                    {
+                        "fields": {
+                            "Business Name": "Websitebrand",
+                            "Business Domain": "websitebrand.com",
+                        }
+                    }
+                ]
+            }
+        return {"records": []}
+
+    monkeypatch.setattr(airtable_client, "_enabled", lambda: True)
+    monkeypatch.setattr(airtable_client, "_get", fake_get)
+
+    user = asyncio.run(
+        me(
+            request=_Request({"X-Uplaud-Brand-Domain": "websitebrand.com"}),
+            current={
+                "id": "user-1",
+                "email": "owner@emailbrand.com",
+                "name": "Owner",
+                "role": "business",
+                "company": "Emailbrand",
+                "approved": True,
+            },
+        )
+    )
+
+    assert user.company == "Websitebrand"
