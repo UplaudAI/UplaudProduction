@@ -34,9 +34,10 @@ import airtable_client
 # ---------------------------------------------------------------------------
 # Config / DB
 # ---------------------------------------------------------------------------
-mongo_url = os.environ["MONGO_URL"]
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ["DB_NAME"]]
+mongo_url = os.environ.get("MONGO_URL")
+mongo_db_name = os.environ.get("DB_NAME")
+client = AsyncIOMotorClient(mongo_url) if mongo_url else None
+db = client[mongo_db_name] if client is not None and mongo_db_name else None
 
 JWT_SECRET = os.environ.get("JWT_SECRET", "uplaud-demo-secret")
 JWT_ALGORITHM = "HS256"
@@ -49,6 +50,8 @@ openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("uplaud")
+if db is None:
+    logger.warning("MongoDB is not configured; Mongo-backed API features will run in degraded mode.")
 
 app = FastAPI(title="Uplaud Growth Engine API")
 api_router = APIRouter(prefix="/api")
@@ -1767,7 +1770,8 @@ async def submit_referrals(share_id: str, body: ReferralSubmit):
         "referrals": clean,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    await db.referrals.insert_one(rec)
+    if db is not None:
+        await db.referrals.insert_one(rec)
 
     # Each referred friend becomes a Circles entry (Initiator = referrer, Receiver = referee),
     # plus a User record for the referee enriched via People Data Labs.
@@ -1842,7 +1846,9 @@ async def get_warm_leads(request: Request, current=Depends(get_current_user)):
     business_name = await resolve_current_business_name(current, request)
     leads = await airtable_client.list_circles_by_business(business_name)
     lead_ids = [l["id"] for l in leads]
-    plans = await db.agent_plans.find({"lead_id": {"$in": lead_ids}}, {"_id": 0}).to_list(len(lead_ids) or 1)
+    plans = []
+    if db is not None and lead_ids:
+        plans = await db.agent_plans.find({"lead_id": {"$in": lead_ids}}, {"_id": 0}).to_list(len(lead_ids))
     plan_map = {p["lead_id"]: p for p in plans}
     for l in leads:
         if not l.get("agent_plan"):
@@ -1857,7 +1863,11 @@ async def run_referral_agent(lead_id: str, request: Request, force: bool = False
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
-    existing = await db.agent_plans.find_one({"lead_id": lead_id}, {"_id": 0})
+    existing = None
+    if db is not None:
+        existing = await db.agent_plans.find_one({"lead_id": lead_id}, {"_id": 0})
+    elif isinstance(lead.get("agent_plan"), dict):
+        existing = lead.get("agent_plan")
     if existing and not force:
         return AgentPlanOut(**existing)
 
@@ -1882,7 +1892,8 @@ async def run_referral_agent(lead_id: str, request: Request, force: bool = False
         },
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
-    await db.agent_plans.update_one({"lead_id": lead_id}, {"$set": plan}, upsert=True)
+    if db is not None:
+        await db.agent_plans.update_one({"lead_id": lead_id}, {"$set": plan}, upsert=True)
     await airtable_client.update_circle_agent_plan(lead_id, plan)
     return AgentPlanOut(**plan)
 
@@ -1891,6 +1902,8 @@ async def run_referral_agent(lead_id: str, request: Request, force: bool = False
 async def update_agent_plan_status(lead_id: str, action: str, current=Depends(get_current_user)):
     if action not in ("approve", "skip"):
         raise HTTPException(status_code=404, detail="Not found")
+    if db is None:
+        raise HTTPException(status_code=503, detail="Agent plan persistence is not configured.")
     existing = await db.agent_plans.find_one({"lead_id": lead_id}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="No agent plan found for this lead yet.")
@@ -2023,7 +2036,8 @@ async def blog_lead_magnet(body: LeadMagnetRequest):
         "slug": slug,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.lead_magnet_signups.insert_one(doc)
+    if db is not None:
+        await db.lead_magnet_signups.insert_one(doc)
     
     # 2. Save/Sync to Airtable as a CRM User Lead in the background!
     name_part = email.split("@")[0].title().replace(".", " ").replace("-", " ")
@@ -2049,10 +2063,12 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup():
-    await db.sources.create_index("owner")
-    await db.agent_plans.create_index("lead_id", unique=True)
+    if db is not None:
+        await db.sources.create_index("owner")
+        await db.agent_plans.create_index("lead_id", unique=True)
 
 
 @app.on_event("shutdown")
 async def shutdown():
-    client.close()
+    if client is not None:
+        client.close()
