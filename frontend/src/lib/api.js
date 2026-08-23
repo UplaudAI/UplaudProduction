@@ -2,7 +2,8 @@ import axios from "axios";
 import { toast } from "sonner";
 import { clearAuth } from "@/lib/business-storage";
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const API_BASE = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/$/, "");
+const API = `${API_BASE}/api`;
 
 const api = axios.create({ baseURL: API });
 
