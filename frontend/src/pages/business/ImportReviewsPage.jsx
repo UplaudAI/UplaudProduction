@@ -77,7 +77,7 @@ export default function ImportReviewsPage() {
 
   const fetchSources = () => {
     api.get("/sources")
-      .then(({ data }) => setSources(data || []))
+      .then(({ data }) => setSources(Array.isArray(data) ? data : []))
       .catch(() => setSources([]))
       .finally(() => setLoading(false));
   };
@@ -177,12 +177,13 @@ export default function ImportReviewsPage() {
     }
   };
 
-  const hasData = sources.length > 0;
+  const sourceList = Array.isArray(sources) ? sources : [];
+  const hasData = sourceList.length > 0;
   
   // Calculate exact actual metrics
-  const totalSources = sources.length;
-  const totalInteractions = sources.filter(s => s.status === "analyzed").length;
-  const totalSignals = sources.reduce((acc, s) => {
+  const totalSources = sourceList.length;
+  const totalInteractions = sourceList.filter(s => s.status === "analyzed").length;
+  const totalSignals = sourceList.reduce((acc, s) => {
     if (s.insights) {
       const ins = s.insights;
       return acc + 

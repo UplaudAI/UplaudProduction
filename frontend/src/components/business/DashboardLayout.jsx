@@ -83,8 +83,9 @@ export default function DashboardLayout() {
       zeroStateChecked.current = true;
       api.get("/sources")
         .then(({ data }) => {
-          setSources(data || []);
-          if (!data || data.length === 0) {
+          const sourceList = Array.isArray(data) ? data : [];
+          setSources(sourceList);
+          if (sourceList.length === 0) {
             const permittedPaths = ["/business/import", "/business/settings", "/business/roi-simulator", "/business"];
             if (!permittedPaths.includes(loc.pathname)) {
               nav("/business/import", { replace: true });
