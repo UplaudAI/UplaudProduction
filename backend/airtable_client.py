@@ -8,7 +8,7 @@ import httpx
 
 logger = logging.getLogger("uplaud.airtable")
 
-AIRTABLE_PAT = os.environ.get("AIRTABLE_PAT", "")
+AIRTABLE_PAT = os.environ.get("AIRTABLE_PAT") or os.environ.get("AIRTABLE_API_KEY", "")
 AIRTABLE_BASE_ID = os.environ.get("AIRTABLE_BASE_ID", "")
 AIRTABLE_API_URL = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}"
 PDL_API_KEY = os.environ.get("PDL_API_KEY", "")
@@ -479,7 +479,7 @@ TABLE_GROWTH_SIGNALS = "Growth_Signals"
 async def upsert_growth_signal(source_id: str, business_name: str, insights: dict, testimonial_status: str, testimonial_draft: str = "", share_id: str = "") -> None:
     """Persist AI-extracted growth signals for a conversation to Airtable (create or update by Source_Id)."""
     if not _enabled():
-        return
+        raise RuntimeError("Airtable is not configured")
     fields = {
         "Name": f"{insights.get('company_name') or business_name} · {insights.get('call_type') or 'Demo'}",
         "Source_Id": source_id,
@@ -512,6 +512,7 @@ async def upsert_growth_signal(source_id: str, business_name: str, insights: dic
             await _create(TABLE_GROWTH_SIGNALS, fields)
     except Exception as e:
         logger.warning("Airtable growth-signal upsert failed: %s", e)
+        raise
 
 
 

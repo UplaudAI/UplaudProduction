@@ -219,11 +219,16 @@ async def get_business_record_by_domain(domain: str) -> Optional[dict]:
 
 
 async def resolve_current_business_name(current: dict, request: Optional[Request] = None) -> str:
-    domain = selected_brand_domain(request, current)
-    return (
-        await airtable_client.get_business_name_by_domain(domain)
-        or current.get("company", "My Company")
-    )
+    header_domain = ""
+    if request is not None:
+        header_domain = normalize_business_domain(request.headers.get("X-Uplaud-Brand-Domain", ""))
+    domain = header_domain or email_domain(current.get("email", ""))
+    business_name = await airtable_client.get_business_name_by_domain(domain)
+    if business_name:
+        return business_name
+    if header_domain:
+        return derive_business_name("user@" + header_domain)
+    return current.get("company", "My Company")
 
 
 # ---------------------------------------------------------------------------

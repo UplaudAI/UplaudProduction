@@ -26,7 +26,7 @@ sys.modules.setdefault("motor", motor_module)
 sys.modules.setdefault("motor.motor_asyncio", motor_asyncio_module)
 
 import airtable_client  # noqa: E402
-from server import get_business_profile, me  # noqa: E402
+from server import get_business_profile, me, resolve_current_business_name  # noqa: E402
 
 
 class _Request:
@@ -169,3 +169,23 @@ def test_get_business_profile_derives_selected_domain_when_business_record_missi
 
     assert profile["selected_domain"] == "websitebrand.com"
     assert profile["company_name"] == "Websitebrand"
+
+
+def test_resolve_current_business_name_derives_selected_domain_when_record_missing(monkeypatch):
+    monkeypatch.setattr(
+        airtable_client,
+        "get_business_name_by_domain",
+        lambda _domain: asyncio.sleep(0, result=None),
+    )
+
+    business_name = asyncio.run(
+        resolve_current_business_name(
+            current={
+                "email": "owner@emailbrand.com",
+                "company": "Emailbrand",
+            },
+            request=_Request({"X-Uplaud-Brand-Domain": "websitebrand.com"}),
+        )
+    )
+
+    assert business_name == "Websitebrand"
