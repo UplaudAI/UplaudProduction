@@ -982,11 +982,11 @@ async def login(body: LoginRequest):
 async def me(request: Request, current=Depends(get_current_user)):
     selected_domain = normalize_business_domain(request.headers.get("X-Uplaud-Brand-Domain", ""))
     if selected_domain:
+        company_name = derive_business_name("user@" + selected_domain)
         rec = await get_business_record_by_domain(selected_domain)
         if rec:
-            company_name = rec.get("fields", {}).get("Business Name")
-            if company_name:
-                current = {**current, "company": company_name}
+            company_name = rec.get("fields", {}).get("Business Name") or company_name
+        current = {**current, "company": company_name}
     return user_to_out(current)
 
 
@@ -1043,7 +1043,11 @@ async def get_business_profile(request: Request, current=Depends(get_current_use
     selected_domain = selected_brand_domain(request, current)
     login_email_domain = email_domain(current.get("email", ""))
 
-    company_name = await resolve_current_business_name(current, request)
+    company_name = (
+        derive_business_name("user@" + selected_domain)
+        if selected_domain
+        else current.get("company", "My Company")
+    )
     website = selected_domain
     brand_color = "#6d46c6"
     logo_url = ""

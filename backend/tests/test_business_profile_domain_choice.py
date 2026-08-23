@@ -124,3 +124,48 @@ def test_auth_me_uses_selected_brand_domain_over_email_domain(monkeypatch):
     )
 
     assert user.company == "Websitebrand"
+
+
+def test_auth_me_derives_selected_brand_domain_when_business_record_missing(monkeypatch):
+    async def fake_get(table, params=None):
+        return {"records": []}
+
+    monkeypatch.setattr(airtable_client, "_enabled", lambda: True)
+    monkeypatch.setattr(airtable_client, "_get", fake_get)
+
+    user = asyncio.run(
+        me(
+            request=_Request({"X-Uplaud-Brand-Domain": "websitebrand.com"}),
+            current={
+                "id": "user-1",
+                "email": "owner@emailbrand.com",
+                "name": "Owner",
+                "role": "business",
+                "company": "Emailbrand",
+                "approved": True,
+            },
+        )
+    )
+
+    assert user.company == "Websitebrand"
+
+
+def test_get_business_profile_derives_selected_domain_when_business_record_missing(monkeypatch):
+    async def fake_get(table, params=None):
+        return {"records": []}
+
+    monkeypatch.setattr(airtable_client, "_enabled", lambda: True)
+    monkeypatch.setattr(airtable_client, "_get", fake_get)
+
+    profile = asyncio.run(
+        get_business_profile(
+            request=_Request({"X-Uplaud-Brand-Domain": "websitebrand.com"}),
+            current={
+                "email": "owner@emailbrand.com",
+                "company": "Emailbrand",
+            },
+        )
+    )
+
+    assert profile["selected_domain"] == "websitebrand.com"
+    assert profile["company_name"] == "Websitebrand"
