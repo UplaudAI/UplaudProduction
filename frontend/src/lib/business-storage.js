@@ -10,6 +10,7 @@ function normalizeAuth(auth) {
     ...auth,
     name: auth.name || fallbackName,
     workspace: auth.workspace || auth.company || "My Company",
+    company: auth.company || auth.workspace || "My Company",
   };
 }
 

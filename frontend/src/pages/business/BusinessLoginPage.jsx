@@ -116,6 +116,7 @@ export default function BusinessLoginPage() {
               name: data.user.name,
               role: data.user.role,
               workspace: data.user.company,
+              company: data.user.company,
               token: data.token,
             });
             const dest = await resolvePostLoginDestination();
@@ -143,6 +144,7 @@ export default function BusinessLoginPage() {
             name: profile.name,
             role: profile.role,
             workspace: profile.company,
+            company: profile.company,
             token: token,
           });
           const dest = await resolvePostLoginDestination();
