@@ -4,6 +4,7 @@ import { ArrowUpRight, Lock, Mail, Sparkles, ShieldCheck } from "lucide-react";
 import { setAuth, getAuth, getImported, getSeenLeadsCount, clearAuth } from "@/lib/business-storage";
 import { supabase } from "@/lib/supabase";
 import api, { formatApiError } from "@/lib/api";
+import { requestPasswordReset } from "@/lib/password-reset";
 
 const LOGO_URL =
   "https://customer-assets-gfyr7b9c.emergentagent.net/job_ai-acquisition-hub-2/artifacts/24zfs0md_logo_white_background.webp";
@@ -29,6 +30,7 @@ export default function BusinessLoginPage() {
   const [password, setPassword] = useState("P@yRew@rds123");
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -165,6 +167,32 @@ export default function BusinessLoginPage() {
     }
   };
 
+  const handlePasswordReset = async () => {
+    setError("");
+    setSuccess("");
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail) {
+      setError("Enter your work email, then request a password reset.");
+      return;
+    }
+
+    if (!normalizedEmail.includes("@")) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+
+    setResetLoading(true);
+    try {
+      await requestPasswordReset(supabase, normalizedEmail);
+      setSuccess("Password reset email sent. Open the link in your email to set a new password.");
+    } catch (err) {
+      setError(err.message || "Could not send the password reset email.");
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   return (
     <div
       data-testid="business-login-page"
@@ -228,9 +256,22 @@ export default function BusinessLoginPage() {
             </div>
 
             <div>
-              <label className="text-[12px] font-mono uppercase tracking-[0.18em] text-[#4b5563]">
-                Password
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-[12px] font-mono uppercase tracking-[0.18em] text-[#4b5563]">
+                  Password
+                </label>
+                {!isSignUp && (
+                  <button
+                    type="button"
+                    data-testid="password-reset-request-btn"
+                    onClick={handlePasswordReset}
+                    disabled={resetLoading}
+                    className="text-[12.5px] font-medium text-[#6d46c6] hover:underline disabled:opacity-60"
+                  >
+                    {resetLoading ? "Sending..." : "Forgot password?"}
+                  </button>
+                )}
+              </div>
               <div className="mt-2 relative">
                 <Lock className="w-4 h-4 text-[#9ca3af] absolute left-4 top-1/2 -translate-y-1/2" />
                 <input

@@ -7,6 +7,7 @@ import BlogListPage from "@/pages/BlogListPage";
 import BlogPostPage from "@/pages/BlogPostPage";
 import AdminBlogPage from "@/pages/AdminBlogPage";
 import BusinessLoginPage from "@/pages/business/BusinessLoginPage";
+import ResetPasswordPage from "@/pages/business/ResetPasswordPage";
 import DashboardLayout from "@/components/business/DashboardLayout";
 import ImportReviewsPage from "@/pages/business/ImportReviewsPage";
 import ReviewsPage from "@/pages/business/ReviewsPage";
@@ -32,6 +33,7 @@ function App() {
 
           {/* Business (Product MVP Dashboard) */}
           <Route path="/business" element={<BusinessLoginPage />} />
+          <Route path="/business/reset-password" element={<ResetPasswordPage />} />
           <Route path="/t/:shareId" element={<TestimonialPage />} />
           <Route element={<DashboardLayout />}>
             <Route path="/business/import" element={<ImportReviewsPage />} />
