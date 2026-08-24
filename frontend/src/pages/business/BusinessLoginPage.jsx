@@ -4,6 +4,7 @@ import { ArrowUpRight, Lock, Mail, Sparkles, ShieldCheck } from "lucide-react";
 import { setAuth, getAuth, getImported, getSeenLeadsCount, clearAuth } from "@/lib/business-storage";
 import { supabase } from "@/lib/supabase";
 import api, { formatApiError } from "@/lib/api";
+import { getAuthErrorMessage } from "@/lib/auth-error-message";
 import { requestPasswordReset } from "@/lib/password-reset";
 
 const LOGO_URL =
@@ -32,6 +33,7 @@ export default function BusinessLoginPage() {
   const [loading, setLoading] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
   const [error, setError] = useState("");
+  const [errorContext, setErrorContext] = useState("login");
   const [success, setSuccess] = useState("");
 
   useEffect(() => {
@@ -43,6 +45,7 @@ export default function BusinessLoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setErrorContext(isSignUp ? "signup" : "login");
     setSuccess("");
     if (!email || !password) {
       setError("Please enter your email and password");
@@ -169,6 +172,7 @@ export default function BusinessLoginPage() {
 
   const handlePasswordReset = async () => {
     setError("");
+    setErrorContext("password-reset");
     setSuccess("");
     const normalizedEmail = email.trim().toLowerCase();
 
@@ -290,9 +294,7 @@ export default function BusinessLoginPage() {
                 data-testid="login-error"
                 className="text-[13px] text-red-600 font-medium bg-red-50 p-3 rounded-xl border border-red-100"
               >
-                {error.toLowerCase().includes("rate limit")
-                  ? "Too many registration requests. Please wait a few minutes before trying again."
-                  : error}
+                {getAuthErrorMessage(error, errorContext)}
               </p>
             )}
 
@@ -320,6 +322,7 @@ export default function BusinessLoginPage() {
                 onClick={() => {
                   setIsSignUp(!isSignUp);
                   setError("");
+                  setErrorContext(!isSignUp ? "signup" : "login");
                   setSuccess("");
                 }}
                 className="hover:text-[#6d46c6] transition-colors font-medium text-[#6d46c6]"
