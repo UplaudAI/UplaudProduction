@@ -150,6 +150,32 @@ def test_auth_me_derives_selected_brand_domain_when_business_record_missing(monk
     assert user.company == "Websitebrand"
 
 
+def test_auth_me_uses_stored_selected_brand_domain_after_login(monkeypatch):
+    async def fake_get(table, params=None):
+        return {"records": []}
+
+    monkeypatch.setattr(airtable_client, "_enabled", lambda: True)
+    monkeypatch.setattr(airtable_client, "_get", fake_get)
+
+    user = asyncio.run(
+        me(
+            request=_Request(),
+            current={
+                "id": "user-1",
+                "email": "owner@emailbrand.com",
+                "name": "Owner",
+                "role": "business",
+                "company": "Emailbrand",
+                "approved": True,
+                "selected_brand_domain": "websitebrand.com",
+            },
+        )
+    )
+
+    assert user.company == "Websitebrand"
+    assert user.selected_brand_domain == "websitebrand.com"
+
+
 def test_get_business_profile_derives_selected_domain_when_business_record_missing(monkeypatch):
     async def fake_get(table, params=None):
         return {"records": []}
@@ -185,6 +211,27 @@ def test_resolve_current_business_name_derives_selected_domain_when_record_missi
                 "company": "Emailbrand",
             },
             request=_Request({"X-Uplaud-Brand-Domain": "websitebrand.com"}),
+        )
+    )
+
+    assert business_name == "Websitebrand"
+
+
+def test_resolve_current_business_name_uses_stored_selected_domain_without_header(monkeypatch):
+    monkeypatch.setattr(
+        airtable_client,
+        "get_business_name_by_domain",
+        lambda _domain: asyncio.sleep(0, result=None),
+    )
+
+    business_name = asyncio.run(
+        resolve_current_business_name(
+            current={
+                "email": "owner@emailbrand.com",
+                "company": "Emailbrand",
+                "selected_brand_domain": "websitebrand.com",
+            },
+            request=_Request(),
         )
     )
 

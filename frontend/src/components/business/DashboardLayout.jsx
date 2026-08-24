@@ -93,6 +93,7 @@ export default function DashboardLayout() {
           role: data.role,
           workspace: data.company,
           company: data.company,
+          brandDomain: data.selected_brand_domain,
           token,
         });
         setUser(nextUser);

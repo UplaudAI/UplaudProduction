@@ -72,6 +72,7 @@ class UserOut(BaseModel):
     role: str
     company: str
     approved: Optional[bool] = True
+    selected_brand_domain: Optional[str] = ""
 
 
 class LoginResponse(BaseModel):
@@ -203,7 +204,8 @@ def selected_brand_domain(request: Optional[Request], current: dict) -> str:
     header_domain = ""
     if request is not None:
         header_domain = normalize_business_domain(request.headers.get("X-Uplaud-Brand-Domain", ""))
-    return header_domain or email_domain(current.get("email", ""))
+    stored_domain = normalize_business_domain(current.get("selected_brand_domain", ""))
+    return header_domain or stored_domain or email_domain(current.get("email", ""))
 
 
 async def get_business_record_by_domain(domain: str) -> Optional[dict]:
@@ -222,12 +224,13 @@ async def resolve_current_business_name(current: dict, request: Optional[Request
     header_domain = ""
     if request is not None:
         header_domain = normalize_business_domain(request.headers.get("X-Uplaud-Brand-Domain", ""))
-    domain = header_domain or email_domain(current.get("email", ""))
+    stored_domain = normalize_business_domain(current.get("selected_brand_domain", ""))
+    domain = header_domain or stored_domain or email_domain(current.get("email", ""))
     business_name = await airtable_client.get_business_name_by_domain(domain)
     if business_name:
         return business_name
-    if header_domain:
-        return derive_business_name("user@" + header_domain)
+    if header_domain or stored_domain:
+        return derive_business_name("user@" + domain)
     return current.get("company", "My Company")
 
 
@@ -336,7 +339,8 @@ async def get_current_user(request: Request) -> dict:
             "name": payload.get("name") or email.split("@")[0],
             "role": payload.get("role", "business"),
             "company": derive_business_name(email),
-            "approved": True if is_admin else payload.get("approved", True)
+            "approved": True if is_admin else payload.get("approved", True),
+            "selected_brand_domain": normalize_business_domain(payload.get("selected_brand_domain", "")),
         }
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
@@ -374,13 +378,22 @@ async def get_current_user(request: Request) -> dict:
             detail="Your account is pending approval by an administrator."
         )
         
+    selected_domain = normalize_business_domain(
+        user_metadata.get("selected_brand_domain")
+        or user_metadata.get("brand_domain")
+        or user_metadata.get("brandDomain")
+        or ""
+    )
+    company = derive_business_name("user@" + selected_domain) if selected_domain else derive_business_name(email)
+    
     return {
         "id": supabase_id,
         "email": email,
         "name": user_metadata.get("name") or email.split("@")[0],
         "role": app_metadata.get("role") or user_metadata.get("role") or "business",
-        "company": derive_business_name(email),
-        "approved": approved
+        "company": company,
+        "approved": approved,
+        "selected_brand_domain": selected_domain,
     }
 
 
@@ -392,6 +405,7 @@ def user_to_out(user: dict) -> UserOut:
         role=user["role"],
         company=user["company"],
         approved=user.get("approved", True),
+        selected_brand_domain=user.get("selected_brand_domain", ""),
     )
 
 
@@ -968,13 +982,22 @@ async def login(body: LoginRequest):
     if not approved:
         raise HTTPException(status_code=403, detail="Your account is pending approval by an administrator.")
         
+    selected_domain = normalize_business_domain(
+        user_metadata.get("selected_brand_domain")
+        or user_metadata.get("brand_domain")
+        or user_metadata.get("brandDomain")
+        or ""
+    )
+    company = derive_business_name("user@" + selected_domain) if selected_domain else derive_business_name(email)
+    
     user_out = UserOut(
         id=user_data["id"],
         email=email,
         name=user_metadata.get("name") or email.split("@")[0],
         role=app_metadata.get("role") or user_metadata.get("role") or "business",
-        company=derive_business_name(email),
-        approved=approved
+        company=company,
+        approved=approved,
+        selected_brand_domain=selected_domain,
     )
     
     return LoginResponse(
@@ -985,13 +1008,13 @@ async def login(body: LoginRequest):
 
 @api_router.get("/auth/me", response_model=UserOut)
 async def me(request: Request, current=Depends(get_current_user)):
-    selected_domain = normalize_business_domain(request.headers.get("X-Uplaud-Brand-Domain", ""))
+    selected_domain = selected_brand_domain(request, current)
     if selected_domain:
         company_name = derive_business_name("user@" + selected_domain)
         rec = await get_business_record_by_domain(selected_domain)
         if rec:
             company_name = rec.get("fields", {}).get("Business Name") or company_name
-        current = {**current, "company": company_name}
+        current = {**current, "company": company_name, "selected_brand_domain": selected_domain}
     return user_to_out(current)
 
 

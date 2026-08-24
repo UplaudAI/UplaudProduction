@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { setImported, getAuth, updateAuth } from "@/lib/business-storage";
 import api, { formatApiError } from "@/lib/api";
+import { supabase } from "@/lib/supabase";
 import { REVIEW_SOURCES, CONVERSATION_SOURCES, PAGE_OUTCOMES } from "@/mocks/fintech";
 import PageHero from "@/components/business/PageHero";
 import {
@@ -115,12 +116,19 @@ export default function ImportReviewsPage() {
     setPersonalizing(true);
     try {
       const { data } = await api.post("/business/profile", { website: selectedDomain });
+      const selectedBrandDomain = data.profile.selected_domain || selectedDomain;
+      await supabase.auth.updateUser({
+        data: {
+          selected_brand_domain: selectedBrandDomain,
+          company: data.profile.company_name,
+        },
+      }).catch(() => null);
       
       // Update local storage so that we can immediately refresh user state
       updateAuth({
         workspace: data.profile.company_name,
         company: data.profile.company_name,
-        brandDomain: data.profile.selected_domain || selectedDomain,
+        brandDomain: selectedBrandDomain,
       });
       
       toast.success("Workspace personalized successfully!", {
