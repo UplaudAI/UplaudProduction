@@ -176,6 +176,26 @@ def test_auth_me_uses_stored_selected_brand_domain_after_login(monkeypatch):
     assert user.selected_brand_domain == "websitebrand.com"
 
 
+def test_auth_me_does_not_report_email_domain_as_selected_domain(monkeypatch):
+    user = asyncio.run(
+        me(
+            request=_Request(),
+            current={
+                "id": "user-1",
+                "email": "owner@emailbrand.com",
+                "name": "Owner",
+                "role": "business",
+                "company": "Emailbrand",
+                "approved": True,
+                "selected_brand_domain": "",
+            },
+        )
+    )
+
+    assert user.company == "Emailbrand"
+    assert user.selected_brand_domain == ""
+
+
 def test_get_business_profile_derives_selected_domain_when_business_record_missing(monkeypatch):
     async def fake_get(table, params=None):
         return {"records": []}
