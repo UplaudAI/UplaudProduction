@@ -33,18 +33,44 @@ client = TestClient(server.app)
 def _mock_airtable(monkeypatch):
     async def fake_get(table, params=None):
         if table == airtable_client.TABLE_BUSINESS:
+            raise AssertionError("public business pages must not read the Business table")
+        if table == airtable_client.TABLE_UPLAUD:
             return {
                 "records": [
                     {
-                        "id": "rec_business",
+                        "id": "rec_review_1",
+                        "createdTime": "2026-06-20T12:00:00Z",
                         "fields": {
-                            "Business Name": "AI Fiesta",
-                            "Business Domain": "aifiesta.ai",
-                            "Audience": "b2b",
-                            "Industry": "SaaS",
-                            "Total Reviews": 2,
-                            "Average Rating": 4.5,
-                            "Trust Score": 92,
+                            "business_name": "AI Fiesta",
+                            "Uplaud": "The side-by-side model comparison helped us pick the right answer.",
+                            "Uplaud Score": 5,
+                            "Name_Creator": ["Priya Menon"],
+                            "Review_Source": "Uplaud",
+                            "Date_Added": "2026-06-20",
+                        },
+                    },
+                    {
+                        "id": "rec_review_2",
+                        "createdTime": "2026-06-18T12:00:00Z",
+                        "fields": {
+                            "business_name": "AI Fiesta",
+                            "Uplaud": "The team onboarding was straightforward.",
+                            "Uplaud Score": 4,
+                            "Name_Creator": ["Rohan Bakshi"],
+                            "Review_Source": "Uplaud",
+                            "Date_Added": "2026-06-18",
+                        },
+                    },
+                    {
+                        "id": "rec_marshall_review",
+                        "createdTime": "2026-08-27T12:00:00Z",
+                        "fields": {
+                            "business_name": "Marshall",
+                            "Uplaud": "Marshall delivered a strong customer experience.",
+                            "Uplaud Score": 5,
+                            "Name_Creator": ["Casey"],
+                            "Review_Source": "Uplaud",
+                            "Date_Added": "2026-08-27",
                         },
                     }
                 ]
@@ -52,25 +78,23 @@ def _mock_airtable(monkeypatch):
         return {"records": []}
 
     async def fake_list_uplaud_by_business(business_name):
-        assert business_name == "AI Fiesta"
-        return [
-            {
-                "id": "rec_review_1",
-                "customer": "Priya Menon",
-                "body": "The side-by-side model comparison helped us pick the right answer.",
-                "rating": 5,
-                "source": "Uplaud",
-                "date_added": "2026-06-20",
-            },
-            {
-                "id": "rec_review_2",
-                "customer": "Rohan Bakshi",
-                "body": "The team onboarding was straightforward.",
-                "rating": 4,
-                "source": "Uplaud",
-                "date_added": "2026-06-18",
-            },
-        ]
+        rows = await fake_get(airtable_client.TABLE_UPLAUD)
+        testimonials = []
+        for rec in rows["records"]:
+            fields = rec["fields"]
+            if fields["business_name"] != business_name:
+                continue
+            testimonials.append(
+                {
+                    "id": rec["id"],
+                    "customer": fields["Name_Creator"][0],
+                    "body": fields["Uplaud"],
+                    "rating": fields["Uplaud Score"],
+                    "source": fields["Review_Source"],
+                    "date_added": fields["Date_Added"],
+                }
+            )
+        return testimonials
 
     monkeypatch.setattr(airtable_client, "_enabled", lambda: True)
     monkeypatch.setattr(airtable_client, "_get", fake_get)
@@ -86,8 +110,8 @@ def test_get_public_business_from_airtable(monkeypatch):
     assert response.status_code == 200
     data = response.json()
     assert data["name"] == "AI Fiesta"
-    assert data["audience"] == "b2b"
-    assert data["website"] == "aifiesta.ai"
+    assert data["total_reviews"] == 2
+    assert data["avg_rating"] == 4.5
 
 
 def test_get_public_business_reviews_from_uplaud_table(monkeypatch):
@@ -120,3 +144,14 @@ def test_unknown_public_business_404(monkeypatch):
     response = client.get("/api/business/public/not-a-business")
 
     assert response.status_code == 404
+
+
+def test_get_public_business_from_uplaud_table_when_business_row_missing(monkeypatch):
+    _mock_airtable(monkeypatch)
+
+    response = client.get("/api/business/public/marshall")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == "Marshall"
+    assert data["total_reviews"] == 1

@@ -953,70 +953,82 @@ def airtable_field(fields: Dict[str, Any], *names: str, default: Any = "") -> An
     return default
 
 
-def public_business_from_record(rec: Dict[str, Any], slug: str) -> Dict[str, Any]:
-    fields = rec.get("fields", {})
-    name = airtable_field(fields, "Business Name", "business_name", "Business_Name", default=slug.replace("-", " ").title())
-    website = normalize_business_domain(airtable_field(fields, "Business Domain", "Website", "website", default=""))
-    audience = (airtable_field(fields, "Audience", "audience", "Business Type", default="b2c") or "b2c").lower()
-    vertical = (airtable_field(fields, "Vertical", "Industry", "Category", default="other") or "other").lower()
-    vertical = public_slug(vertical) or "other"
-    total_reviews = int(airtable_field(fields, "Total Reviews", "total_reviews", default=0) or 0)
-    avg_rating = float(airtable_field(fields, "Average Rating", "Avg Rating", "avg_rating", default=0) or 0)
-    trust_score = int(airtable_field(fields, "Trust Score", "trust_score", default=90) or 90)
+async def public_uplaud_records_by_slug(slug: str) -> List[Dict[str, Any]]:
+    if not airtable_client._enabled():
+        raise HTTPException(status_code=503, detail="Airtable is not configured")
+    try:
+        data = await airtable_client._get(airtable_client.TABLE_UPLAUD, {"pageSize": 100})
+    except Exception as e:
+        logger.warning("Airtable public Uplaud lookup failed: %s", e)
+        raise HTTPException(status_code=502, detail="Failed to fetch Uplaud records from Airtable")
 
+    return [
+        rec
+        for rec in data.get("records", [])
+        if public_slug(str(airtable_field(rec.get("fields", {}), "business_name", default=""))) == slug
+    ]
+
+
+def public_business_from_uplaud_records(slug: str, records: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    matching_name = ""
+    matching_reviews = 0
+    rating_total = 0
+    rating_count = 0
+    latest_date = ""
+    for rec in records:
+        fields = rec.get("fields", {})
+        business_name = airtable_field(fields, "business_name", default="")
+        if not business_name:
+            continue
+        matching_name = str(business_name)
+        body = airtable_field(fields, "Uplaud", default="")
+        if body:
+            matching_reviews += 1
+        rating = airtable_field(fields, "Uplaud Score", "Rating", default=None)
+        try:
+            rating_total += int(rating)
+            rating_count += 1
+        except (TypeError, ValueError):
+            pass
+        latest_date = max(latest_date, str(airtable_field(fields, "Date_Added", default=rec.get("createdTime", "")[:10])))
+
+    if not matching_name:
+        return None
+
+    avg_rating = round(rating_total / rating_count, 1) if rating_count else 5.0
     return {
         "slug": slug,
-        "name": name,
-        "tagline": airtable_field(fields, "Tagline", "tagline", default=f"Verified customer stories for {name}."),
-        "vertical": vertical,
-        "audience": "b2b" if audience in {"b2b", "business", "enterprise"} else "b2c",
-        "category": airtable_field(fields, "Category", "Industry", "Vertical", default="Verified business"),
-        "logo_url": airtable_field(fields, "Logo_Url", "Logo URL", "logo_url", default=None),
-        "hero_image_url": airtable_field(fields, "Hero Image URL", "Hero_Image_Url", "hero_image_url", default=None),
-        "location": airtable_field(fields, "Location", "City", default=""),
-        "website": website,
-        "founded": str(airtable_field(fields, "Founded", "Founded Year", default="")),
-        "about": airtable_field(fields, "About", "Description", "Brand_Voice", default=f"{name} is verified on Uplaud."),
-        "verified": bool(airtable_field(fields, "Verified", default=True)),
-        "claimed": bool(airtable_field(fields, "Claimed", default=True)),
-        "total_reviews": total_reviews,
+        "name": matching_name,
+        "tagline": f"Verified customer stories for {matching_name}.",
+        "vertical": "other",
+        "audience": "b2c",
+        "category": "Verified business",
+        "logo_url": None,
+        "hero_image_url": None,
+        "location": "",
+        "website": "",
+        "founded": "",
+        "about": f"{matching_name} is verified on Uplaud.",
+        "verified": True,
+        "claimed": True,
+        "total_reviews": matching_reviews,
         "avg_rating": avg_rating,
-        "total_referrals": int(airtable_field(fields, "Total Referrals", "total_referrals", default=0) or 0),
-        "unique_reviewers": int(airtable_field(fields, "Unique Reviewers", "unique_reviewers", default=total_reviews) or total_reviews),
-        "trust_score": trust_score,
-        "top_praise": airtable_field(fields, "Top Praise", "top_praise", default=""),
+        "total_referrals": 0,
+        "unique_reviewers": matching_reviews,
+        "trust_score": 90,
+        "top_praise": "",
         "keywords": [],
         "trust_badges": [
             {"label": "Verified by Uplaud", "icon": "shield-check"},
-            {"label": f"{total_reviews or 'Real'} reviews", "icon": "users"},
+            {"label": f"{matching_reviews or 'Real'} reviews", "icon": "users"},
         ],
+        "latest_review_date": latest_date,
     }
 
 
 async def public_business_by_slug(slug: str) -> Optional[Dict[str, Any]]:
-    if not airtable_client._enabled():
-        raise HTTPException(status_code=503, detail="Airtable is not configured")
-    try:
-        data = await airtable_client._get(airtable_client.TABLE_BUSINESS, {"pageSize": 100})
-    except Exception as e:
-        logger.warning("Airtable public business lookup failed: %s", e)
-        raise HTTPException(status_code=502, detail="Failed to fetch business from Airtable")
-
-    for rec in data.get("records", []):
-        fields = rec.get("fields", {})
-        candidates = [
-            fields.get("Slug"),
-            fields.get("Business Slug"),
-            fields.get("Public Slug"),
-            fields.get("Business Domain"),
-            fields.get("Website"),
-            fields.get("Business Name"),
-            fields.get("business_name"),
-            fields.get("Business_Name"),
-        ]
-        if slug in {public_slug(normalize_business_domain(str(value))) for value in candidates if value}:
-            return public_business_from_record(rec, slug)
-    return None
+    records = await public_uplaud_records_by_slug(slug)
+    return public_business_from_uplaud_records(slug, records)
 
 
 def public_review_from_uplaud(testimonial: Dict[str, Any], business_slug: str) -> Dict[str, Any]:
