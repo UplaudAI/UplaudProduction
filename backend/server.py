@@ -14,10 +14,11 @@ import logging
 import bcrypt
 import jwt
 import httpx
+import html
 from datetime import datetime, timezone, timedelta
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, APIRouter, Request, HTTPException, Depends, UploadFile, File
+from fastapi import FastAPI, APIRouter, Request, HTTPException, Depends, UploadFile, File, Query
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr, Field
@@ -178,6 +179,13 @@ class BlogPostOut(BaseModel):
 class LeadMagnetRequest(BaseModel):
     email: EmailStr
     slug: str
+
+
+class PublicReviewSubmit(BaseModel):
+    reviewer_name: str
+    rating: int
+    text: str
+    emoji: str = "Nice"
 
 
 class BusinessProfileRequest(BaseModel):
@@ -931,6 +939,270 @@ def build_verbatim_testimonial(fragments, transcript: str, customer_language) ->
 @api_router.get("/")
 async def root():
     return {"message": "Uplaud Growth Engine API"}
+
+
+def public_slug(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", (value or "").lower()).strip("-")
+
+
+def airtable_field(fields: Dict[str, Any], *names: str, default: Any = "") -> Any:
+    for name in names:
+        value = fields.get(name)
+        if value not in (None, ""):
+            return value
+    return default
+
+
+def public_business_from_record(rec: Dict[str, Any], slug: str) -> Dict[str, Any]:
+    fields = rec.get("fields", {})
+    name = airtable_field(fields, "Business Name", "business_name", "Business_Name", default=slug.replace("-", " ").title())
+    website = normalize_business_domain(airtable_field(fields, "Business Domain", "Website", "website", default=""))
+    audience = (airtable_field(fields, "Audience", "audience", "Business Type", default="b2c") or "b2c").lower()
+    vertical = (airtable_field(fields, "Vertical", "Industry", "Category", default="other") or "other").lower()
+    vertical = public_slug(vertical) or "other"
+    total_reviews = int(airtable_field(fields, "Total Reviews", "total_reviews", default=0) or 0)
+    avg_rating = float(airtable_field(fields, "Average Rating", "Avg Rating", "avg_rating", default=0) or 0)
+    trust_score = int(airtable_field(fields, "Trust Score", "trust_score", default=90) or 90)
+
+    return {
+        "slug": slug,
+        "name": name,
+        "tagline": airtable_field(fields, "Tagline", "tagline", default=f"Verified customer stories for {name}."),
+        "vertical": vertical,
+        "audience": "b2b" if audience in {"b2b", "business", "enterprise"} else "b2c",
+        "category": airtable_field(fields, "Category", "Industry", "Vertical", default="Verified business"),
+        "logo_url": airtable_field(fields, "Logo_Url", "Logo URL", "logo_url", default=None),
+        "hero_image_url": airtable_field(fields, "Hero Image URL", "Hero_Image_Url", "hero_image_url", default=None),
+        "location": airtable_field(fields, "Location", "City", default=""),
+        "website": website,
+        "founded": str(airtable_field(fields, "Founded", "Founded Year", default="")),
+        "about": airtable_field(fields, "About", "Description", "Brand_Voice", default=f"{name} is verified on Uplaud."),
+        "verified": bool(airtable_field(fields, "Verified", default=True)),
+        "claimed": bool(airtable_field(fields, "Claimed", default=True)),
+        "total_reviews": total_reviews,
+        "avg_rating": avg_rating,
+        "total_referrals": int(airtable_field(fields, "Total Referrals", "total_referrals", default=0) or 0),
+        "unique_reviewers": int(airtable_field(fields, "Unique Reviewers", "unique_reviewers", default=total_reviews) or total_reviews),
+        "trust_score": trust_score,
+        "top_praise": airtable_field(fields, "Top Praise", "top_praise", default=""),
+        "keywords": [],
+        "trust_badges": [
+            {"label": "Verified by Uplaud", "icon": "shield-check"},
+            {"label": f"{total_reviews or 'Real'} reviews", "icon": "users"},
+        ],
+    }
+
+
+async def public_business_by_slug(slug: str) -> Optional[Dict[str, Any]]:
+    if not airtable_client._enabled():
+        raise HTTPException(status_code=503, detail="Airtable is not configured")
+    try:
+        data = await airtable_client._get(airtable_client.TABLE_BUSINESS, {"pageSize": 100})
+    except Exception as e:
+        logger.warning("Airtable public business lookup failed: %s", e)
+        raise HTTPException(status_code=502, detail="Failed to fetch business from Airtable")
+
+    for rec in data.get("records", []):
+        fields = rec.get("fields", {})
+        candidates = [
+            fields.get("Slug"),
+            fields.get("Business Slug"),
+            fields.get("Public Slug"),
+            fields.get("Business Domain"),
+            fields.get("Website"),
+            fields.get("Business Name"),
+            fields.get("business_name"),
+            fields.get("Business_Name"),
+        ]
+        if slug in {public_slug(normalize_business_domain(str(value))) for value in candidates if value}:
+            return public_business_from_record(rec, slug)
+    return None
+
+
+def public_review_from_uplaud(testimonial: Dict[str, Any], business_slug: str) -> Dict[str, Any]:
+    customer = testimonial.get("customer") or "Uplaud customer"
+    rating = testimonial.get("rating")
+    try:
+        rating = int(rating)
+    except (TypeError, ValueError):
+        rating = 5
+    return {
+        "id": testimonial.get("id") or str(uuid.uuid4()),
+        "business_slug": business_slug,
+        "reviewer_name": customer,
+        "reviewer_slug": public_slug(customer),
+        "reviewer_title": testimonial.get("source") or "Verified customer",
+        "rating": max(1, min(5, rating)),
+        "emoji": "Fire" if rating >= 5 else "Nice",
+        "text": testimonial.get("body") or "",
+        "date": testimonial.get("date_added") or "",
+        "verified": True,
+        "verification_type": "purchase",
+        "channel": testimonial.get("source") or "Uplaud",
+        "referred": False,
+    }
+
+
+async def public_reviews_for_business(business: Dict[str, Any]) -> List[Dict[str, Any]]:
+    reviews = [
+        public_review_from_uplaud(testimonial, business["slug"])
+        for testimonial in await airtable_client.list_uplaud_by_business(business["name"])
+    ]
+    if db is not None:
+        stored = await db.public_reviews.find({"business_slug": business["slug"]}, {"_id": 0}).to_list(500)
+        reviews.extend(stored)
+    return reviews
+
+
+@api_router.get("/business/public/{slug}")
+async def get_public_business(slug: str):
+    biz = await public_business_by_slug(slug)
+    if not biz:
+        raise HTTPException(status_code=404, detail="Business not found")
+    return biz
+
+
+@api_router.get("/business/public/{slug}/reviews")
+async def get_public_reviews(
+    slug: str,
+    rating: Optional[int] = Query(None, ge=1, le=5),
+    sort: str = Query("recent"),
+    q: Optional[str] = None,
+    referred_only: bool = False,
+    limit: int = Query(100, ge=1, le=500),
+):
+    biz = await public_business_by_slug(slug)
+    if not biz:
+        raise HTTPException(status_code=404, detail="Business not found")
+
+    reviews = await public_reviews_for_business(biz)
+    if rating:
+        reviews = [review for review in reviews if review.get("rating") == rating]
+    if referred_only:
+        reviews = [review for review in reviews if review.get("referred") is True]
+    if q:
+        needle = q.lower()
+        reviews = [
+            review
+            for review in reviews
+            if needle in review.get("text", "").lower()
+            or needle in review.get("reviewer_name", "").lower()
+            or needle in review.get("reviewer_title", "").lower()
+        ]
+
+    if sort == "top":
+        reviews.sort(key=lambda review: (review.get("rating", 0), review.get("date", "")), reverse=True)
+    elif sort == "oldest":
+        reviews.sort(key=lambda review: review.get("date", ""))
+    else:
+        reviews.sort(key=lambda review: review.get("date", ""), reverse=True)
+
+    limited = reviews[:limit]
+    return {"count": len(limited), "reviews": limited}
+
+
+@api_router.get("/business/public/{slug}/stats")
+async def get_public_stats(slug: str):
+    biz = await public_business_by_slug(slug)
+    if not biz:
+        raise HTTPException(status_code=404, detail="Business not found")
+
+    reviews = await public_reviews_for_business(biz)
+    distribution = {rating: 0 for rating in range(1, 6)}
+    for review in reviews:
+        distribution[review.get("rating", 0)] = distribution.get(review.get("rating", 0), 0) + 1
+
+    total = max(len(reviews), 1)
+    positive = sum(count for rating, count in distribution.items() if rating >= 4)
+    neutral = distribution.get(3, 0)
+    negative = sum(count for rating, count in distribution.items() if rating <= 2)
+
+    return {
+        "total_reviews": biz.get("total_reviews", len(reviews)),
+        "avg_rating": biz.get("avg_rating", 0),
+        "total_referrals": biz.get("total_referrals", 0),
+        "unique_reviewers": biz.get("unique_reviewers", 0),
+        "trust_score": biz.get("trust_score", 90),
+        "rating_distribution": distribution,
+        "sentiment": {
+            "positive": round(positive / total * 100),
+            "neutral": round(neutral / total * 100),
+            "negative": round(negative / total * 100),
+        },
+        "keywords": biz.get("keywords", []),
+        "top_praise": biz.get("top_praise", ""),
+    }
+
+
+@api_router.get("/business/public/{slug}/case-studies")
+async def get_public_case_studies(slug: str):
+    biz = await public_business_by_slug(slug)
+    if not biz:
+        raise HTTPException(status_code=404, detail="Business not found")
+    reviews = await public_reviews_for_business(biz)
+    items = [
+        {
+            "id": review["id"],
+            "business_slug": slug,
+            "slug": public_slug(review["text"][:64]) or review["id"],
+            "title": f"{review['reviewer_name']}'s experience with {biz['name']}",
+            "excerpt": review["text"][:180],
+            "hero_quote": review["text"],
+            "hero_quote_author": review["reviewer_name"],
+            "body_html": f"<p>{html.escape(review['text'])}</p>",
+            "tag": "Customer story",
+            "read_time": "2 min read",
+            "published": review["date"],
+        }
+        for review in reviews[:6]
+    ]
+    items.sort(key=lambda cs: cs.get("published", ""), reverse=True)
+    return {"count": len(items), "case_studies": items}
+
+
+@api_router.get("/business/public/{slug}/case-studies/{cs_slug}")
+async def get_public_case_study(slug: str, cs_slug: str):
+    stories = (await get_public_case_studies(slug))["case_studies"]
+    cs = next((item for item in stories if item["slug"] == cs_slug), None)
+    if not cs:
+        raise HTTPException(status_code=404, detail="Case study not found")
+    return cs
+
+
+@api_router.post("/business/public/{slug}/reviews")
+async def submit_public_review(slug: str, payload: PublicReviewSubmit):
+    biz = await public_business_by_slug(slug)
+    if not biz:
+        raise HTTPException(status_code=404, detail="Business not found")
+
+    reviewer_name = payload.reviewer_name.strip()
+    review_text = payload.text.strip()
+    if not reviewer_name or not review_text:
+        raise HTTPException(status_code=400, detail="Name and review text are required")
+
+    doc = {
+        "id": str(uuid.uuid4()),
+        "business_slug": slug,
+        "reviewer_name": reviewer_name,
+        "reviewer_slug": re.sub(r"[^a-z0-9]+", "-", reviewer_name.lower()).strip("-"),
+        "reviewer_title": "Community review",
+        "rating": max(1, min(5, payload.rating)),
+        "emoji": payload.emoji,
+        "text": review_text,
+        "date": datetime.now(timezone.utc).date().isoformat(),
+        "verified": False,
+        "verification_type": "web",
+        "channel": "web",
+        "referred": False,
+    }
+    if db is not None:
+        await db.public_reviews.insert_one(doc.copy())
+    await airtable_client.create_uplaud_record(
+        business_name=biz["name"],
+        testimonial=review_text,
+        date_added=doc["date"],
+    )
+    return {"success": True, "review": doc}
 
 
 @api_router.post("/auth/login", response_model=LoginResponse)

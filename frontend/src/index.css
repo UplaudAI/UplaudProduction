@@ -332,3 +332,189 @@ textarea:focus-visible {
 [data-testid="hero-vertical-copy"] {
     animation: fadeInUp 300ms ease-out both;
 }
+
+/* Public business review pages */
+:root {
+    --u-cream: #f4efe6;
+    --u-cream-2: #ede7db;
+    --u-ink: #0b0b10;
+    --u-ink-2: #1a1a22;
+    --u-muted: #6b6960;
+    --u-line: #e0d9cb;
+    --u-line-2: #d1c9b7;
+    --u-white: #ffffff;
+    --u-violet: #5b3eee;
+    --u-violet-2: #4b2fe0;
+    --u-violet-soft: #eee9ff;
+    --u-mint: #7ce8c8;
+    --u-mint-2: #5ddcba;
+    --u-mint-soft: #dff7ee;
+    --u-star: #f4b840;
+}
+
+.font-serif-italic {
+    font-family: Georgia, "Times New Roman", serif;
+    font-style: italic;
+    letter-spacing: 0;
+}
+
+.bg-grain {
+    position: relative;
+    background: var(--u-cream);
+}
+.bg-grain::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.15 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: 0.35;
+    mix-blend-mode: multiply;
+}
+
+.u-card {
+    background: var(--u-white);
+    border: 1px solid var(--u-line);
+    border-radius: 20px;
+    transition:
+        transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1),
+        box-shadow 0.35s ease,
+        border-color 0.35s ease;
+}
+.u-card:hover {
+    border-color: var(--u-line-2);
+    box-shadow: 0 24px 60px -30px rgba(11, 11, 16, 0.18);
+}
+
+.u-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    border-radius: 999px;
+    font-weight: 500;
+    font-size: 0.925rem;
+    line-height: 1;
+    transition:
+        transform 0.2s ease,
+        background 0.2s ease,
+        border 0.2s ease,
+        color 0.2s ease;
+    white-space: nowrap;
+    cursor: pointer;
+    border: 1px solid transparent;
+}
+.u-btn-primary {
+    background: var(--u-violet);
+    color: white;
+    box-shadow: 0 8px 22px -8px rgba(91, 62, 238, 0.5);
+}
+.u-btn-primary:hover {
+    background: var(--u-violet-2);
+    transform: translateY(-1px);
+}
+.u-btn-ghost {
+    background: transparent;
+    color: var(--u-ink);
+    border-color: var(--u-line-2);
+}
+.u-btn-ghost:hover {
+    background: var(--u-white);
+    border-color: var(--u-ink);
+}
+.u-btn-dark {
+    background: var(--u-ink);
+    color: white;
+}
+.u-btn-dark:hover {
+    background: var(--u-ink-2);
+    transform: translateY(-1px);
+}
+
+.u-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    background: var(--u-white);
+    border: 1px solid var(--u-line-2);
+    color: var(--u-ink);
+}
+.u-pill-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--u-mint-2);
+    display: inline-block;
+}
+
+@keyframes reveal-up {
+    from {
+        opacity: 0;
+        transform: translateY(24px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+.reveal {
+    animation: reveal-up 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes marquee {
+    from {
+        transform: translateX(0);
+    }
+    to {
+        transform: translateX(-50%);
+    }
+}
+.marquee {
+    display: flex;
+    width: max-content;
+    animation: marquee 40s linear infinite;
+}
+.marquee:hover {
+    animation-play-state: paused;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+.no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.prose-uplaud h3 {
+    font-family: "Bricolage Grotesque", "Inter", sans-serif;
+    font-size: 1.35rem;
+    font-weight: 600;
+    letter-spacing: 0;
+    margin-top: 2rem;
+    margin-bottom: 0.75rem;
+    color: var(--u-ink);
+}
+.prose-uplaud p {
+    font-size: 1.05rem;
+    line-height: 1.75;
+    color: var(--u-ink-2);
+    margin-bottom: 1.1rem;
+}
+.prose-uplaud blockquote {
+    font-family: Georgia, "Times New Roman", serif;
+    font-style: italic;
+    font-size: 1.5rem;
+    line-height: 1.4;
+    color: var(--u-ink);
+    padding: 1.25rem 1.5rem;
+    border-left: 3px solid var(--u-mint-2);
+    background: var(--u-cream-2);
+    border-radius: 0 12px 12px 0;
+    margin: 1.5rem 0;
+}

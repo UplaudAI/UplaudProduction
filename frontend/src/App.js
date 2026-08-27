@@ -6,6 +6,8 @@ import FinanceLandingPage from "@/pages/FinanceLandingPage";
 import BlogListPage from "@/pages/BlogListPage";
 import BlogPostPage from "@/pages/BlogPostPage";
 import AdminBlogPage from "@/pages/AdminBlogPage";
+import PublicBusinessPage from "@/pages/BusinessPage";
+import CaseStudyPage from "@/pages/CaseStudyPage";
 import BusinessLoginPage from "@/pages/business/BusinessLoginPage";
 import ResetPasswordPage from "@/pages/business/ResetPasswordPage";
 import DashboardLayout from "@/components/business/DashboardLayout";
@@ -30,6 +32,8 @@ function App() {
           <Route path="/blog" element={<BlogListPage />} />
           <Route path="/blog/:slug" element={<BlogPostPage />} />
           <Route path="/admin/blog" element={<AdminBlogPage />} />
+          <Route path="/business/public/:slug" element={<PublicBusinessPage />} />
+          <Route path="/business/public/:slug/blog/:csSlug" element={<CaseStudyPage />} />
 
           {/* Business (Product MVP Dashboard) */}
           <Route path="/business" element={<BusinessLoginPage />} />
