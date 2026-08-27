@@ -59,3 +59,17 @@ Redesign the Uplaud business review page (currently at `https://www.uplaud.ai/bu
 ## Deferred / Future
 - Move review text to a full-text index for smarter search.
 - Multi-language support (Hindi, Tamil given customer base).
+
+## B2B adaptation (2026-08)
+- Added second seeded business `ai-fiesta` (B2B SaaS, modeled on aifiesta.ai — multi-LLM chat subscription) alongside `the-solved-skin` (B2C). Business now has `audience` field ("b2c" | "b2b") driving terminology.
+- **Review model**: new `verification_type` field ("purchase" | "demo") + `reviewer_title` (job title/company). Reviews with `verification_type="demo"` show a violet "Verified Demo" badge (Video icon); purchase-type reviews show "Verified purchase" (b2c) or "Verified subscriber" (b2b) with a mint ShieldCheck icon.
+- **B2B terminology swap** (when `business.audience === "b2b"`): Trust Score → Vendor Trust Score, Unique reviewers → Verified accounts, Referrals → Team referrals, "Verified business · Claimed" → "Verified vendor · Claimed", Nav "Refer a friend" → "Refer a teammate", Hero CTA "Share your experience" → "Share your team's experience", conversion tag "+2.3× conversion" → "+2.3× pipeline".
+- **TrustStrip**: added `saas` vertical badge set (Y Combinator backed, SOC 2 in progress, Enterprise-ready).
+- **Bug fixed**: Insights "Top praise" text and reviews-search placeholder were hardcoded to skincare copy; now dynamic via new `stats.top_praise` field (per-business).
+- Removed unused `TrustBadges.jsx` (superseded by `TrustStrip.jsx`).
+- Backend seed data refactored to per-slug mapping (`REVIEWS_BY_SLUG`, `CASE_STUDIES_BY_SLUG`) instead of one shared review/case-study list, so each business gets its own seeded content.
+- Testing: 15/15 backend pytest cases pass, 100% frontend Playwright pass (`/app/test_reports/iteration_2.json`). Verified Demo vs Verified subscriber badges, B2B terminology, SaaS trust badges, dynamic top_praise, and full regression on `the-solved-skin` (unchanged).
+
+### P1 — Next
+- Seed additional B2B verticals (Legal, FinTech) using the same `audience`/`verification_type` pattern for full multi-vertical demo coverage.
+- Add a "Verified Demo" filter pill in ReviewsSection (currently only "Referred by a friend" toggle exists) for B2B pages.

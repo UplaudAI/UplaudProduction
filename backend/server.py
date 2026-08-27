@@ -29,11 +29,13 @@ class Review(BaseModel):
     business_slug: str
     reviewer_name: str
     reviewer_slug: str
+    reviewer_title: str = ""
     rating: int
     emoji: str = ""
     text: str
     date: str
     verified: bool = True
+    verification_type: str = "purchase"  # purchase | demo
     channel: str = "whatsapp"
     referred: bool = False
 
@@ -43,7 +45,8 @@ class BusinessProfile(BaseModel):
     slug: str
     name: str
     tagline: str
-    vertical: str  # education | health-wellness | legal | fintech | other
+    vertical: str  # education | health-wellness | legal | fintech | saas | other
+    audience: str = "b2c"  # b2c | b2b
     category: str
     logo_url: Optional[str] = None
     hero_image_url: Optional[str] = None
@@ -58,6 +61,7 @@ class BusinessProfile(BaseModel):
     total_referrals: int = 0
     unique_reviewers: int = 0
     trust_score: int = 92
+    top_praise: str = ""
     keywords: List[Dict[str, Any]] = []
     trust_badges: List[Dict[str, str]] = []
 
@@ -85,6 +89,7 @@ SEED_BUSINESSES: List[Dict[str, Any]] = [
         "name": "The Solved Skin",
         "tagline": "Clinically-formulated acne skincare, backed by 666 real customer stories.",
         "vertical": "health-wellness",
+        "audience": "b2c",
         "category": "Skincare · D2C",
         "logo_url": None,
         "hero_image_url": "https://images.unsplash.com/photo-1556228720-195a672e8a03?w=1600&q=80",
@@ -99,6 +104,7 @@ SEED_BUSINESSES: List[Dict[str, Any]] = [
         "total_referrals": 214,
         "unique_reviewers": 612,
         "trust_score": 94,
+        "top_praise": "effectiveness on active acne, gentle formula, dermatologist-level results at a D2C price.",
         "keywords": [
             {"word": "acne", "count": 396, "sentiment": "positive"},
             {"word": "facewash", "count": 98, "sentiment": "positive"},
@@ -116,6 +122,46 @@ SEED_BUSINESSES: List[Dict[str, Any]] = [
             {"label": "612 unique reviewers", "icon": "users"},
             {"label": "Dermatologist tested", "icon": "flask-conical"},
             {"label": "Cruelty free", "icon": "leaf"},
+        ],
+    },
+    {
+        "slug": "ai-fiesta",
+        "name": "AI Fiesta",
+        "tagline": "One subscription. 9+ premium AI models. Trusted by 300+ teams to cut AI spend by up to 90%.",
+        "vertical": "saas",
+        "audience": "b2b",
+        "category": "AI Productivity · B2B SaaS",
+        "logo_url": None,
+        "hero_image_url": "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=1600&q=80",
+        "location": "Remote-first · Bengaluru & SF",
+        "website": "aifiesta.ai",
+        "founded": "2024",
+        "about": "AI Fiesta gives teams side-by-side access to ChatGPT, Claude, Gemini, Perplexity, Grok and more — under one subscription. Backed by Y Combinator, built for teams that compare answers before they ship decisions, at half the cost of stacking individual AI subscriptions.",
+        "verified": True,
+        "claimed": True,
+        "total_reviews": 348,
+        "avg_rating": 4.7,
+        "total_referrals": 96,
+        "unique_reviewers": 312,
+        "trust_score": 91,
+        "top_praise": "side-by-side model comparison, transparent per-seat pricing well below stacking individual subscriptions, and fast support from the founding team.",
+        "keywords": [
+            {"word": "side-by-side", "count": 142, "sentiment": "positive"},
+            {"word": "cost savings", "count": 118, "sentiment": "positive"},
+            {"word": "onboarding", "count": 74, "sentiment": "positive"},
+            {"word": "context switching", "count": 61, "sentiment": "positive"},
+            {"word": "enterprise support", "count": 57, "sentiment": "positive"},
+            {"word": "super fiesta", "count": 45, "sentiment": "positive"},
+            {"word": "prompt enhancer", "count": 39, "sentiment": "positive"},
+            {"word": "discovery call", "count": 33, "sentiment": "positive"},
+            {"word": "pricing", "count": 29, "sentiment": "positive"},
+            {"word": "token limits", "count": 22, "sentiment": "mixed"},
+        ],
+        "trust_badges": [
+            {"label": "Verified by Uplaud", "icon": "shield-check"},
+            {"label": "Y Combinator backed", "icon": "award"},
+            {"label": "SOC 2 in progress", "icon": "lock"},
+            {"label": "Enterprise-ready", "icon": "shield-check"},
         ],
     },
 ]
@@ -290,6 +336,212 @@ SEED_CASE_STUDIES: List[Dict[str, Any]] = [
     },
 ]
 
+SEED_REVIEWS_AI_FIESTA: List[Dict[str, Any]] = [
+    {
+        "reviewer_name": "Rhea Kapoor",
+        "reviewer_slug": "rhea-kapoor",
+        "reviewer_title": "Head of Growth, Loop Studios",
+        "rating": 5,
+        "emoji": "🚀",
+        "text": "Switched our entire growth team from 4 separate AI subscriptions to AI Fiesta. We're saving ~$1,800/month across 12 seats and nobody misses tab-switching.",
+        "date": "2026-06-19",
+        "verification_type": "purchase",
+        "referred": True,
+    },
+    {
+        "reviewer_name": "Marcus Chen",
+        "reviewer_slug": "marcus-chen",
+        "reviewer_title": "Founder, Nimbus Labs",
+        "rating": 5,
+        "emoji": "🔥",
+        "text": "Booked the enterprise demo expecting a pitch. Got a genuine walkthrough of Super Fiesta and immediately saw how our PM team could ship faster comparisons.",
+        "date": "2026-06-17",
+        "verification_type": "demo",
+        "referred": True,
+    },
+    {
+        "reviewer_name": "Ananya Iyer",
+        "reviewer_slug": "ananya-iyer",
+        "reviewer_title": "Product Manager, Fintrail",
+        "rating": 4,
+        "emoji": "😍",
+        "text": "Side-by-side comparison is the killer feature — catching where Gemini and Claude disagree before we ship a customer-facing answer.",
+        "date": "2026-06-16",
+        "verification_type": "purchase",
+        "referred": False,
+    },
+    {
+        "reviewer_name": "Devesh Rao",
+        "reviewer_slug": "devesh-rao",
+        "reviewer_title": "Engineering Lead, Northbeam",
+        "rating": 5,
+        "emoji": "🚀",
+        "text": "3M tokens/month sounded like a lot until our whole eng team started using it for code review AND spec writing. Never hit the ceiling.",
+        "date": "2026-06-15",
+        "verification_type": "purchase",
+        "referred": True,
+    },
+    {
+        "reviewer_name": "Priya Menon",
+        "reviewer_slug": "priya-menon",
+        "reviewer_title": "Ops Director, Chronos Health",
+        "rating": 3,
+        "emoji": "🙂",
+        "text": "Demo was thorough and the sales team was patient with our security questions, but we're still waiting on SOC 2 before we can roll it out company-wide.",
+        "date": "2026-06-13",
+        "verification_type": "demo",
+        "referred": False,
+    },
+    {
+        "reviewer_name": "Karan Malhotra",
+        "reviewer_slug": "karan-malhotra",
+        "reviewer_title": "CMO, Fenwick & Co",
+        "rating": 5,
+        "emoji": "🔥",
+        "text": "Our content team compares Claude and Grok on every brief now — genuinely 2x faster than the old ChatGPT-only workflow.",
+        "date": "2026-06-12",
+        "verification_type": "purchase",
+        "referred": True,
+    },
+    {
+        "reviewer_name": "Sara Thomas",
+        "reviewer_slug": "sara-thomas",
+        "reviewer_title": "VP Marketing, HelloScout",
+        "rating": 4,
+        "emoji": "😍",
+        "text": "Booked a discovery call after a colleague's referral. The team walked us through custom projects with system instructions — exactly what our brand voice needed.",
+        "date": "2026-06-11",
+        "verification_type": "demo",
+        "referred": False,
+    },
+    {
+        "reviewer_name": "Aditya Bhatt",
+        "reviewer_slug": "aditya-bhatt",
+        "reviewer_title": "CTO, Verlay",
+        "rating": 5,
+        "emoji": "🚀",
+        "text": "Migrated 20 engineers off individual ChatGPT Plus + Claude Pro licenses. Half the cost, twice the visibility into who's using what.",
+        "date": "2026-06-09",
+        "verification_type": "purchase",
+        "referred": True,
+    },
+    {
+        "reviewer_name": "Neha Choudhary",
+        "reviewer_slug": "neha-choudhary",
+        "reviewer_title": "Founder, Petal & Co",
+        "rating": 5,
+        "emoji": "🔥",
+        "text": "As a solo founder wearing five hats, having 9 models in one thread with shared context saves me hours every week.",
+        "date": "2026-06-07",
+        "verification_type": "purchase",
+        "referred": False,
+    },
+    {
+        "reviewer_name": "Rohan Bakshi",
+        "reviewer_slug": "rohan-bakshi",
+        "reviewer_title": "Head of Support, Quilltech",
+        "rating": 4,
+        "emoji": "😍",
+        "text": "Discovery call convinced our support leadership this wasn't just another chat wrapper. Avatars feature is unexpectedly great for QA training scripts.",
+        "date": "2026-06-05",
+        "verification_type": "demo",
+        "referred": True,
+    },
+    {
+        "reviewer_name": "Ishaan Kapoor",
+        "reviewer_slug": "ishaan-kapoor",
+        "reviewer_title": "Growth Marketer, Driftwise",
+        "rating": 5,
+        "emoji": "🚀",
+        "text": "Referred by a friend on WhatsApp, converted within a day. The pricing math alone — half of one premium subscription — made this an easy internal sell.",
+        "date": "2026-06-03",
+        "verification_type": "purchase",
+        "referred": True,
+    },
+    {
+        "reviewer_name": "Meera Nair",
+        "reviewer_slug": "meera-nair",
+        "reviewer_title": "Data Analyst, Loop Studios",
+        "rating": 3,
+        "emoji": "🙂",
+        "text": "Solid tool, but our team occasionally hits token limits during heavy research sprints. Would love a team-pooled overage option.",
+        "date": "2026-06-01",
+        "verification_type": "purchase",
+        "referred": False,
+    },
+]
+
+SEED_CASE_STUDIES_AI_FIESTA: List[Dict[str, Any]] = [
+    {
+        "slug": "how-loop-studios-cut-ai-spend-by-1800-a-month",
+        "title": "How Loop Studios cut AI spend by $1,800/month without losing a single model",
+        "excerpt": "Twelve seats. Four subscriptions each. One consolidation call. Here's how a growth team simplified its entire AI stack.",
+        "hero_quote": "We're saving ~$1,800/month across 12 seats and nobody misses tab-switching.",
+        "hero_quote_author": "Rhea Kapoor · Head of Growth, Loop Studios · verified subscriber",
+        "body_html": """
+            <p>Before AI Fiesta, Loop Studios' 12-person growth team was running four separate premium AI subscriptions per seat — ChatGPT Plus, Claude Pro, Gemini Advanced, and Perplexity Pro — with zero visibility into who was actually using what.</p>
+            <h3>The consolidation</h3>
+            <p>Rhea Kapoor, Head of Growth, ran the numbers: over $2,600/month across scattered logins, expense reports and IT tickets. Onboarding took an afternoon per new hire.</p>
+            <h3>The switch</h3>
+            <p>One AI Fiesta enterprise plan replaced all four. Side-by-side comparison meant the team could sanity-check outputs across models before anything shipped to a client.</p>
+            <blockquote>"We're saving ~$1,800/month across 12 seats and nobody misses tab-switching."</blockquote>
+            <h3>The outcome</h3>
+            <p>Three months in, Loop Studios has referred two other agencies through Uplaud, and their data analyst has become the loudest internal advocate — despite the occasional token-limit grumble during heavy research sprints.</p>
+        """,
+        "tag": "Case study",
+        "read_time": "4 min read",
+        "published": "2026-06-19",
+    },
+    {
+        "slug": "verlay-migrated-20-engineers-half-the-cost",
+        "title": "Verlay migrated 20 engineers off individual AI subscriptions — at half the cost",
+        "excerpt": "A CTO's play-by-play on consolidating ChatGPT Plus and Claude Pro seats into one enterprise line item.",
+        "hero_quote": "Half the cost, twice the visibility into who's using what.",
+        "hero_quote_author": "Aditya Bhatt · CTO, Verlay · verified subscriber",
+        "body_html": """
+            <p>Verlay's engineering org had grown to 20 people, each expensing their own mix of ChatGPT Plus and Claude Pro licenses. Finance had no clean way to audit spend, and IT had no way to enforce which models handled sensitive code.</p>
+            <h3>Why AI Fiesta</h3>
+            <p>Aditya Bhatt, CTO, wanted one invoice, one admin console, and model-level usage visibility — without slowing down 20 engineers mid-sprint.</p>
+            <blockquote>"Migrated 20 engineers off individual ChatGPT Plus + Claude Pro licenses. Half the cost, twice the visibility into who's using what."</blockquote>
+            <h3>The rollout</h3>
+            <p>Migration took a single sprint. Engineers kept their workflows — code review, spec writing, debugging — but now compared model outputs side by side before merging anything AI-assisted.</p>
+            <h3>The result</h3>
+            <p>Verlay cut its AI tooling line item in half while gaining an audit trail finance actually trusts.</p>
+        """,
+        "tag": "Growth deep-dive",
+        "read_time": "5 min read",
+        "published": "2026-06-15",
+    },
+    {
+        "slug": "the-demo-that-convinced-nimbus-labs",
+        "title": "The 30-minute demo that convinced Nimbus Labs to consolidate their AI stack",
+        "excerpt": "Not every enterprise demo turns into a deal in the same call. This one did — here's the exact walkthrough that closed it.",
+        "hero_quote": "Booked the enterprise demo expecting a pitch. Got a genuine walkthrough of Super Fiesta.",
+        "hero_quote_author": "Marcus Chen · Founder, Nimbus Labs · verified demo attendee",
+        "body_html": """
+            <p>Marcus Chen, founder of Nimbus Labs, booked a discovery call skeptical it would be anything more than a sales pitch. Instead, the AI Fiesta team walked through Super Fiesta live, using one of Nimbus's own product questions.</p>
+            <h3>What the demo showed</h3>
+            <p>Automatic model selection, unified context across a multi-turn conversation, and the ability to request an alternative answer without losing the thread — all things Nimbus's PM team had been doing manually across five browser tabs.</p>
+            <blockquote>"Booked the enterprise demo expecting a pitch. Got a genuine walkthrough of Super Fiesta and immediately saw how our PM team could ship faster comparisons."</blockquote>
+            <h3>The close</h3>
+            <p>Nimbus signed within the week. Marcus has since referred the AI Fiesta enterprise team to two portfolio founders in his network.</p>
+        """,
+        "tag": "Case study",
+        "read_time": "3 min read",
+        "published": "2026-06-08",
+    },
+]
+
+REVIEWS_BY_SLUG: Dict[str, List[Dict[str, Any]]] = {
+    "the-solved-skin": SEED_REVIEWS,
+    "ai-fiesta": SEED_REVIEWS_AI_FIESTA,
+}
+
+CASE_STUDIES_BY_SLUG: Dict[str, List[Dict[str, Any]]] = {
+    "the-solved-skin": SEED_CASE_STUDIES,
+    "ai-fiesta": SEED_CASE_STUDIES_AI_FIESTA,
+}
+
 
 # ---------- Startup: seed DB ----------
 @app.on_event("startup")
@@ -303,7 +555,7 @@ async def seed_db():
         # Seed reviews (only if none exist for this business)
         existing = await db.reviews.count_documents({"business_slug": biz["slug"]})
         if existing == 0:
-            for r in SEED_REVIEWS:
+            for r in REVIEWS_BY_SLUG.get(biz["slug"], []):
                 doc = {
                     "id": str(uuid.uuid4()),
                     "business_slug": biz["slug"],
@@ -315,7 +567,7 @@ async def seed_db():
         # Seed case studies (only if none)
         existing_cs = await db.case_studies.count_documents({"business_slug": biz["slug"]})
         if existing_cs == 0:
-            for cs in SEED_CASE_STUDIES:
+            for cs in CASE_STUDIES_BY_SLUG.get(biz["slug"], []):
                 doc = {
                     "id": str(uuid.uuid4()),
                     "business_slug": biz["slug"],
@@ -404,6 +656,7 @@ async def get_stats(slug: str):
         "rating_distribution": scaled,
         "sentiment": sentiment,
         "keywords": biz.get("keywords", []),
+        "top_praise": biz.get("top_praise", ""),
     }
 
 

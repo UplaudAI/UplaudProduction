@@ -11,14 +11,14 @@ export default function CaseStudies({ slug, caseStudies }) {
   if (!caseStudies?.length) return null;
 
   return (
-    <section id="stories" className="max-w-[1320px] mx-auto px-6 lg:px-10 py-14 lg:py-20" data-testid="case-studies-section">
-      <div className="flex items-end justify-between mb-10 flex-wrap gap-4">
+    <section id="stories" className="max-w-[1320px] mx-auto px-6 lg:px-10 py-10 lg:py-14" data-testid="case-studies-section">
+      <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
         <div>
           <span className="u-pill"><span className="u-pill-dot" /> 04 · stories</span>
-          <h2 className="font-display text-4xl lg:text-5xl font-semibold tracking-tight mt-3 max-w-3xl leading-[1.05]">
+          <h2 className="font-display text-3xl lg:text-[2.75rem] font-semibold tracking-tight mt-3 max-w-2xl leading-[1.05]">
             Reviews, rewritten as <span className="font-serif-italic">stories</span>.
           </h2>
-          <p className="mt-4 text-[color:var(--u-muted)] max-w-xl text-[15px] leading-relaxed">
+          <p className="mt-3 text-[color:var(--u-muted)] max-w-xl text-sm leading-relaxed">
             Uplaud AI reads your review corpus and turns the highest-signal ones into shareable case studies. On-brand. On-message. Zero writing.
           </p>
         </div>

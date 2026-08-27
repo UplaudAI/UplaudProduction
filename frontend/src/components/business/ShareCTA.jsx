@@ -30,7 +30,7 @@ export default function ShareCTA({ slug, businessName }) {
   };
 
   return (
-    <section id="share" className="max-w-[1320px] mx-auto px-6 lg:px-10 py-14 lg:py-20" data-testid="share-section">
+    <section id="share" className="max-w-[1320px] mx-auto px-6 lg:px-10 py-10 lg:py-14" data-testid="share-section">
       <div
         className="relative rounded-[28px] overflow-hidden p-8 lg:p-14 grid lg:grid-cols-12 gap-10 items-center"
         style={{

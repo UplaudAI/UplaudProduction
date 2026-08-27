@@ -42,7 +42,7 @@ export default function CaseStudyPage() {
 
   return (
     <div className="min-h-screen bg-grain" data-testid="case-study-page">
-      <Nav businessName={business.name} />
+      <Nav businessName={business.name} audience={business.audience} />
 
       <article className="max-w-[820px] mx-auto px-6 lg:px-10 py-14 lg:py-20">
         <Link

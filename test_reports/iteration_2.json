@@ -1,0 +1,18 @@
+{
+  "summary": "Full backend + frontend regression for the new B2B AI Fiesta business page and B2C The Solved Skin regression. 15/15 pytest cases pass. Playwright verified B2B terminology (Vendor Trust Score, Verified accounts, Team referrals, Verified vendor, Refer a teammate, Share your team's experience, B2B SaaS pill), TrustStrip SaaS badges (YC, SOC 2, Enterprise-ready), Verified Demo badges (4) vs Verified subscriber badges (9) with reviewer titles rendered, 5-star WhatsApp referral buttons, dynamic Insights top_praise, 3 case studies with correct nav to /blog/:slug, and share form submit. Regression on the-solved-skin confirmed: original B2C terminology intact, 0 demo badges, 12+ Verified purchase badges, skincare top_praise, 3 original case studies. Share form on ai-fiesta submits successfully (shows 'Thank you. Truly.').",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_business_b2b.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Minor: seed_db() only reseeds reviews/case_studies when the collection for a given slug is empty. If seed data content changes later (e.g. adding verification_type or reviewer_title to already-seeded rows), the old data will remain. Consider a version-tagged reseed or explicit migration."
+  ],
+  "updated_files": ["/app/backend/tests/test_business_b2b.py"],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100%"},
+  "test_credentials": "N/A - all endpoints public",
+  "seed_data_creation": "Backend auto-seeds 2 businesses (the-solved-skin, ai-fiesta), 12 reviews each and 3 case studies each. One TEST_ review inserted for ai-fiesta via POST test and one TEST_UI Bot via share form UI test; these accumulate but are namespaced with TEST_ prefix.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "backend_test.py at /app/backend/tests/test_business_b2b.py covers both businesses. Two TEST_-prefixed reviews now exist for ai-fiesta from prior test runs; test_reviews_all_purchase intentionally filters TEST_ prefix so B2C regression still works. ReviewCard uses `verification_type` (purchase|demo) to switch icon+label. Hero, Nav, TrustStrip and ReviewsSection all take an `audience` prop threaded through BusinessPage.jsx.",
+  "rca of the issue": "No issues found."
+}

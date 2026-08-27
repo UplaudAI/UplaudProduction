@@ -1,10 +1,10 @@
-import { BadgeCheck, Sparkles, MessageCircle } from "lucide-react";
+import { BadgeCheck, Sparkles, MessageCircle, Share2, Video, ShieldCheck } from "lucide-react";
 
 function Stars({ n }) {
   return (
-    <div className="inline-flex" aria-label={`${n} out of 5 stars`}>
+    <div className="inline-flex gap-0.5" aria-label={`${n} out of 5 stars`}>
       {Array.from({ length: 5 }).map((_, i) => (
-        <span key={i} className="text-base leading-none" style={{ color: i < n ? "var(--u-star)" : "var(--u-line-2)" }}>★</span>
+        <span key={i} className="text-[13px] leading-none" style={{ color: i < n ? "var(--u-star)" : "var(--u-line-2)" }}>★</span>
       ))}
     </div>
   );
@@ -14,9 +14,7 @@ function formatDate(iso) {
   try {
     const d = new Date(iso);
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-  } catch {
-    return iso;
-  }
+  } catch { return iso; }
 }
 
 const AVATAR_COLORS = [
@@ -28,66 +26,109 @@ const AVATAR_COLORS = [
   ["#F5B14E", "#FF7A66"],
 ];
 
-export default function ReviewCard({ review, delay = 0 }) {
-  const initials = (review.reviewer_name || "?")
-    .split(" ")
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase();
+function buildReferralUrl(review, businessName) {
+  const text = `Hey! You asked me about ${businessName || "this"} — here's my honest review on Uplaud:%0A%0A"${review.text}"%0A%0A- ${review.reviewer_name}%0A%0ACheck it: uplaud.ai/business/${review.business_slug}`;
+  return `https://wa.me/?text=${text}`;
+}
+
+export default function ReviewCard({ review, businessName, audience, delay = 0 }) {
+  const isB2B = audience === "b2b";
+  const isDemo = review.verification_type === "demo";
+  const initials = (review.reviewer_name || "?").split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
   const colorIdx = (review.reviewer_name?.charCodeAt(0) || 0) % AVATAR_COLORS.length;
   const [c1, c2] = AVATAR_COLORS[colorIdx];
+  const isFiveStar = review.rating >= 5;
 
   return (
     <article
-      className="u-card p-6 flex flex-col reveal group"
+      className="u-card p-5 flex flex-col reveal group relative"
       style={{ animationDelay: `${delay}s` }}
       data-testid={`review-card-${review.id}`}
     >
-      <div className="flex items-center gap-3 mb-4">
+      {isFiveStar && (
+        <span
+          className="absolute -top-2 -right-2 inline-flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider px-2 py-1 rounded-full"
+          style={{ background: "var(--u-mint)", color: "var(--u-ink)" }}
+        >
+          <Sparkles size={9} /> 5★
+        </span>
+      )}
+
+      <div className="flex items-center gap-3 mb-3">
         <div
-          className="w-11 h-11 rounded-full flex items-center justify-center text-white font-semibold text-sm shrink-0"
+          className="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-xs shrink-0"
           style={{ background: `linear-gradient(135deg, ${c1}, ${c2})` }}
         >
           {initials}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <span className="font-medium truncate">{review.reviewer_name}</span>
-            {review.verified && <BadgeCheck size={14} className="text-[color:var(--u-violet)] shrink-0" />}
+            <span className="font-medium text-sm truncate">{review.reviewer_name}</span>
+            {review.verified && <BadgeCheck size={13} className="text-[color:var(--u-violet)] shrink-0" />}
           </div>
-          <div className="text-[11px] text-[color:var(--u-muted)] flex items-center gap-2">
+          {review.reviewer_title && (
+            <div className="text-[11px] text-[color:var(--u-ink-2)] truncate">{review.reviewer_title}</div>
+          )}
+          <div className="text-[10px] text-[color:var(--u-muted)] font-mono uppercase tracking-wider flex items-center gap-1.5">
             <span>{formatDate(review.date)}</span>
             <span>·</span>
-            <span className="inline-flex items-center gap-1">
-              <MessageCircle size={10} /> {review.channel === "whatsapp" ? "via WhatsApp" : review.channel}
-            </span>
+            <MessageCircle size={9} /> WA
           </div>
         </div>
-        <div className="text-2xl">{review.emoji}</div>
+        <div className="text-xl leading-none">{review.emoji}</div>
       </div>
 
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-2.5">
         <Stars n={review.rating} />
         {review.referred && (
-          <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-full text-[color:var(--u-violet)]" style={{ background: "var(--u-violet-soft)" }}>
-            <Sparkles size={10} /> Referred a friend
+          <span className="inline-flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full text-[color:var(--u-violet)]" style={{ background: "var(--u-violet-soft)" }}>
+            <Sparkles size={9} /> referred
           </span>
         )}
       </div>
 
-      <p className="text-[color:var(--u-ink-2)] text-[15px] leading-relaxed">
+      <p className="text-[color:var(--u-ink-2)] text-[14px] leading-relaxed flex-1">
         {review.text}
       </p>
 
-      <div className="mt-5 pt-4 border-t border-[color:var(--u-line)] flex items-center justify-between text-xs text-[color:var(--u-muted)]">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-[color:var(--u-mint-2)]" />
-          Verified purchase
-        </span>
-        <span className="opacity-0 group-hover:opacity-100 transition text-[color:var(--u-ink-2)] font-medium">
-          Share →
-        </span>
+      <div className="mt-4 pt-3 border-t border-[color:var(--u-line)] flex items-center justify-between">
+        {isDemo ? (
+          <span
+            className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider"
+            style={{ color: "var(--u-violet)" }}
+            data-testid={`verification-badge-${review.id}`}
+          >
+            <Video size={11} />
+            Verified demo
+          </span>
+        ) : (
+          <span
+            className="inline-flex items-center gap-1.5 text-[10px] text-[color:var(--u-muted)] font-mono uppercase tracking-wider"
+            data-testid={`verification-badge-${review.id}`}
+          >
+            <ShieldCheck size={11} className="text-[color:var(--u-mint-2)]" />
+            {isB2B ? "Verified subscriber" : "Verified purchase"}
+          </span>
+        )}
+
+        {isFiveStar ? (
+          <a
+            href={buildReferralUrl(review, businessName)}
+            target="_blank"
+            rel="noreferrer"
+            data-testid={`referral-btn-${review.id}`}
+            className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-full transition group/refer"
+            style={{ background: "#0B0B10", color: "white" }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "#25D366")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "#0B0B10")}
+          >
+            <Share2 size={11} /> Refer via WhatsApp
+          </a>
+        ) : (
+          <span className="text-[10px] text-[color:var(--u-muted)] opacity-0 group-hover:opacity-100 transition">
+            Share →
+          </span>
+        )}
       </div>
     </article>
   );

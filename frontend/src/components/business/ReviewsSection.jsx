@@ -5,7 +5,7 @@ import ReviewCard from "./ReviewCard";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
-export default function ReviewsSection({ slug }) {
+export default function ReviewsSection({ slug, businessName, audience }) {
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [rating, setRating] = useState(0);
@@ -39,28 +39,28 @@ export default function ReviewsSection({ slug }) {
   }, [slug, rating, sort, q, referredOnly]);
 
   return (
-    <section id="reviews" className="max-w-[1320px] mx-auto px-6 lg:px-10 py-14 lg:py-20" data-testid="reviews-section">
-      <div className="flex items-end justify-between mb-10 flex-wrap gap-4">
+    <section id="reviews" className="max-w-[1320px] mx-auto px-6 lg:px-10 py-10 lg:py-14" data-testid="reviews-section">
+      <div className="flex items-end justify-between mb-6 flex-wrap gap-4">
         <div>
-          <span className="u-pill"><span className="u-pill-dot" /> 03 · voices</span>
-          <h2 className="font-display text-4xl lg:text-5xl font-semibold tracking-tight mt-3 max-w-2xl leading-[1.05]">
-            Real words from <span className="font-serif-italic">real</span> customers.
+          <span className="u-pill"><span className="u-pill-dot" /> 02 · voices</span>
+          <h2 className="font-display text-3xl lg:text-[2.75rem] font-semibold tracking-tight mt-3 max-w-2xl leading-[1.05]">
+            Real words. <span className="font-serif-italic">Real</span> people.
           </h2>
         </div>
-        <p className="text-sm text-[color:var(--u-muted)] max-w-sm">
-          Every review captured via WhatsApp — no bots, no incentivised fluff. Filter, search, and see what actually matters.
+        <p className="text-sm text-[color:var(--u-muted)] max-w-xs">
+          Every review captured via WhatsApp — no bots, no incentivised fluff.
         </p>
       </div>
 
       {/* Filter Bar */}
-      <div className="u-card p-4 lg:p-5 mb-8 flex flex-wrap items-center gap-3" data-testid="reviews-filters">
+      <div className="u-card p-3 lg:p-4 mb-6 flex flex-wrap items-center gap-2" data-testid="reviews-filters">
         <div className="relative flex-1 min-w-[240px]">
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[color:var(--u-muted)]" />
           <input
             type="text"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search reviews — try 'acne', 'packaging', 'week 5'..."
+            placeholder="Search reviews by keyword..."
             data-testid="reviews-search"
             className="w-full pl-10 pr-4 py-2.5 rounded-full bg-[color:var(--u-cream-2)] border border-transparent focus:border-[color:var(--u-ink)] focus:bg-white outline-none text-sm transition"
           />
@@ -121,7 +121,7 @@ export default function ReviewsSection({ slug }) {
         <>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5" data-testid="reviews-grid">
             {reviews.map((r, i) => (
-              <ReviewCard key={r.id} review={r} delay={i * 0.04} />
+              <ReviewCard key={r.id} review={r} businessName={businessName} audience={audience} delay={i * 0.04} />
             ))}
           </div>
           <div className="mt-8 flex justify-center">

@@ -7,16 +7,16 @@ export default function Insights({ stats }) {
   const keywords = (stats?.keywords || []).slice(0, 12);
 
   return (
-    <section id="insights" className="max-w-[1320px] mx-auto px-6 lg:px-10 py-14 lg:py-20" data-testid="insights-section">
-      <div className="flex items-end justify-between mb-10 flex-wrap gap-4">
+    <section id="insights" className="max-w-[1320px] mx-auto px-6 lg:px-10 py-10 lg:py-14" data-testid="insights-section">
+      <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
         <div>
-          <span className="u-pill mb-4"><span className="u-pill-dot" /> 02 · what the data says</span>
-          <h2 className="font-display text-4xl lg:text-5xl font-semibold tracking-tight mt-3 max-w-2xl leading-[1.05]">
+          <span className="u-pill"><span className="u-pill-dot" /> 03 · signal</span>
+          <h2 className="font-display text-3xl lg:text-[2.75rem] font-semibold tracking-tight mt-3 max-w-2xl leading-[1.05]">
             The <span className="font-serif-italic">signal</span> inside <span className="mint-underline">{stats?.total_reviews?.toLocaleString() || 0}</span> reviews.
           </h2>
         </div>
-        <p className="text-sm text-[color:var(--u-muted)] max-w-sm">
-          Every review is read, tagged and clustered by Uplaud AI — so a business can see what actually drives a 5-star.
+        <p className="text-sm text-[color:var(--u-muted)] max-w-xs">
+          Every review read, tagged and clustered by Uplaud AI — so you see what actually drives the 5-star.
         </p>
       </div>
 
@@ -71,7 +71,7 @@ export default function Insights({ stats }) {
           </div>
 
           <p className="mt-6 pt-5 border-t border-[color:var(--u-line)] text-xs text-[color:var(--u-muted)] leading-relaxed">
-            <span className="font-medium text-[color:var(--u-ink-2)]">Top praise:</span> effectiveness on active acne, gentle formula, dermatologist-level results at a D2C price.
+            <span className="font-medium text-[color:var(--u-ink-2)]">Top praise:</span> {stats?.top_praise || "consistent quality, responsive support, and results customers keep coming back for."}
           </p>
         </div>
 

@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
 import { ArrowUpRight } from "lucide-react";
 
-export default function Nav({ businessName }) {
+export default function Nav({ businessName, audience }) {
+  const isB2B = audience === "b2b";
   return (
     <header
       data-testid="site-nav"
@@ -35,7 +36,7 @@ export default function Nav({ businessName }) {
             data-testid="nav-refer-btn"
             className="u-btn u-btn-ghost hidden sm:inline-flex"
           >
-            Refer a friend
+            {isB2B ? "Refer a teammate" : "Refer a friend"}
           </a>
           <a href="#share" data-testid="nav-cta-btn" className="u-btn u-btn-primary">
             Leave a review <ArrowUpRight size={16} />
