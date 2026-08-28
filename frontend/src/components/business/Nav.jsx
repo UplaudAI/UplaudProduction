@@ -1,8 +1,6 @@
 import { Link } from "react-router-dom";
 import { MessageCircle } from "lucide-react";
-
-const LOGO_LIGHT_URL =
-  "https://customer-assets-gfyr7b9c.emergentagent.net/job_ai-acquisition-hub-2/artifacts/24zfs0md_logo_white_background.webp";
+import UplaudLogo from "@/components/UplaudLogo";
 
 export default function Nav({ businessName, audience }) {
   const isB2B = audience === "b2b";
@@ -14,12 +12,7 @@ export default function Nav({ businessName, audience }) {
     >
       <div className="max-w-[1320px] mx-auto px-6 lg:px-10 h-16 flex items-center justify-between">
         <Link to="/" data-testid="nav-logo" className="flex items-center">
-          <img
-            src={LOGO_LIGHT_URL}
-            alt="Uplaud"
-            className="h-10 w-auto object-contain mix-blend-multiply"
-            style={{ maxWidth: 120 }}
-          />
+          <UplaudLogo markClassName="h-9 w-9 text-base" textClassName="text-xl" />
         </Link>
         <nav className="hidden md:flex items-center gap-8 text-sm text-[color:var(--u-ink-2)]">
           <a href="#reviews" data-testid="nav-reviews" className="hover:text-[color:var(--u-ink)] transition">Reviews</a>

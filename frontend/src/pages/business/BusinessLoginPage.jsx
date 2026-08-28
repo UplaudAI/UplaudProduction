@@ -6,9 +6,7 @@ import { supabase } from "@/lib/supabase";
 import api, { formatApiError } from "@/lib/api";
 import { getAuthErrorMessage } from "@/lib/auth-error-message";
 import { requestPasswordReset } from "@/lib/password-reset";
-
-const LOGO_URL =
-  "https://customer-assets-gfyr7b9c.emergentagent.net/job_ai-acquisition-hub-2/artifacts/24zfs0md_logo_white_background.webp";
+import UplaudLogo from "@/components/UplaudLogo";
 
 // First-time users go to setup. Returning users land on Warm Pipeline.
 async function resolvePostLoginDestination() {
@@ -209,12 +207,7 @@ export default function BusinessLoginPage() {
           data-testid="login-brand-logo"
           className="inline-flex items-center"
         >
-          <img
-            src={LOGO_URL}
-            alt="Uplaud"
-            className="h-10 w-auto object-contain mix-blend-multiply"
-            style={{ maxWidth: 120 }}
-          />
+          <UplaudLogo markClassName="h-9 w-9 text-base" textClassName="text-2xl" />
         </a>
 
         <div className="max-w-[440px] w-full mx-auto lg:mx-0 lg:ml-4">
