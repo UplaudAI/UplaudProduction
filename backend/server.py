@@ -956,15 +956,25 @@ def airtable_field(fields: Dict[str, Any], *names: str, default: Any = "") -> An
 async def public_uplaud_records_by_slug(slug: str) -> List[Dict[str, Any]]:
     if not airtable_client._enabled():
         raise HTTPException(status_code=503, detail="Airtable is not configured")
+    records = []
+    offset = None
     try:
-        data = await airtable_client._get(airtable_client.TABLE_UPLAUD, {"pageSize": 100})
+        while True:
+            params = {"pageSize": 100}
+            if offset:
+                params["offset"] = offset
+            data = await airtable_client._get(airtable_client.TABLE_UPLAUD, params)
+            records.extend(data.get("records", []))
+            offset = data.get("offset")
+            if not offset:
+                break
     except Exception as e:
         logger.warning("Airtable public Uplaud lookup failed: %s", e)
         raise HTTPException(status_code=502, detail="Failed to fetch Uplaud records from Airtable")
 
     return [
         rec
-        for rec in data.get("records", [])
+        for rec in records
         if public_slug(str(airtable_field(rec.get("fields", {}), "business_name", default=""))) == slug
     ]
 

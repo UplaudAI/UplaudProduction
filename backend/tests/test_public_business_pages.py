@@ -35,7 +35,25 @@ def _mock_airtable(monkeypatch):
         if table == airtable_client.TABLE_BUSINESS:
             raise AssertionError("public business pages must not read the Business table")
         if table == airtable_client.TABLE_UPLAUD:
+            if (params or {}).get("offset") == "next_page":
+                return {
+                    "records": [
+                        {
+                            "id": "rec_marshall_review",
+                            "createdTime": "2026-08-27T12:00:00Z",
+                            "fields": {
+                                "business_name": "Marshall",
+                                "Uplaud": "Marshall delivered a strong customer experience.",
+                                "Uplaud Score": 5,
+                                "Name_Creator": ["Casey"],
+                                "Review_Source": "Uplaud",
+                                "Date_Added": "2026-08-27",
+                            },
+                        }
+                    ]
+                }
             return {
+                "offset": "next_page",
                 "records": [
                     {
                         "id": "rec_review_1",
@@ -61,18 +79,6 @@ def _mock_airtable(monkeypatch):
                             "Date_Added": "2026-06-18",
                         },
                     },
-                    {
-                        "id": "rec_marshall_review",
-                        "createdTime": "2026-08-27T12:00:00Z",
-                        "fields": {
-                            "business_name": "Marshall",
-                            "Uplaud": "Marshall delivered a strong customer experience.",
-                            "Uplaud Score": 5,
-                            "Name_Creator": ["Casey"],
-                            "Review_Source": "Uplaud",
-                            "Date_Added": "2026-08-27",
-                        },
-                    }
                 ]
             }
         return {"records": []}
