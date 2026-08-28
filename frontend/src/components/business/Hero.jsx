@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { ShieldCheck, MapPin, ArrowUpRight, Sparkles, Star } from "lucide-react";
 
 const VERTICAL_LABEL = {
@@ -203,16 +204,18 @@ function PreviewCard({ review, position, business }) {
     >
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-semibold"
-               style={{ background: "linear-gradient(135deg,#5B3EEE,#7CE8C8)" }}>
-            {initials}
-          </div>
-          <div>
-            <div className="text-xs font-medium">{review.reviewer_name}{review.reviewer_title ? `, ${review.reviewer_title}` : ""}</div>
-            <div className="text-[10px] text-[color:var(--u-muted)]">
-              {isDemo ? "verified demo" : isB2B ? "verified subscriber" : "verified"} · via WhatsApp
+          <Link to={`/profile/${review.reviewer_slug}`} data-testid={`preview-reviewer-link-${position}`} className="flex items-center gap-2 group/pprofile">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-semibold"
+                 style={{ background: "linear-gradient(135deg,#5B3EEE,#7CE8C8)" }}>
+              {initials}
             </div>
-          </div>
+            <div>
+              <div className="text-xs font-medium group-hover/pprofile:underline">{review.reviewer_name}{review.reviewer_title ? `, ${review.reviewer_title}` : ""}</div>
+              <div className="text-[10px] text-[color:var(--u-muted)]">
+                {isDemo ? "verified demo" : isB2B ? "verified subscriber" : "verified"} · via WhatsApp
+              </div>
+            </div>
+          </Link>
         </div>
         <div className="inline-flex" aria-label={`${review.rating} stars`}>
           {Array.from({ length: 5 }).map((_, i) => (

@@ -73,3 +73,15 @@ Redesign the Uplaud business review page (currently at `https://www.uplaud.ai/bu
 ### P1 — Next
 - Seed additional B2B verticals (Legal, FinTech) using the same `audience`/`verification_type` pattern for full multi-vertical demo coverage.
 - Add a "Verified Demo" filter pill in ReviewsSection (currently only "Referred by a friend" toggle exists) for B2B pages.
+
+## Reviewer Profile Page (2026-08)
+- New global route `/profile/:reviewerSlug` aggregates ALL reviews by a reviewer across ANY business (by `reviewer_slug`), not scoped to one business. Demonstrated with "Ananya Iyer" who has real reviews on both `the-solved-skin` and `ai-fiesta` — her profile correctly merges both.
+- **New collection** `reviewer_profiles`: `{reviewer_slug, bio, instagram_url, linkedin_url, follower_count}`. Seeded for 6 reviewers (ananya-iyer, rohit-sharma, riya-menon, marcus-chen, rhea-kapoor, aditya-bhatt); others fall back to computed defaults (empty bio, 0 followers).
+- **New endpoints**: `GET /api/reviewer/{slug}` (aggregated profile + metrics: total_reviews, avg_rating_given, total_referrals, verified_demo_count, member_since, businesses_reviewed, full reviews list with denormalized business_name), `POST /api/reviewer/{slug}/follow`, `POST /api/reviewer/{slug}/unfollow` (clamped at 0).
+- **Frontend**: `ReviewerPage.jsx` — header (avatar, name, title, bio, Instagram/LinkedIn links, Follow/Unfollow button with localStorage-persisted state + optimistic follower count), 4 metric cards, "Businesses reviewed" chips (link to `/business/:slug`), full reviews list (each links to `/business/:slug#reviews`).
+- **Bidirectional linking**: reviewer name/avatar on `ReviewCard.jsx` and Hero `PreviewCard` now link to `/profile/:reviewerSlug`; reviewer profile's review cards and business chips link back to the business page.
+- Testing: 8/8 backend pytest, 100% frontend Playwright pass (`/app/test_reports/iteration_3.json`). Cleaned up leftover `TEST_`-prefixed seed pollution from earlier test runs.
+
+### P1 — Next
+- Add auth so "Follow" persists per-account instead of per-browser localStorage.
+- Make unfollow atomic (currently read-then-clamp-set; a $inc + floor-at-0 aggregation update would remove the small race window).

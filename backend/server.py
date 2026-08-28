@@ -66,6 +66,15 @@ class BusinessProfile(BaseModel):
     trust_badges: List[Dict[str, str]] = []
 
 
+class ReviewerProfile(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    reviewer_slug: str
+    bio: str = ""
+    instagram_url: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    follower_count: int = 0
+
+
 class CaseStudy(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -542,10 +551,61 @@ CASE_STUDIES_BY_SLUG: Dict[str, List[Dict[str, Any]]] = {
     "ai-fiesta": SEED_CASE_STUDIES_AI_FIESTA,
 }
 
+SEED_REVIEWER_PROFILES: List[Dict[str, Any]] = [
+    {
+        "reviewer_slug": "ananya-iyer",
+        "bio": "Product manager by day, skincare enthusiast off the clock. Reviews things that actually work.",
+        "instagram_url": "https://instagram.com/ananya.iyer",
+        "linkedin_url": "https://linkedin.com/in/ananya-iyer-pm",
+        "follower_count": 342,
+    },
+    {
+        "reviewer_slug": "rohit-sharma",
+        "bio": "Featured in a Solved Skin case study. Shares real skincare wins, no fluff.",
+        "instagram_url": "https://instagram.com/rohit.sharma",
+        "linkedin_url": None,
+        "follower_count": 128,
+    },
+    {
+        "reviewer_slug": "riya-menon",
+        "bio": "PCOS advocate. Talks openly about hormonal acne and what actually worked for her.",
+        "instagram_url": "https://instagram.com/riya.menon",
+        "linkedin_url": None,
+        "follower_count": 276,
+    },
+    {
+        "reviewer_slug": "marcus-chen",
+        "bio": "Founder @ Nimbus Labs. Evaluates every tool via a live demo before buying.",
+        "instagram_url": None,
+        "linkedin_url": "https://linkedin.com/in/marcuschen",
+        "follower_count": 512,
+    },
+    {
+        "reviewer_slug": "rhea-kapoor",
+        "bio": "Head of Growth at Loop Studios. Obsessed with cutting SaaS spend without cutting quality.",
+        "instagram_url": None,
+        "linkedin_url": "https://linkedin.com/in/rheakapoor",
+        "follower_count": 398,
+    },
+    {
+        "reviewer_slug": "aditya-bhatt",
+        "bio": "CTO at Verlay. Migrates teams off subscription sprawl for a living.",
+        "instagram_url": None,
+        "linkedin_url": "https://linkedin.com/in/adityabhatt",
+        "follower_count": 231,
+    },
+]
+
 
 # ---------- Startup: seed DB ----------
 @app.on_event("startup")
 async def seed_db():
+    for rp in SEED_REVIEWER_PROFILES:
+        await db.reviewer_profiles.update_one(
+            {"reviewer_slug": rp["reviewer_slug"]},
+            {"$set": rp},
+            upsert=True,
+        )
     for biz in SEED_BUSINESSES:
         await db.businesses.update_one(
             {"slug": biz["slug"]},
@@ -673,6 +733,72 @@ async def get_case_study(slug: str, cs_slug: str):
     if not cs:
         raise HTTPException(status_code=404, detail="Case study not found")
     return cs
+
+
+@api_router.get("/reviewer/{reviewer_slug}")
+async def get_reviewer_profile(reviewer_slug: str):
+    reviews = await db.reviews.find({"reviewer_slug": reviewer_slug}, {"_id": 0}).sort("date", -1).to_list(1000)
+    if not reviews:
+        raise HTTPException(status_code=404, detail="Reviewer not found")
+
+    business_slugs = list({r["business_slug"] for r in reviews})
+    businesses = await db.businesses.find({"slug": {"$in": business_slugs}}, {"_id": 0}).to_list(100)
+    biz_map = {b["slug"]: b for b in businesses}
+    for r in reviews:
+        b = biz_map.get(r["business_slug"])
+        r["business_name"] = b["name"] if b else r["business_slug"]
+
+    profile = await db.reviewer_profiles.find_one({"reviewer_slug": reviewer_slug}, {"_id": 0}) or {}
+
+    total_reviews = len(reviews)
+    avg_rating_given = round(sum(r["rating"] for r in reviews) / total_reviews, 1)
+    total_referrals = sum(1 for r in reviews if r.get("referred"))
+    verified_demo_count = sum(1 for r in reviews if r.get("verification_type") == "demo")
+    member_since = min(r["date"] for r in reviews)
+    reviewer_title = next((r.get("reviewer_title") for r in reviews if r.get("reviewer_title")), "")
+
+    return {
+        "reviewer_slug": reviewer_slug,
+        "reviewer_name": reviews[0]["reviewer_name"],
+        "reviewer_title": reviewer_title,
+        "bio": profile.get("bio", ""),
+        "instagram_url": profile.get("instagram_url"),
+        "linkedin_url": profile.get("linkedin_url"),
+        "follower_count": profile.get("follower_count", 0),
+        "total_reviews": total_reviews,
+        "avg_rating_given": avg_rating_given,
+        "total_referrals": total_referrals,
+        "verified_demo_count": verified_demo_count,
+        "member_since": member_since,
+        "businesses_reviewed": [
+            {"slug": b["slug"], "name": b["name"], "category": b.get("category", "")} for b in businesses
+        ],
+        "reviews": reviews,
+    }
+
+
+@api_router.post("/reviewer/{reviewer_slug}/follow")
+async def follow_reviewer(reviewer_slug: str):
+    await db.reviewer_profiles.update_one(
+        {"reviewer_slug": reviewer_slug},
+        {"$inc": {"follower_count": 1}},
+        upsert=True,
+    )
+    doc = await db.reviewer_profiles.find_one({"reviewer_slug": reviewer_slug}, {"_id": 0})
+    return {"follower_count": doc.get("follower_count", 0)}
+
+
+@api_router.post("/reviewer/{reviewer_slug}/unfollow")
+async def unfollow_reviewer(reviewer_slug: str):
+    doc = await db.reviewer_profiles.find_one({"reviewer_slug": reviewer_slug}, {"_id": 0})
+    current = doc.get("follower_count", 0) if doc else 0
+    new_count = max(0, current - 1)
+    await db.reviewer_profiles.update_one(
+        {"reviewer_slug": reviewer_slug},
+        {"$set": {"follower_count": new_count}},
+        upsert=True,
+    )
+    return {"follower_count": new_count}
 
 
 class ReviewSubmit(BaseModel):

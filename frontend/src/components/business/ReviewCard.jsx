@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { BadgeCheck, Sparkles, MessageCircle, Share2, Video, ShieldCheck } from "lucide-react";
 
 function Stars({ n }) {
@@ -55,26 +56,32 @@ export default function ReviewCard({ review, businessName, audience, delay = 0 }
       )}
 
       <div className="flex items-center gap-3 mb-3">
-        <div
-          className="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-xs shrink-0"
-          style={{ background: `linear-gradient(135deg, ${c1}, ${c2})` }}
+        <Link
+          to={`/profile/${review.reviewer_slug}`}
+          data-testid={`reviewer-link-${review.id}`}
+          className="flex items-center gap-3 min-w-0 flex-1 group/profile"
         >
-          {initials}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <span className="font-medium text-sm truncate">{review.reviewer_name}</span>
-            {review.verified && <BadgeCheck size={13} className="text-[color:var(--u-violet)] shrink-0" />}
+          <div
+            className="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-xs shrink-0"
+            style={{ background: `linear-gradient(135deg, ${c1}, ${c2})` }}
+          >
+            {initials}
           </div>
-          {review.reviewer_title && (
-            <div className="text-[11px] text-[color:var(--u-ink-2)] truncate">{review.reviewer_title}</div>
-          )}
-          <div className="text-[10px] text-[color:var(--u-muted)] font-mono uppercase tracking-wider flex items-center gap-1.5">
-            <span>{formatDate(review.date)}</span>
-            <span>·</span>
-            <MessageCircle size={9} /> WA
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <span className="font-medium text-sm truncate group-hover/profile:underline">{review.reviewer_name}</span>
+              {review.verified && <BadgeCheck size={13} className="text-[color:var(--u-violet)] shrink-0" />}
+            </div>
+            {review.reviewer_title && (
+              <div className="text-[11px] text-[color:var(--u-ink-2)] truncate">{review.reviewer_title}</div>
+            )}
+            <div className="text-[10px] text-[color:var(--u-muted)] font-mono uppercase tracking-wider flex items-center gap-1.5">
+              <span>{formatDate(review.date)}</span>
+              <span>·</span>
+              <MessageCircle size={9} /> WA
+            </div>
           </div>
-        </div>
+        </Link>
         <div className="text-xl leading-none">{review.emoji}</div>
       </div>
 
