@@ -952,6 +952,11 @@ def public_display_business_name(value: str) -> str:
     return clean
 
 
+def public_business_name_slugs(value: str) -> set:
+    display_name = public_display_business_name(value)
+    return {public_slug(value), public_slug(display_name)}
+
+
 def airtable_field(fields: Dict[str, Any], *names: str, default: Any = "") -> Any:
     for name in names:
         value = fields.get(name)
@@ -982,12 +987,15 @@ async def public_uplaud_records_by_slug(slug: str) -> List[Dict[str, Any]]:
     return [
         rec
         for rec in records
-        if public_slug(str(airtable_field(rec.get("fields", {}), "business_name", default=""))) == slug
+        if slug in public_business_name_slugs(
+            str(airtable_field(rec.get("fields", {}), "business_name", default=""))
+        )
     ]
 
 
 def public_business_from_uplaud_records(slug: str, records: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     matching_name = ""
+    raw_business_name = ""
     matching_reviews = 0
     rating_total = 0
     rating_count = 0
@@ -997,7 +1005,8 @@ def public_business_from_uplaud_records(slug: str, records: List[Dict[str, Any]]
         business_name = airtable_field(fields, "business_name", default="")
         if not business_name:
             continue
-        matching_name = public_display_business_name(str(business_name))
+        raw_business_name = str(business_name)
+        matching_name = public_display_business_name(raw_business_name)
         body = airtable_field(fields, "Uplaud", default="")
         if body:
             matching_reviews += 1
@@ -1016,6 +1025,7 @@ def public_business_from_uplaud_records(slug: str, records: List[Dict[str, Any]]
     return {
         "slug": slug,
         "name": matching_name,
+        "airtable_business_name": raw_business_name,
         "tagline": f"Verified customer stories for {matching_name}.",
         "vertical": "other",
         "audience": "b2c",
@@ -1072,10 +1082,27 @@ def public_review_from_uplaud(testimonial: Dict[str, Any], business_slug: str) -
     }
 
 
+def public_testimonial_from_uplaud_record(rec: Dict[str, Any]) -> Dict[str, Any]:
+    fields = rec.get("fields", {})
+    creators = airtable_field(fields, "Name_Creator", default=[])
+    customer = creators[0] if isinstance(creators, list) and creators else "Uplaud customer"
+    return {
+        "id": rec.get("id"),
+        "customer": customer,
+        "body": airtable_field(fields, "Uplaud", default=""),
+        "rating": airtable_field(fields, "Uplaud Score", "Rating", default=None),
+        "source": airtable_field(fields, "Review_Source", default="Uplaud"),
+        "sentiment": str(airtable_field(fields, "NBA_Sentiment", default="")).lower(),
+        "date_added": airtable_field(fields, "Date_Added", default=rec.get("createdTime", "")[:10]),
+    }
+
+
 async def public_reviews_for_business(business: Dict[str, Any]) -> List[Dict[str, Any]]:
+    records = await public_uplaud_records_by_slug(business["slug"])
     reviews = [
         public_review_from_uplaud(testimonial, business["slug"])
-        for testimonial in await airtable_client.list_uplaud_by_business(business["name"])
+        for testimonial in [public_testimonial_from_uplaud_record(rec) for rec in records]
+        if testimonial["body"] and testimonial["sentiment"] != "low"
     ]
     if db is not None:
         stored = await db.public_reviews.find({"business_slug": business["slug"]}, {"_id": 0}).to_list(500)
@@ -1142,7 +1169,7 @@ async def get_public_stats(slug: str):
         raise HTTPException(status_code=404, detail="Business not found")
 
     reviews = await public_reviews_for_business(biz)
-    referral_count = await public_referral_count_for_business(biz["name"])
+    referral_count = await public_referral_count_for_business(biz.get("airtable_business_name") or biz["name"])
     distribution = {rating: 0 for rating in range(1, 6)}
     for review in reviews:
         distribution[review.get("rating", 0)] = distribution.get(review.get("rating", 0), 0) + 1
@@ -1233,7 +1260,7 @@ async def submit_public_review(slug: str, payload: PublicReviewSubmit):
     if db is not None:
         await db.public_reviews.insert_one(doc.copy())
     await airtable_client.create_uplaud_record(
-        business_name=biz["name"],
+        business_name=biz.get("airtable_business_name") or biz["name"],
         testimonial=review_text,
         date_added=doc["date"],
     )

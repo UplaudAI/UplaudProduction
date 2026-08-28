@@ -59,7 +59,7 @@ def _mock_airtable(monkeypatch):
                         "id": "rec_review_1",
                         "createdTime": "2026-06-20T12:00:00Z",
                         "fields": {
-                            "business_name": "AI Fiesta",
+                            "business_name": "AIFiesta",
                             "Uplaud": "The side-by-side model comparison helped us pick the right answer.",
                             "Uplaud Score": 5,
                             "Name_Creator": ["Priya Menon"],
@@ -71,7 +71,7 @@ def _mock_airtable(monkeypatch):
                         "id": "rec_review_2",
                         "createdTime": "2026-06-18T12:00:00Z",
                         "fields": {
-                            "business_name": "AI Fiesta",
+                            "business_name": "AIFiesta",
                             "Uplaud": "The team onboarding was straightforward.",
                             "Uplaud Score": 4,
                             "Name_Creator": ["Rohan Bakshi"],
@@ -83,27 +83,8 @@ def _mock_airtable(monkeypatch):
             }
         return {"records": []}
 
-    async def fake_list_uplaud_by_business(business_name):
-        rows = await fake_get(airtable_client.TABLE_UPLAUD)
-        testimonials = []
-        for rec in rows["records"]:
-            fields = rec["fields"]
-            if fields["business_name"] != business_name:
-                continue
-            testimonials.append(
-                {
-                    "id": rec["id"],
-                    "customer": fields["Name_Creator"][0],
-                    "body": fields["Uplaud"],
-                    "rating": fields["Uplaud Score"],
-                    "source": fields["Review_Source"],
-                    "date_added": fields["Date_Added"],
-                }
-            )
-        return testimonials
-
     async def fake_list_circles_by_business(business_name):
-        if business_name == "AI Fiesta":
+        if business_name == "AIFiesta":
             return [{"id": "circle_1"}, {"id": "circle_2"}, {"id": "circle_3"}]
         if business_name == "Marshall":
             return [{"id": "circle_4"}]
@@ -111,7 +92,6 @@ def _mock_airtable(monkeypatch):
 
     monkeypatch.setattr(airtable_client, "_enabled", lambda: True)
     monkeypatch.setattr(airtable_client, "_get", fake_get)
-    monkeypatch.setattr(airtable_client, "list_uplaud_by_business", fake_list_uplaud_by_business)
     monkeypatch.setattr(airtable_client, "list_circles_by_business", fake_list_circles_by_business)
     monkeypatch.setattr(server, "db", None)
 
