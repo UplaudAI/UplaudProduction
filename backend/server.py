@@ -1062,7 +1062,7 @@ def public_review_from_uplaud(testimonial: Dict[str, Any], business_slug: str) -
         "reviewer_slug": public_slug(customer),
         "reviewer_title": testimonial.get("source") or "Verified customer",
         "rating": max(1, min(5, rating)),
-        "emoji": "Fire" if rating >= 5 else "Nice",
+        "emoji": "",
         "text": testimonial.get("body") or "",
         "date": testimonial.get("date_added") or "",
         "verified": True,

@@ -31,6 +31,10 @@ function buildReferralUrl(review, businessName) {
   return `https://wa.me/?text=${text}`;
 }
 
+function isDisplayEmoji(value) {
+  return /\p{Extended_Pictographic}/u.test(value || "");
+}
+
 export default function ReviewCard({ review, businessName, audience, delay = 0 }) {
   const isB2B = audience === "b2b";
   const isDemo = review.verification_type === "demo";
@@ -75,7 +79,7 @@ export default function ReviewCard({ review, businessName, audience, delay = 0 }
             <MessageCircle size={9} /> WA
           </div>
         </div>
-        <div className="text-xl leading-none">{review.emoji}</div>
+        {isDisplayEmoji(review.emoji) && <div className="text-xl leading-none">{review.emoji}</div>}
       </div>
 
       <div className="flex items-center justify-between mb-2.5">
