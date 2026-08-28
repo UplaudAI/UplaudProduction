@@ -11,7 +11,9 @@ const VERTICAL_LABEL = {
 
 export default function Hero({ business, stats, topReviews = [] }) {
   const isB2B = business?.audience === "b2b";
-  const initials = (business?.name || "?")
+  const displayName = formatBusinessName(business?.name);
+  const detailItems = [business?.location, business?.website, business?.founded ? `Est. ${business.founded}` : ""].filter(Boolean);
+  const initials = (displayName || "?")
     .split(" ").slice(0, 2).map((w) => w[0]).join("");
 
   return (
@@ -48,11 +50,19 @@ export default function Hero({ business, stats, topReviews = [] }) {
               </div>
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-[color:var(--u-muted)]">
-                  <span className="inline-flex items-center gap-1"><MapPin size={12} />{business?.location}</span>
-                  <span>·</span>
-                  <span>{business?.website}</span>
-                  <span>·</span>
-                  <span>Est. {business?.founded}</span>
+                  {detailItems.length > 0 ? (
+                    <>
+                      <span className="inline-flex items-center gap-1"><MapPin size={12} />{detailItems[0]}</span>
+                      {detailItems.slice(1).map((item) => (
+                        <span key={item} className="inline-flex items-center gap-3">
+                          <span>·</span>
+                          <span>{item}</span>
+                        </span>
+                      ))}
+                    </>
+                  ) : (
+                    <span className="inline-flex items-center gap-1"><MapPin size={12} />Verified on Uplaud</span>
+                  )}
                 </div>
                 <div className="text-[11px] text-[color:var(--u-violet)] font-medium mt-0.5 inline-flex items-center gap-1">
                   <ShieldCheck size={12} /> {isB2B ? "Verified vendor · Claimed" : "Verified business · Claimed"}
@@ -61,10 +71,10 @@ export default function Hero({ business, stats, topReviews = [] }) {
             </div>
 
             <h1
-              className="font-display font-semibold tracking-tight leading-[0.95] text-[2.75rem] md:text-[3.5rem] lg:text-[4.25rem] mt-6"
+              className="font-display font-semibold tracking-tight leading-[0.95] text-[2.75rem] md:text-[3.5rem] lg:text-[4.25rem] mt-6 text-[color:var(--u-ink)]"
               data-testid="hero-title"
             >
-              {business?.name}<span className="text-[color:var(--u-muted)]">.</span>
+              <span className="block">{displayName}<span className="text-[color:var(--u-muted)]">.</span></span>
               <span className="block text-[1.6rem] md:text-[2rem] lg:text-[2.4rem] mt-2 leading-[1.05] font-normal text-[color:var(--u-ink-2)]">
                 <span className="font-serif-italic text-[color:var(--u-ink)]">Trusted</span>. Reviewed. <span className="mint-underline">Referred</span>.
               </span>
@@ -104,6 +114,15 @@ export default function Hero({ business, stats, topReviews = [] }) {
       </div>
     </section>
   );
+}
+
+function formatBusinessName(name) {
+  const clean = (name || "").trim();
+  if (!clean) return "";
+  return clean
+    .replace(/^AI(?=[A-Z][a-z])/g, "AI ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/\s+/g, " ");
 }
 
 function StatBit({ label, value, suffix, accent, starColor }) {

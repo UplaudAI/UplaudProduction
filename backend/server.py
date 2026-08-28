@@ -945,6 +945,13 @@ def public_slug(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", (value or "").lower()).strip("-")
 
 
+def public_display_business_name(value: str) -> str:
+    clean = re.sub(r"\s+", " ", (value or "").strip())
+    clean = re.sub(r"^AI(?=[A-Z][a-z])", "AI ", clean)
+    clean = re.sub(r"([a-z])([A-Z])", r"\1 \2", clean)
+    return clean
+
+
 def airtable_field(fields: Dict[str, Any], *names: str, default: Any = "") -> Any:
     for name in names:
         value = fields.get(name)
@@ -990,7 +997,7 @@ def public_business_from_uplaud_records(slug: str, records: List[Dict[str, Any]]
         business_name = airtable_field(fields, "business_name", default="")
         if not business_name:
             continue
-        matching_name = str(business_name)
+        matching_name = public_display_business_name(str(business_name))
         body = airtable_field(fields, "Uplaud", default="")
         if body:
             matching_reviews += 1
