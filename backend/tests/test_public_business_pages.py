@@ -102,9 +102,17 @@ def _mock_airtable(monkeypatch):
             )
         return testimonials
 
+    async def fake_list_circles_by_business(business_name):
+        if business_name == "AI Fiesta":
+            return [{"id": "circle_1"}, {"id": "circle_2"}, {"id": "circle_3"}]
+        if business_name == "Marshall":
+            return [{"id": "circle_4"}]
+        return []
+
     monkeypatch.setattr(airtable_client, "_enabled", lambda: True)
     monkeypatch.setattr(airtable_client, "_get", fake_get)
     monkeypatch.setattr(airtable_client, "list_uplaud_by_business", fake_list_uplaud_by_business)
+    monkeypatch.setattr(airtable_client, "list_circles_by_business", fake_list_circles_by_business)
     monkeypatch.setattr(server, "db", None)
 
 
@@ -130,6 +138,17 @@ def test_get_public_business_reviews_from_uplaud_table(monkeypatch):
     assert len(reviews) == 1
     assert reviews[0]["reviewer_name"] == "Priya Menon"
     assert reviews[0]["text"].startswith("The side-by-side")
+
+
+def test_get_public_business_stats_counts_reviews_and_circles(monkeypatch):
+    _mock_airtable(monkeypatch)
+
+    response = client.get("/api/business/public/ai-fiesta/stats")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total_reviews"] == 2
+    assert data["total_referrals"] == 3
 
 
 def test_get_public_business_case_study_from_uplaud_review(monkeypatch):

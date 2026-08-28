@@ -1076,6 +1076,11 @@ async def public_reviews_for_business(business: Dict[str, Any]) -> List[Dict[str
     return reviews
 
 
+async def public_referral_count_for_business(business_name: str) -> int:
+    leads = await airtable_client.list_circles_by_business(business_name)
+    return len(leads)
+
+
 @api_router.get("/business/public/{slug}")
 async def get_public_business(slug: str):
     biz = await public_business_by_slug(slug)
@@ -1130,6 +1135,7 @@ async def get_public_stats(slug: str):
         raise HTTPException(status_code=404, detail="Business not found")
 
     reviews = await public_reviews_for_business(biz)
+    referral_count = await public_referral_count_for_business(biz["name"])
     distribution = {rating: 0 for rating in range(1, 6)}
     for review in reviews:
         distribution[review.get("rating", 0)] = distribution.get(review.get("rating", 0), 0) + 1
@@ -1142,7 +1148,7 @@ async def get_public_stats(slug: str):
     return {
         "total_reviews": biz.get("total_reviews", len(reviews)),
         "avg_rating": biz.get("avg_rating", 0),
-        "total_referrals": biz.get("total_referrals", 0),
+        "total_referrals": referral_count,
         "unique_reviewers": biz.get("unique_reviewers", 0),
         "trust_score": biz.get("trust_score", 90),
         "rating_distribution": distribution,

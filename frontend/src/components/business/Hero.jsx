@@ -138,11 +138,11 @@ function FloatingPreview({ reviews, business, stats }) {
         }}
       />
 
-      {/* Trust score tag top-right */}
+      {/* Live review count tag top-right */}
       <div className="absolute top-4 right-4 u-pill" style={{ background: "white" }}>
         <span className="u-pill-dot" />
         <span className="text-[10px] font-mono uppercase tracking-wider text-[color:var(--u-muted)]">Live</span>
-        <span className="font-display font-semibold ml-1">{stats?.trust_score}</span>
+        <span className="font-display font-semibold ml-1">{(stats?.total_reviews || 0).toLocaleString()}</span>
       </div>
 
       {/* Uplaud watermark badge */}
