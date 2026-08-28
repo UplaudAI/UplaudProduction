@@ -6,7 +6,6 @@ import Hero from "@/components/business/Hero";
 import Insights from "@/components/business/Insights";
 import ReviewsSection from "@/components/business/ReviewsSection";
 import CaseStudies from "@/components/business/CaseStudies";
-import ShareCTA from "@/components/business/ShareCTA";
 import Footer from "@/components/business/Footer";
 import TrustStrip from "@/components/business/TrustStrip";
 
@@ -66,7 +65,6 @@ export default function BusinessPage() {
       <ReviewsSection slug={slug} businessName={business.name} audience={business.audience} />
       <Insights stats={stats} />
       <CaseStudies slug={slug} caseStudies={caseStudies} />
-      <ShareCTA slug={slug} businessName={business.name} />
       <Footer />
     </div>
   );

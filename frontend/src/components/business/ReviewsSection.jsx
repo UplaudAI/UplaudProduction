@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Search, MessageSquareText, Sparkles, ArrowUpRight } from "lucide-react";
+import { Search, MessageSquareText, Sparkles } from "lucide-react";
 import ReviewCard from "./ReviewCard";
 import api from "@/lib/api";
 
@@ -121,11 +121,6 @@ export default function ReviewsSection({ slug, businessName, audience }) {
             {reviews.map((r, i) => (
               <ReviewCard key={r.id} review={r} businessName={businessName} audience={audience} delay={i * 0.04} />
             ))}
-          </div>
-          <div className="mt-8 flex justify-center">
-            <a href="#share" className="u-btn u-btn-ghost" data-testid="load-more-btn">
-              Add your story <ArrowUpRight size={16} />
-            </a>
           </div>
         </>
       )}

@@ -1,4 +1,4 @@
-import { ShieldCheck, MapPin, ArrowUpRight, Sparkles, Star } from "lucide-react";
+import { ShieldCheck, MapPin, ArrowUpRight, Star } from "lucide-react";
 
 const VERTICAL_LABEL = {
   "health-wellness": "Health & Wellness",
@@ -96,9 +96,6 @@ export default function Hero({ business, stats, topReviews = [] }) {
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <a href="#reviews" className="u-btn u-btn-dark" data-testid="hero-cta-reviews">
                 Read all reviews <ArrowUpRight size={16} />
-              </a>
-              <a href="#share" className="u-btn u-btn-ghost" data-testid="hero-cta-share">
-                <Sparkles size={14} /> {isB2B ? "Share your team's experience" : "Share your experience"}
               </a>
               <span className="hidden md:inline-flex items-center gap-1.5 text-[11px] text-[color:var(--u-muted)] ml-2">
                 {isB2B ? "Captured via CRM, sales calls & WhatsApp · zero fake accounts" : "Captured via WhatsApp · zero fake accounts"}

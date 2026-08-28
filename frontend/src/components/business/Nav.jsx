@@ -1,5 +1,8 @@
 import { Link } from "react-router-dom";
-import { ArrowUpRight } from "lucide-react";
+import { MessageCircle } from "lucide-react";
+
+const LOGO_LIGHT_URL =
+  "https://customer-assets-gfyr7b9c.emergentagent.net/job_ai-acquisition-hub-2/artifacts/24zfs0md_logo_white_background.webp";
 
 export default function Nav({ businessName, audience }) {
   const isB2B = audience === "b2b";
@@ -10,23 +13,18 @@ export default function Nav({ businessName, audience }) {
       style={{ background: "rgba(244, 239, 230, 0.82)", borderBottom: "1px solid var(--u-line)" }}
     >
       <div className="max-w-[1320px] mx-auto px-6 lg:px-10 h-16 flex items-center justify-between">
-        <Link to="/" data-testid="nav-logo" className="flex items-center gap-2 group">
-          <span
-            className="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-xs"
-            style={{
-              background:
-                "conic-gradient(from 210deg at 50% 50%, #5B3EEE 0%, #7CE8C8 40%, #5B3EEE 90%)",
-            }}
-          >
-            u
-          </span>
-          <span className="font-display text-lg font-semibold tracking-tight">uplaud</span>
+        <Link to="/" data-testid="nav-logo" className="flex items-center">
+          <img
+            src={LOGO_LIGHT_URL}
+            alt="Uplaud"
+            className="h-10 w-auto object-contain mix-blend-multiply"
+            style={{ maxWidth: 120 }}
+          />
         </Link>
         <nav className="hidden md:flex items-center gap-8 text-sm text-[color:var(--u-ink-2)]">
           <a href="#reviews" data-testid="nav-reviews" className="hover:text-[color:var(--u-ink)] transition">Reviews</a>
           <a href="#insights" data-testid="nav-insights" className="hover:text-[color:var(--u-ink)] transition">Insights</a>
           <a href="#stories" data-testid="nav-stories" className="hover:text-[color:var(--u-ink)] transition">Stories</a>
-          <a href="#share" data-testid="nav-share" className="hover:text-[color:var(--u-ink)] transition">Share yours</a>
         </nav>
         <div className="flex items-center gap-3">
           <a
@@ -36,10 +34,8 @@ export default function Nav({ businessName, audience }) {
             data-testid="nav-refer-btn"
             className="u-btn u-btn-ghost hidden sm:inline-flex"
           >
+            <MessageCircle size={15} />
             {isB2B ? "Refer a teammate" : "Refer a friend"}
-          </a>
-          <a href="#share" data-testid="nav-cta-btn" className="u-btn u-btn-primary">
-            Leave a review <ArrowUpRight size={16} />
           </a>
         </div>
       </div>
