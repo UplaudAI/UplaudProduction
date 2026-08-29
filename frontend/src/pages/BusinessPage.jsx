@@ -19,18 +19,14 @@ export default function BusinessPage() {
 
   useEffect(() => {
     let ignore = false;
-    Promise.all([
-      api.get(`/business/public/${slug}`),
-      api.get(`/business/public/${slug}/stats`),
-      api.get(`/business/public/${slug}/case-studies`),
-      api.get(`/business/public/${slug}/reviews?sort=top&limit=4`),
-    ])
-      .then(([b, s, cs, rv]) => {
+    api
+      .get(`/business/public/${slug}/page`)
+      .then(({ data }) => {
         if (ignore) return;
-        setBusiness(b.data);
-        setStats(s.data);
-        setCaseStudies(cs.data.case_studies || []);
-        setTopReviews(rv.data.reviews || []);
+        setBusiness(data.business);
+        setStats(data.stats);
+        setCaseStudies(data.case_studies || []);
+        setTopReviews(data.top_reviews || []);
       })
       .catch(() => !ignore && setError(true));
     return () => { ignore = true; };

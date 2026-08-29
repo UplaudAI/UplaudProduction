@@ -108,6 +108,68 @@ def test_get_public_business_from_airtable(monkeypatch):
     assert data["avg_rating"] == 4.5
 
 
+def test_get_public_business_page_payload_uses_single_airtable_lookup(monkeypatch):
+    _mock_airtable(monkeypatch)
+
+    response = client.get("/api/business/public/ai-fiesta/page")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["business"]["name"] == "AI Fiesta"
+    assert data["stats"]["total_reviews"] == 2
+    assert data["stats"]["total_referrals"] == 3
+    assert len(data["reviews"]) == 2
+    assert len(data["top_reviews"]) == 2
+    assert data["case_studies"][0]["hero_quote_author"] == "Priya Menon"
+
+
+def test_public_business_html_is_crawlable(monkeypatch):
+    _mock_airtable(monkeypatch)
+
+    response = client.get("/business/public/ai-fiesta")
+
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "<title>AI Fiesta Reviews | Uplaud</title>" in response.text
+    assert "application/ld+json" in response.text
+    assert "The side-by-side model comparison helped us pick the right answer." in response.text
+    assert "Average rating" in response.text
+
+
+def test_public_business_html_rewrite_fallback_is_crawlable(monkeypatch):
+    _mock_airtable(monkeypatch)
+
+    response = client.get("/api/index.py?path=business/public/ai-fiesta")
+
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "<link rel=\"canonical\" href=\"http://testserver/business/public/ai-fiesta\" />" in response.text
+    assert "The side-by-side model comparison helped us pick the right answer." in response.text
+
+
+def test_robots_txt_points_to_sitemap(monkeypatch):
+    _mock_airtable(monkeypatch)
+
+    response = client.get("/api/index.py?path=robots.txt")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+    assert "User-agent: *" in response.text
+    assert "Allow: /" in response.text
+    assert "Sitemap: http://testserver/sitemap.xml" in response.text
+
+
+def test_sitemap_xml_lists_public_business_pages(monkeypatch):
+    _mock_airtable(monkeypatch)
+
+    response = client.get("/api/index.py?path=sitemap.xml")
+
+    assert response.status_code == 200
+    assert "application/xml" in response.headers["content-type"]
+    assert "<loc>http://testserver/business/public/ai-fiesta</loc>" in response.text
+    assert "<loc>http://testserver/business/public/marshall</loc>" in response.text
+
+
 def test_get_public_business_reviews_from_uplaud_table(monkeypatch):
     _mock_airtable(monkeypatch)
 

@@ -41,6 +41,18 @@
   ],
   "rewrites": [
     {
+      "source": "/robots.txt",
+      "destination": "/api/index.py?path=robots.txt"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "/api/index.py?path=sitemap.xml"
+    },
+    {
+      "source": "/business/public/:slug",
+      "destination": "/api/index.py?path=business/public/:slug"
+    },
+    {
       "source": "/api/:path*",
       "destination": "/api/index.py"
     },

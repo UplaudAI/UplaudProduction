@@ -19,6 +19,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, APIRouter, Request, HTTPException, Depends, UploadFile, File, Query
+from fastapi.responses import HTMLResponse
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr, Field
@@ -968,6 +969,19 @@ def airtable_field(fields: Dict[str, Any], *names: str, default: Any = "") -> An
 async def public_uplaud_records_by_slug(slug: str) -> List[Dict[str, Any]]:
     if not airtable_client._enabled():
         raise HTTPException(status_code=503, detail="Airtable is not configured")
+    records = await public_all_uplaud_records()
+    return [
+        rec
+        for rec in records
+        if slug in public_business_name_slugs(
+            str(airtable_field(rec.get("fields", {}), "business_name", default=""))
+        )
+    ]
+
+
+async def public_all_uplaud_records() -> List[Dict[str, Any]]:
+    if not airtable_client._enabled():
+        raise HTTPException(status_code=503, detail="Airtable is not configured")
     records = []
     offset = None
     try:
@@ -984,13 +998,28 @@ async def public_uplaud_records_by_slug(slug: str) -> List[Dict[str, Any]]:
         logger.warning("Airtable public Uplaud lookup failed: %s", e)
         raise HTTPException(status_code=502, detail="Failed to fetch Uplaud records from Airtable")
 
-    return [
-        rec
-        for rec in records
-        if slug in public_business_name_slugs(
-            str(airtable_field(rec.get("fields", {}), "business_name", default=""))
-        )
-    ]
+    return records
+
+
+async def public_sitemap_businesses() -> List[Dict[str, str]]:
+    records = await public_all_uplaud_records()
+    businesses: Dict[str, Dict[str, str]] = {}
+    for rec in records:
+        fields = rec.get("fields", {})
+        raw_name = str(airtable_field(fields, "business_name", default="")).strip()
+        body = airtable_field(fields, "Uplaud", default="")
+        if not raw_name or not body:
+            continue
+        display_name = public_display_business_name(raw_name)
+        slug = public_slug(display_name)
+        updated = str(airtable_field(fields, "Date_Added", default=rec.get("createdTime", "")[:10]))
+        current = businesses.get(slug)
+        businesses[slug] = {
+            "slug": slug,
+            "name": display_name,
+            "lastmod": max(updated, current.get("lastmod", "") if current else ""),
+        }
+    return sorted(businesses.values(), key=lambda item: item["slug"])
 
 
 def public_business_from_uplaud_records(slug: str, records: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -1099,6 +1128,10 @@ def public_testimonial_from_uplaud_record(rec: Dict[str, Any]) -> Dict[str, Any]
 
 async def public_reviews_for_business(business: Dict[str, Any]) -> List[Dict[str, Any]]:
     records = await public_uplaud_records_by_slug(business["slug"])
+    return await public_reviews_from_records(business, records)
+
+
+async def public_reviews_from_records(business: Dict[str, Any], records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     reviews = [
         public_review_from_uplaud(testimonial, business["slug"])
         for testimonial in [public_testimonial_from_uplaud_record(rec) for rec in records]
@@ -1115,12 +1148,318 @@ async def public_referral_count_for_business(business_name: str) -> int:
     return len(leads)
 
 
+def public_stats_from_reviews(
+    business: Dict[str, Any],
+    reviews: List[Dict[str, Any]],
+    referral_count: int,
+) -> Dict[str, Any]:
+    distribution = {rating: 0 for rating in range(1, 6)}
+    for review in reviews:
+        distribution[review.get("rating", 0)] = distribution.get(review.get("rating", 0), 0) + 1
+
+    total = max(len(reviews), 1)
+    positive = sum(count for rating, count in distribution.items() if rating >= 4)
+    neutral = distribution.get(3, 0)
+    negative = sum(count for rating, count in distribution.items() if rating <= 2)
+
+    return {
+        "total_reviews": len(reviews),
+        "avg_rating": business.get("avg_rating", 0),
+        "total_referrals": referral_count,
+        "unique_reviewers": len({review.get("reviewer_name") for review in reviews if review.get("reviewer_name")}),
+        "trust_score": business.get("trust_score", 90),
+        "rating_distribution": distribution,
+        "sentiment": {
+            "positive": round(positive / total * 100),
+            "neutral": round(neutral / total * 100),
+            "negative": round(negative / total * 100),
+        },
+        "keywords": business.get("keywords", []),
+        "top_praise": business.get("top_praise", ""),
+    }
+
+
+def public_case_studies_from_reviews(slug: str, business: Dict[str, Any], reviews: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    items = [
+        {
+            "id": review["id"],
+            "business_slug": slug,
+            "slug": public_slug(review["text"][:64]) or review["id"],
+            "title": f"{review['reviewer_name']}'s experience with {business['name']}",
+            "excerpt": review["text"][:180],
+            "hero_quote": review["text"],
+            "hero_quote_author": review["reviewer_name"],
+            "body_html": f"<p>{html.escape(review['text'])}</p>",
+            "tag": "Customer story",
+            "read_time": "2 min read",
+            "published": review["date"],
+        }
+        for review in reviews[:6]
+    ]
+    items.sort(key=lambda cs: cs.get("published", ""), reverse=True)
+    return items
+
+
+async def public_page_payload(slug: str) -> Optional[Dict[str, Any]]:
+    records = await public_uplaud_records_by_slug(slug)
+    biz = public_business_from_uplaud_records(slug, records)
+    if not biz:
+        return None
+
+    reviews = await public_reviews_from_records(biz, records)
+    reviews.sort(key=lambda review: review.get("date", ""), reverse=True)
+    top_reviews = sorted(
+        reviews,
+        key=lambda review: (review.get("rating", 0), review.get("date", "")),
+        reverse=True,
+    )[:4]
+    referral_count = await public_referral_count_for_business(biz.get("airtable_business_name") or biz["name"])
+    stats = public_stats_from_reviews(biz, reviews, referral_count)
+    case_studies = public_case_studies_from_reviews(slug, biz, reviews)
+    biz.update(
+        {
+            "total_reviews": stats["total_reviews"],
+            "avg_rating": stats["avg_rating"],
+            "total_referrals": stats["total_referrals"],
+            "unique_reviewers": stats["unique_reviewers"],
+        }
+    )
+    return {
+        "business": biz,
+        "stats": stats,
+        "reviews": reviews,
+        "top_reviews": top_reviews,
+        "case_studies": case_studies,
+    }
+
+
+def public_business_json_ld(payload: Dict[str, Any], canonical_url: str) -> Dict[str, Any]:
+    business = payload["business"]
+    stats = payload["stats"]
+    reviews = payload["reviews"][:25]
+    return {
+        "@context": "https://schema.org",
+        "@type": "LocalBusiness",
+        "@id": canonical_url,
+        "name": business["name"],
+        "url": canonical_url,
+        "description": business.get("about") or business.get("tagline"),
+        "aggregateRating": {
+            "@type": "AggregateRating",
+            "ratingValue": stats.get("avg_rating") or 0,
+            "reviewCount": stats.get("total_reviews") or 0,
+            "bestRating": 5,
+            "worstRating": 1,
+        },
+        "review": [
+            {
+                "@type": "Review",
+                "author": {"@type": "Person", "name": review.get("reviewer_name") or "Uplaud customer"},
+                "datePublished": review.get("date"),
+                "reviewBody": review.get("text"),
+                "reviewRating": {
+                    "@type": "Rating",
+                    "ratingValue": review.get("rating") or 5,
+                    "bestRating": 5,
+                    "worstRating": 1,
+                },
+            }
+            for review in reviews
+        ],
+    }
+
+
+def render_public_business_html(payload: Dict[str, Any], canonical_url: str) -> str:
+    business = payload["business"]
+    stats = payload["stats"]
+    reviews = payload["reviews"]
+    title = f"{business['name']} Reviews | Uplaud"
+    description = (
+        f"Read {stats.get('total_reviews', 0)} verified Uplaud reviews for {business['name']} "
+        f"with an average rating of {stats.get('avg_rating', 0)} out of 5."
+    )
+    review_items = "\n".join(
+        f"""
+        <article class="review" itemprop="review" itemscope itemtype="https://schema.org/Review">
+          <h2 itemprop="author">{html.escape(review.get('reviewer_name') or 'Uplaud customer')}</h2>
+          <p class="meta"><time itemprop="datePublished">{html.escape(str(review.get('date') or ''))}</time> · <span itemprop="reviewRating" itemscope itemtype="https://schema.org/Rating"><span itemprop="ratingValue">{html.escape(str(review.get('rating') or 5))}</span>/5</span></p>
+          <p itemprop="reviewBody">{html.escape(review.get('text') or '')}</p>
+        </article>
+        """
+        for review in reviews
+    )
+    json_ld = json.dumps(public_business_json_ld(payload, canonical_url), ensure_ascii=False).replace("</", "<\\/")
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{html.escape(title)}</title>
+  <meta name="description" content="{html.escape(description)}" />
+  <link rel="canonical" href="{html.escape(canonical_url)}" />
+  <meta property="og:title" content="{html.escape(title)}" />
+  <meta property="og:description" content="{html.escape(description)}" />
+  <meta property="og:type" content="website" />
+  <script type="application/ld+json">{json_ld}</script>
+  <style>
+    body {{ margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #111827; background: #f4efe6; }}
+    main {{ max-width: 960px; margin: 0 auto; padding: 48px 24px; }}
+    .logo {{ width: 116px; height: auto; margin-bottom: 40px; }}
+    .eyebrow {{ color: #6d46c6; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }}
+    h1 {{ font-size: clamp(42px, 8vw, 78px); line-height: .95; margin: 12px 0 18px; letter-spacing: -0.04em; }}
+    .summary {{ font-size: 18px; line-height: 1.6; color: #4b5563; max-width: 720px; }}
+    .stats {{ display: flex; flex-wrap: wrap; gap: 24px; border-top: 1px solid #d8d0c2; border-bottom: 1px solid #d8d0c2; padding: 22px 0; margin: 36px 0; }}
+    .stat strong {{ display: block; font-size: 30px; }}
+    .stat span {{ color: #6b665f; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; }}
+    .review {{ background: rgba(255,255,255,.62); border: 1px solid #d8d0c2; border-radius: 18px; padding: 22px; margin: 18px 0; }}
+    .review h2 {{ margin: 0 0 6px; font-size: 20px; }}
+    .meta {{ color: #6b665f; font-size: 14px; }}
+    a {{ color: #5b3eee; }}
+  </style>
+</head>
+<body>
+  <main itemscope itemtype="https://schema.org/LocalBusiness">
+    <img class="logo" src="/uplaud-wordmark-purple.png" alt="Uplaud" />
+    <div class="eyebrow">Verified on Uplaud</div>
+    <h1 itemprop="name">{html.escape(business['name'])} reviews</h1>
+    <p class="summary" itemprop="description">{html.escape(description)}</p>
+    <section class="stats" aria-label="Review statistics">
+      <div class="stat"><strong>{html.escape(str(stats.get('avg_rating', 0)))}/5</strong><span>Average rating</span></div>
+      <div class="stat"><strong>{html.escape(str(stats.get('total_reviews', 0)))}</strong><span>Live reviews</span></div>
+      <div class="stat"><strong>{html.escape(str(stats.get('unique_reviewers', 0)))}</strong><span>Unique reviewers</span></div>
+      <div class="stat"><strong>{html.escape(str(stats.get('total_referrals', 0)))}</strong><span>Referrals</span></div>
+    </section>
+    <section aria-label="Verified reviews">
+      {review_items or '<p>No public reviews are available yet.</p>'}
+    </section>
+  </main>
+</body>
+</html>"""
+
+
+def site_origin(request: Request) -> str:
+    forwarded_proto = request.headers.get("x-forwarded-proto")
+    forwarded_host = request.headers.get("x-forwarded-host")
+    scheme = forwarded_proto or request.url.scheme
+    host = forwarded_host or request.url.netloc
+    return f"{scheme}://{host}"
+
+
+async def render_sitemap_xml(request: Request) -> str:
+    origin = site_origin(request)
+    businesses = await public_sitemap_businesses()
+    static_urls = [
+        {"loc": f"{origin}/", "changefreq": "weekly", "priority": "0.7"},
+        {"loc": f"{origin}/business", "changefreq": "monthly", "priority": "0.3"},
+    ]
+    business_urls = [
+        {
+            "loc": f"{origin}/business/public/{business['slug']}",
+            "lastmod": business.get("lastmod", ""),
+            "changefreq": "weekly",
+            "priority": "0.8",
+        }
+        for business in businesses
+    ]
+    url_items = []
+    for item in static_urls + business_urls:
+        lastmod = f"<lastmod>{html.escape(item['lastmod'])}</lastmod>" if item.get("lastmod") else ""
+        url_items.append(
+            f"<url><loc>{html.escape(item['loc'])}</loc>{lastmod}"
+            f"<changefreq>{item['changefreq']}</changefreq><priority>{item['priority']}</priority></url>"
+        )
+    return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" \
+        "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">" \
+        + "".join(url_items) + "</urlset>"
+
+
+def render_robots_txt(request: Request) -> str:
+    origin = site_origin(request)
+    return "\n".join(
+        [
+            "User-agent: *",
+            "Allow: /",
+            "Disallow: /api/",
+            "Disallow: /admin/",
+            "Sitemap: " + f"{origin}/sitemap.xml",
+            "",
+        ]
+    )
+
+
 @api_router.get("/business/public/{slug}")
 async def get_public_business(slug: str):
     biz = await public_business_by_slug(slug)
     if not biz:
         raise HTTPException(status_code=404, detail="Business not found")
     return biz
+
+
+@api_router.get("/business/public/{slug}/page")
+async def get_public_page(slug: str):
+    payload = await public_page_payload(slug)
+    if not payload:
+        raise HTTPException(status_code=404, detail="Business not found")
+    return payload
+
+
+@app.get("/business/public/{slug}", response_class=HTMLResponse)
+async def get_public_business_html(slug: str, request: Request):
+    payload = await public_page_payload(slug)
+    if not payload:
+        raise HTTPException(status_code=404, detail="Business not found")
+    canonical_url = str(request.url.replace(query=None))
+    return HTMLResponse(
+        render_public_business_html(payload, canonical_url),
+        headers={"Cache-Control": "public, s-maxage=300, stale-while-revalidate=3600"},
+    )
+
+
+@app.get("/robots.txt")
+async def get_robots_txt(request: Request):
+    return HTMLResponse(
+        render_robots_txt(request),
+        media_type="text/plain",
+        headers={"Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400"},
+    )
+
+
+@app.get("/sitemap.xml")
+async def get_sitemap_xml(request: Request):
+    return HTMLResponse(
+        await render_sitemap_xml(request),
+        media_type="application/xml",
+        headers={"Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400"},
+    )
+
+
+@app.get("/api/index.py", response_class=HTMLResponse)
+async def get_public_business_html_rewrite(request: Request):
+    rewritten_path = (request.query_params.get("path") or "").strip("/")
+    if rewritten_path == "robots.txt":
+        return HTMLResponse(
+            render_robots_txt(request),
+            media_type="text/plain",
+            headers={"Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400"},
+        )
+    if rewritten_path == "sitemap.xml":
+        return HTMLResponse(
+            await render_sitemap_xml(request),
+            media_type="application/xml",
+            headers={"Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400"},
+        )
+    match = re.fullmatch(r"business/public/([^/]+)", rewritten_path)
+    if not match:
+        raise HTTPException(status_code=404, detail="Not found")
+    slug = match.group(1)
+    payload = await public_page_payload(slug)
+    if not payload:
+        raise HTTPException(status_code=404, detail="Business not found")
+    canonical_url = f"{request.url.scheme}://{request.url.netloc}/business/public/{slug}"
+    return HTMLResponse(
+        render_public_business_html(payload, canonical_url),
+        headers={"Cache-Control": "public, s-maxage=300, stale-while-revalidate=3600"},
+    )
 
 
 @api_router.get("/business/public/{slug}/reviews")
@@ -1170,30 +1509,7 @@ async def get_public_stats(slug: str):
 
     reviews = await public_reviews_for_business(biz)
     referral_count = await public_referral_count_for_business(biz.get("airtable_business_name") or biz["name"])
-    distribution = {rating: 0 for rating in range(1, 6)}
-    for review in reviews:
-        distribution[review.get("rating", 0)] = distribution.get(review.get("rating", 0), 0) + 1
-
-    total = max(len(reviews), 1)
-    positive = sum(count for rating, count in distribution.items() if rating >= 4)
-    neutral = distribution.get(3, 0)
-    negative = sum(count for rating, count in distribution.items() if rating <= 2)
-
-    return {
-        "total_reviews": biz.get("total_reviews", len(reviews)),
-        "avg_rating": biz.get("avg_rating", 0),
-        "total_referrals": referral_count,
-        "unique_reviewers": biz.get("unique_reviewers", 0),
-        "trust_score": biz.get("trust_score", 90),
-        "rating_distribution": distribution,
-        "sentiment": {
-            "positive": round(positive / total * 100),
-            "neutral": round(neutral / total * 100),
-            "negative": round(negative / total * 100),
-        },
-        "keywords": biz.get("keywords", []),
-        "top_praise": biz.get("top_praise", ""),
-    }
+    return public_stats_from_reviews(biz, reviews, referral_count)
 
 
 @api_router.get("/business/public/{slug}/case-studies")
@@ -1202,23 +1518,7 @@ async def get_public_case_studies(slug: str):
     if not biz:
         raise HTTPException(status_code=404, detail="Business not found")
     reviews = await public_reviews_for_business(biz)
-    items = [
-        {
-            "id": review["id"],
-            "business_slug": slug,
-            "slug": public_slug(review["text"][:64]) or review["id"],
-            "title": f"{review['reviewer_name']}'s experience with {biz['name']}",
-            "excerpt": review["text"][:180],
-            "hero_quote": review["text"],
-            "hero_quote_author": review["reviewer_name"],
-            "body_html": f"<p>{html.escape(review['text'])}</p>",
-            "tag": "Customer story",
-            "read_time": "2 min read",
-            "published": review["date"],
-        }
-        for review in reviews[:6]
-    ]
-    items.sort(key=lambda cs: cs.get("published", ""), reverse=True)
+    items = public_case_studies_from_reviews(slug, biz, reviews)
     return {"count": len(items), "case_studies": items}
 
 
