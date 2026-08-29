@@ -89,6 +89,9 @@ export default function ReviewerPage() {
     "linear-gradient(135deg, #FF7A66, #F5B14E)",
     "linear-gradient(135deg, #5DDCBA, #5B3EEE)",
   ][colorIdx];
+  const topQuote = profile.reviews?.length > 0
+    ? [...profile.reviews].sort((a, b) => b.rating - a.rating)[0]
+    : null;
 
   return (
     <div className="min-h-screen bg-grain" data-testid="reviewer-profile-page">
@@ -102,38 +105,55 @@ export default function ReviewerPage() {
         {/* Cover + header */}
         <div className="relative rounded-[28px] overflow-hidden reveal" data-testid="reviewer-header">
           <div
-            className="h-32 lg:h-40 relative"
-            style={{ background: "linear-gradient(135deg, #0B0B10 0%, #1A1A22 45%, #2E245C 100%)" }}
+            className="relative flex flex-col justify-between px-6 lg:px-9 pt-6 lg:pt-9 pb-16 lg:pb-20 min-h-[230px] lg:min-h-[250px]"
+            style={{ background: "linear-gradient(135deg, #0B0B10 0%, #1A1A22 40%, #2E245C 100%)" }}
           >
             <div
-              className="absolute -top-16 -right-10 w-72 h-72 rounded-full opacity-40 blur-3xl pointer-events-none"
+              className="absolute -top-20 -right-16 w-80 h-80 rounded-full opacity-45 blur-3xl pointer-events-none"
               style={{ background: "radial-gradient(closest-side, #7CE8C8, transparent 70%)" }}
             />
             <div
-              className="absolute -bottom-24 -left-16 w-80 h-80 rounded-full opacity-35 blur-3xl pointer-events-none"
+              className="absolute -bottom-28 -left-20 w-96 h-96 rounded-full opacity-35 blur-3xl pointer-events-none"
               style={{ background: "radial-gradient(closest-side, #5B3EEE, transparent 70%)" }}
             />
-            <div
-              className="absolute inset-0 opacity-[0.08]"
-              style={{
-                backgroundImage:
-                  "linear-gradient(to right, rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.5) 1px, transparent 1px)",
-                backgroundSize: "26px 26px",
-              }}
-            />
             <span
-              className="absolute top-4 right-5 u-pill"
-              style={{ background: "rgba(255,255,255,0.08)", borderColor: "rgba(255,255,255,0.18)", color: "white" }}
+              className="absolute -bottom-6 right-10 font-serif-italic text-[140px] leading-none text-white/[0.06] pointer-events-none select-none hidden lg:block"
+              aria-hidden="true"
             >
-              <span className="u-pill-dot" /> Verified reviewer
+              &rdquo;
             </span>
+
+            <div className="relative z-10 flex justify-end">
+              <span
+                className="u-pill"
+                style={{ background: "rgba(255,255,255,0.08)", borderColor: "rgba(255,255,255,0.18)", color: "white" }}
+              >
+                <span className="u-pill-dot" /> Verified reviewer
+              </span>
+            </div>
+
+            {topQuote ? (
+              <div className="relative z-10 max-w-lg mt-5" data-testid="reviewer-featured-quote">
+                <div className="inline-flex mb-2.5" aria-label={`${topQuote.rating} stars`}>
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <span key={i} className="text-[13px]" style={{ color: i < topQuote.rating ? "var(--u-star)" : "rgba(255,255,255,0.2)" }}>★</span>
+                  ))}
+                </div>
+                <p className="font-serif-italic text-white text-lg lg:text-[1.65rem] leading-snug line-clamp-3">
+                  &ldquo;{topQuote.text}&rdquo;
+                </p>
+                <p className="mt-3 text-[10px] text-white/45 font-mono uppercase tracking-wider">on {topQuote.business_name}</p>
+              </div>
+            ) : (
+              <div className="relative z-10" />
+            )}
           </div>
 
           <div className="bg-white px-6 lg:px-9 pb-7 relative">
             <div className="flex flex-col md:flex-row gap-5 md:items-end -mt-12 md:-mt-14">
               <div
-                className="w-24 h-24 rounded-3xl flex items-center justify-center text-white font-display text-3xl font-bold shrink-0 shadow-xl"
-                style={{ background: avatarGrad, border: "4px solid white" }}
+                className="w-24 h-24 rounded-3xl flex items-center justify-center text-white font-display text-3xl font-bold shrink-0"
+                style={{ background: avatarGrad, border: "4px solid white", boxShadow: "0 18px 40px -14px rgba(11,11,16,0.4)" }}
                 data-testid="reviewer-avatar"
               >
                 {initials}
@@ -248,7 +268,7 @@ export default function ReviewerPage() {
               <p className="text-[color:var(--u-ink-2)] font-medium">No reviews yet.</p>
             </div>
           ) : (
-            <div className="grid md:grid-cols-2 gap-5" data-testid="reviewer-reviews-list">
+            <div className={`grid gap-5 ${profile.reviews.length > 1 ? "md:grid-cols-2" : "max-w-xl"}`} data-testid="reviewer-reviews-list">
               {profile.reviews.map((r, i) => (
                 <ReviewCard
                   key={r.id}
