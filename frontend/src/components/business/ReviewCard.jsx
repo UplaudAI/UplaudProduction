@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { BadgeCheck, Sparkles, MessageCircle, Share2, Video, ShieldCheck } from "lucide-react";
+import { BadgeCheck, Sparkles, MessageCircle, Share2, Video, ShieldCheck, ArrowUpRight } from "lucide-react";
 
 function Stars({ n }) {
   return (
@@ -32,10 +32,11 @@ function buildReferralUrl(review, businessName) {
   return `https://wa.me/?text=${text}`;
 }
 
-export default function ReviewCard({ review, businessName, audience, delay = 0 }) {
+export default function ReviewCard({ review, businessName, audience, delay = 0, showBusinessTag = false }) {
   const isB2B = audience === "b2b";
   const isDemo = review.verification_type === "demo";
   const initials = (review.reviewer_name || "?").split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+  const businessInitials = (businessName || "?").split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
   const colorIdx = (review.reviewer_name?.charCodeAt(0) || 0) % AVATAR_COLORS.length;
   const [c1, c2] = AVATAR_COLORS[colorIdx];
   const isFiveStar = review.rating >= 5;
@@ -53,6 +54,25 @@ export default function ReviewCard({ review, businessName, audience, delay = 0 }
         >
           <Sparkles size={9} /> 5★
         </span>
+      )}
+
+      {showBusinessTag && (
+        <Link
+          to={`/business/${review.business_slug}`}
+          data-testid={`review-business-tag-${review.id}`}
+          className="inline-flex items-center gap-2 mb-3.5 pb-3.5 border-b border-[color:var(--u-line)] group/biz"
+        >
+          <div
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+            style={{ background: "linear-gradient(135deg, #0B0B10 0%, #2A2545 45%, #5B3EEE 100%)" }}
+          >
+            {businessInitials}
+          </div>
+          <span className="text-[12px] font-medium text-[color:var(--u-ink-2)] group-hover/biz:text-[color:var(--u-violet)] transition">
+            {businessName}
+          </span>
+          <ArrowUpRight size={11} className="text-[color:var(--u-muted)] group-hover/biz:text-[color:var(--u-violet)] transition" />
+        </Link>
       )}
 
       <div className="flex items-center gap-3 mb-3">

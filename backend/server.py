@@ -747,6 +747,7 @@ async def get_reviewer_profile(reviewer_slug: str):
     for r in reviews:
         b = biz_map.get(r["business_slug"])
         r["business_name"] = b["name"] if b else r["business_slug"]
+        r["business_audience"] = b.get("audience", "b2c") if b else "b2c"
 
     profile = await db.reviewer_profiles.find_one({"reviewer_slug": reviewer_slug}, {"_id": 0}) or {}
 
@@ -771,7 +772,8 @@ async def get_reviewer_profile(reviewer_slug: str):
         "verified_demo_count": verified_demo_count,
         "member_since": member_since,
         "businesses_reviewed": [
-            {"slug": b["slug"], "name": b["name"], "category": b.get("category", "")} for b in businesses
+            {"slug": b["slug"], "name": b["name"], "category": b.get("category", ""), "audience": b.get("audience", "b2c")}
+            for b in businesses
         ],
         "reviews": reviews,
     }

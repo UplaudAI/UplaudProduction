@@ -85,3 +85,13 @@ Redesign the Uplaud business review page (currently at `https://www.uplaud.ai/bu
 ### P1 — Next
 - Add auth so "Follow" persists per-account instead of per-browser localStorage.
 - Make unfollow atomic (currently read-then-clamp-set; a $inc + floor-at-0 aggregation update would remove the small race window).
+
+## Reviewer Profile Redesign (2026-08)
+- Redesigned `/profile/:reviewerSlug` per user feedback ("looks boring"): dark gradient cover banner (ambient mint/violet blur glows + grid overlay) behind an overlapping gradient avatar tile, hero-style stat strip (5 stats incl. new "Verified demos" count), "Businesses reviewed" as clickable logo-chip cards, and section headers matching site copy voice (pill kicker + italic accent word headings).
+- **Shared component reuse**: `ReviewCard.jsx` gained an optional `showBusinessTag` prop (default `false`, only used on the reviewer profile page) that renders a small dark-gradient business logo tile + name (linking to `/business/:slug`) above the reviewer row — so review cards on the profile page are now visually IDENTICAL to business-page review cards (same verification badges, referred tag, avatar colors, WhatsApp referral button).
+- Backend `GET /api/reviewer/{slug}` now also returns `business_audience` per review and `audience` per entry in `businesses_reviewed`, so the reused ReviewCard shows correct B2B/B2C terminology per review.
+- Testing: 9/9 backend pytest, 100% frontend Playwright pass (`/app/test_reports/iteration_4.json`). Business page regression confirmed clean (no business tag shown there, WhatsApp referral still works).
+- Fixed: reviewer page "Back" link no longer hardcoded to `/business/the-solved-skin`; now points to `/`.
+
+### P1 — Next
+- Single-column layout for reviewer review grid when a reviewer has only 1 review (currently a 2-col grid with one card looks slightly sparse).

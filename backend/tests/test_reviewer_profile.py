@@ -32,10 +32,30 @@ class TestReviewerProfile:
         assert biz_slugs == ["ai-fiesta", "the-solved-skin"]
         biz_names = sorted(b["name"] for b in d["businesses_reviewed"])
         assert biz_names == ["AI Fiesta", "The Solved Skin"]
-        # reviews carry business_name
+        # reviews carry business_name and business_audience (new field for showBusinessTag)
         for rv in d["reviews"]:
             assert "business_name" in rv
+            assert "business_audience" in rv
+            assert rv["business_audience"] in ("b2b", "b2c")
         assert len(d["reviews"]) == 2
+        # businesses_reviewed carries audience (new field)
+        for b in d["businesses_reviewed"]:
+            assert "audience" in b
+            assert b["audience"] in ("b2b", "b2c")
+
+    def test_marcus_chen_verified_demo(self, s):
+        r = s.get(f"{API}/reviewer/marcus-chen")
+        assert r.status_code == 200
+        d = r.json()
+        # Should have a demo review on ai-fiesta (b2b)
+        demo_reviews = [rv for rv in d["reviews"] if rv.get("verification_type") == "demo"]
+        assert len(demo_reviews) >= 1
+        assert any(rv["business_slug"] == "ai-fiesta" for rv in demo_reviews)
+        # verified_demo_count reflects it
+        assert d["verified_demo_count"] >= 1
+        # business_audience for ai-fiesta review should be b2b
+        af = [rv for rv in d["reviews"] if rv["business_slug"] == "ai-fiesta"]
+        assert af and af[0]["business_audience"] == "b2b"
 
     def test_shweta_no_seeded_profile(self, s):
         r = s.get(f"{API}/reviewer/shweta")
