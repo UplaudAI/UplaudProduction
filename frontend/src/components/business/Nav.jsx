@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { MessageCircle } from "lucide-react";
+import UplaudBrand from "@/components/UplaudBrand";
 
 export default function Nav({ businessName, audience }) {
   const isB2B = audience === "b2b";
@@ -11,11 +12,7 @@ export default function Nav({ businessName, audience }) {
     >
       <div className="max-w-[1320px] mx-auto px-6 lg:px-10 h-16 flex items-center justify-between">
         <Link to="/" data-testid="nav-logo" className="flex items-center">
-          <img
-            src="/uplaud-wordmark-purple.png"
-            alt="Uplaud"
-            className="h-8 w-auto object-contain"
-          />
+          <UplaudBrand textClassName="text-2xl" />
         </Link>
         <nav className="hidden md:flex items-center gap-8 text-sm text-[color:var(--u-ink-2)]">
           <a href="#reviews" data-testid="nav-reviews" className="hover:text-[color:var(--u-ink)] transition">Reviews</a>
