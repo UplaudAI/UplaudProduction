@@ -469,7 +469,7 @@ Return ONLY a JSON object with EXACTLY these keys:
   "ae_name": "name of the seller / account executive, if mentioned",
   "sentiment_label": "one of: Positive, Neutral, Negative — the customer's genuine overall sentiment",
   "signal_score": 0,
-  "call_type": "one of: Demo, Discovery, Onboarding, Support, Renewal",
+  "call_type": "one of: Demo, Discovery, Feedback, Testimonial, Onboarding, Support, Renewal",
   "summary": "3-4 sentences capturing the real arc of the conversation AND the genuine sentiment, including any hesitation or nuance",
   "motivations": ["what is driving the customer / why they're looking — 3-6 specific items when supported"],
   "pain_points": ["specific pains, frustrations, costs or problems they described — 3-6 items when supported, be concrete"],
@@ -1099,7 +1099,7 @@ def public_review_from_uplaud(testimonial: Dict[str, Any], business_slug: str) -
         "business_slug": business_slug,
         "reviewer_name": customer,
         "reviewer_slug": public_slug(customer),
-        "reviewer_title": testimonial.get("source") or "Verified customer",
+        "reviewer_title": "",
         "rating": max(1, min(5, rating)),
         "emoji": "",
         "text": testimonial.get("body") or "",
@@ -2126,6 +2126,17 @@ def _public_payload(doc: dict) -> PublicTestimonial:
     )
 
 
+def review_source_for_call_type(call_type: str) -> str:
+    normalized = re.sub(r"[^a-z]+", " ", (call_type or "").lower()).strip()
+    if normalized in {"demo", "discovery", "sales demo", "pre sales demo", "pre sales"}:
+        return "Pre-Sales Demo"
+    if normalized in {"testimonial", "feedback", "customer feedback", "post sales testimonial", "post sales"}:
+        return "Post Sales Testimonial"
+    if normalized in {"onboarding", "renewal", "support", "customer success", "qbr"}:
+        return "Post Sales Testimonial"
+    return ""
+
+
 @api_router.get("/public/testimonial/{share_id}", response_model=PublicTestimonial)
 async def public_get_testimonial(share_id: str):
     doc = await find_public_source(share_id)
@@ -2174,6 +2185,7 @@ async def public_approve_testimonial(share_id: str, request: Request):
         reviewer_record_id=reviewer_id,
         share_link=share_link,
         date_added=now[:10],
+        review_source=review_source_for_call_type(ins.get("call_type", "")),
     )
     return _public_payload(doc)
 

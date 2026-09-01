@@ -184,6 +184,23 @@ def test_get_public_business_reviews_from_uplaud_table(monkeypatch):
     assert reviews[0]["text"].startswith("The side-by-side")
 
 
+def test_review_source_is_channel_not_reviewer_title():
+    review = server.public_review_from_uplaud(
+        {
+            "id": "rec_review",
+            "customer": "Anand Pandey",
+            "body": "AI Fiesta helps me compare models.",
+            "rating": 5,
+            "source": "Post Sales Testimonial",
+            "date_added": "2026-08-31",
+        },
+        "aifiesta",
+    )
+
+    assert review["channel"] == "Post Sales Testimonial"
+    assert review["reviewer_title"] == ""
+
+
 def test_get_public_business_stats_counts_reviews_and_circles(monkeypatch):
     _mock_airtable(monkeypatch)
 

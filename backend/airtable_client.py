@@ -281,6 +281,7 @@ async def create_uplaud_record(
     reviewer_record_id: Optional[str] = None,
     share_link: str = "",
     date_added: Optional[str] = None,
+    review_source: str = "",
     city: Optional[str] = None,
     state: Optional[str] = None,
     country: Optional[str] = None,
@@ -292,6 +293,8 @@ async def create_uplaud_record(
         fields["Share Link"] = share_link
     if date_added:
         fields["Date_Added"] = date_added
+    if review_source:
+        fields["Review_Source"] = review_source
     if city:
         fields["City"] = city
     if state:

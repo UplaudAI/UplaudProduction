@@ -63,6 +63,14 @@ def test_regen_doc_uses_all_available_growth_signal_fields_as_context():
     assert "Can we use unlimited seats?" in doc["transcript"]
 
 
+def test_review_source_label_from_call_type():
+    assert server.review_source_for_call_type("Demo") == "Pre-Sales Demo"
+    assert server.review_source_for_call_type("Discovery") == "Pre-Sales Demo"
+    assert server.review_source_for_call_type("Feedback") == "Post Sales Testimonial"
+    assert server.review_source_for_call_type("Renewal") == "Post Sales Testimonial"
+    assert server.review_source_for_call_type("") == ""
+
+
 async def _fake_generate_insights(*_args, **_kwargs):
     return {
         "company_name": "AI Fiesta",
@@ -139,3 +147,53 @@ async def test_analyze_source_does_not_create_public_uplaud_record(monkeypatch):
     assert out.status == "analyzed"
     assert out.testimonial_draft
     assert created_public_records == []
+
+
+@pytest.mark.asyncio
+async def test_approval_writes_review_source_to_public_uplaud_record(monkeypatch):
+    source_id = "src_approved"
+    share_id = "share_approved"
+    server.TEMP_SOURCES.clear()
+    server.TEMP_SOURCES[source_id] = {
+        "id": source_id,
+        "owner": "user_123",
+        "filename": "feedback.pdf",
+        "file_type": "pdf",
+        "client_name": "Anand Pandey",
+        "brand": "AI Fiesta",
+        "conversation_code": "CV_001",
+        "source_name": "Upload",
+        "duration_min": 12,
+        "transcript": "Post-sales feedback about AI Fiesta.",
+        "word_count": 120,
+        "status": "analyzed",
+        "created_at": "2026-08-31T00:00:00+00:00",
+        "insights": {"speaker_name": "Anand Pandey", "call_type": "Feedback"},
+        "testimonial_draft": "AI Fiesta helps me compare models, with room for better transparency.",
+        "testimonial_is_verbatim": False,
+        "share_id": share_id,
+        "testimonial_status": "sent",
+        "approved_at": None,
+        "approval_requested_at": None,
+    }
+    created_public_records = []
+
+    async def fake_update_growth_signal_by_source_id(*_args, **_kwargs):
+        return True
+
+    async def fake_find_or_create_user(*_args, **_kwargs):
+        return "rec_user"
+
+    async def fake_create_uplaud_record(*args, **kwargs):
+        created_public_records.append((args, kwargs))
+        return "rec_public"
+
+    monkeypatch.setattr(server.airtable_client, "update_growth_signal_by_source_id", fake_update_growth_signal_by_source_id)
+    monkeypatch.setattr(server.airtable_client, "find_or_create_user", fake_find_or_create_user)
+    monkeypatch.setattr(server.airtable_client, "create_uplaud_record", fake_create_uplaud_record)
+
+    out = await server.public_approve_testimonial(share_id, _FakeRequest())
+
+    assert out.status == "approved"
+    assert created_public_records
+    assert created_public_records[0][1]["review_source"] == "Post Sales Testimonial"

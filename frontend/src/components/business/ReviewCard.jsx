@@ -33,6 +33,10 @@ function buildReferralUrl(review, businessName) {
   return `https://wa.me/?text=${encodeURIComponent(`Check out ${name} on Uplaud: ${url}`)}`;
 }
 
+export function displayReviewSource(source) {
+  return (source || "").trim() || "WA";
+}
+
 function isDisplayEmoji(value) {
   return /\p{Extended_Pictographic}/u.test(value || "");
 }
@@ -44,6 +48,7 @@ export default function ReviewCard({ review, businessName, audience, delay = 0 }
   const colorIdx = (review.reviewer_name?.charCodeAt(0) || 0) % AVATAR_COLORS.length;
   const [c1, c2] = AVATAR_COLORS[colorIdx];
   const isFiveStar = review.rating >= 5;
+  const sourceLabel = displayReviewSource(review.channel || review.source);
 
   return (
     <article
@@ -78,7 +83,7 @@ export default function ReviewCard({ review, businessName, audience, delay = 0 }
           <div className="text-[10px] text-[color:var(--u-muted)] font-mono uppercase tracking-wider flex items-center gap-1.5">
             <span>{formatDate(review.date)}</span>
             <span>·</span>
-            <MessageCircle size={9} /> WA
+            <MessageCircle size={9} /> {sourceLabel}
           </div>
         </div>
         {isDisplayEmoji(review.emoji) && <div className="text-xl leading-none">{review.emoji}</div>}
