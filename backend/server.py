@@ -1297,7 +1297,9 @@ def render_public_business_html(payload: Dict[str, Any], canonical_url: str) -> 
   <title>{html.escape(title)}</title>
   <meta name="description" content="{html.escape(description)}" />
   <link rel="canonical" href="{html.escape(canonical_url)}" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+  <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png" />
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   <meta property="og:site_name" content="Uplaud" />
