@@ -1,14 +1,5 @@
 import { ShieldCheck, MapPin, ArrowUpRight, Star } from "lucide-react";
 
-const VERTICAL_LABEL = {
-  "health-wellness": "Health & Wellness",
-  "education": "Education",
-  "legal": "Legal",
-  "fintech": "Financial Services",
-  "saas": "B2B SaaS",
-  "other": "Consumer",
-};
-
 export default function Hero({ business, stats, topReviews = [] }) {
   const isB2B = business?.audience === "b2b";
   const displayName = formatBusinessName(business?.name);
@@ -32,12 +23,7 @@ export default function Hero({ business, stats, topReviews = [] }) {
         <div className="grid lg:grid-cols-12 gap-8 lg:gap-10 items-center">
           {/* LEFT: editorial column */}
           <div className="lg:col-span-7 reveal">
-            <span className="u-pill" data-testid="hero-vertical-pill">
-              <span className="u-pill-dot" />
-              {VERTICAL_LABEL[business?.vertical] || "Consumer"} · Verified on Uplaud
-            </span>
-
-            <div className="flex items-center gap-4 mt-6">
+            <div className="flex items-center gap-4">
               <div
                 className="w-14 h-14 rounded-2xl flex items-center justify-center text-white font-display text-xl font-bold shrink-0"
                 style={{
@@ -97,9 +83,6 @@ export default function Hero({ business, stats, topReviews = [] }) {
               <a href="#reviews" className="u-btn u-btn-dark" data-testid="hero-cta-reviews">
                 Read all reviews <ArrowUpRight size={16} />
               </a>
-              <span className="hidden md:inline-flex items-center gap-1.5 text-[11px] text-[color:var(--u-muted)] ml-2">
-                {isB2B ? "Captured via CRM, sales calls & WhatsApp · zero fake accounts" : "Captured via WhatsApp · zero fake accounts"}
-              </span>
             </div>
           </div>
 

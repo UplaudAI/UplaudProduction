@@ -46,7 +46,7 @@ export default function ReviewsSection({ slug, businessName, audience }) {
           </h2>
         </div>
         <p className="text-sm text-[color:var(--u-muted)] max-w-xs">
-          Every review captured via WhatsApp — no bots, no incentivised fluff.
+          Every review captured from verified sources — no bots, no incentivized fluff.
         </p>
       </div>
 
