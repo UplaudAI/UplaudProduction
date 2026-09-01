@@ -27,8 +27,10 @@ const AVATAR_COLORS = [
 ];
 
 function buildReferralUrl(review, businessName) {
-  const text = `Hey! You asked me about ${businessName || "this"} — here's my honest review on Uplaud:%0A%0A"${review.text}"%0A%0A- ${review.reviewer_name}%0A%0ACheck it: uplaud.ai/business/${review.business_slug}`;
-  return `https://wa.me/?text=${text}`;
+  const name = businessName || "this business";
+  const slug = review.business_slug || "";
+  const url = `https://www.uplaud.ai/business/public/${slug}`;
+  return `https://wa.me/?text=${encodeURIComponent(`Check out ${name} on Uplaud: ${url}`)}`;
 }
 
 function isDisplayEmoji(value) {

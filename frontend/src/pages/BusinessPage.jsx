@@ -55,7 +55,7 @@ export default function BusinessPage() {
 
   return (
     <div className="min-h-screen bg-grain" data-testid="business-page">
-      <Nav businessName={business.name} audience={business.audience} />
+      <Nav businessName={business.name} audience={business.audience} slug={business.slug || slug} />
       <Hero business={business} stats={stats} topReviews={topReviews} />
       <TrustStrip business={business} stats={stats} />
       <ReviewsSection slug={slug} businessName={business.name} audience={business.audience} />

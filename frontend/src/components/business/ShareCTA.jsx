@@ -3,6 +3,13 @@ import { Send, MessageCircle, Sparkles, Check } from "lucide-react";
 import api from "@/lib/api";
 
 const EMOJIS = ["🔥", "😍", "🙂", "😐", "😕"];
+const PUBLIC_ORIGIN = "https://www.uplaud.ai";
+
+function buildBusinessReferralUrl(businessName, slug) {
+  const name = businessName || "this business";
+  const url = `${PUBLIC_ORIGIN}/business/public/${slug || ""}`;
+  return `https://wa.me/?text=${encodeURIComponent(`Check out ${name} on Uplaud: ${url}`)}`;
+}
 
 export default function ShareCTA({ slug, businessName }) {
   const [form, setForm] = useState({ reviewer_name: "", rating: 5, emoji: "🔥", text: "" });
@@ -63,7 +70,7 @@ export default function ShareCTA({ slug, businessName }) {
 
           <div className="mt-8 flex flex-wrap gap-4">
             <a
-              href={`https://wa.me/?text=${encodeURIComponent(`Check out ${businessName} — real reviews on Uplaud`)}`}
+              href={buildBusinessReferralUrl(businessName, slug)}
               target="_blank"
               rel="noreferrer"
               className="u-btn"

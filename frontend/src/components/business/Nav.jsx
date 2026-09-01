@@ -2,8 +2,15 @@ import { Link } from "react-router-dom";
 import { MessageCircle } from "lucide-react";
 
 const LOGO_LIGHT_URL = "/uplaud-main-wordmark.png";
+const PUBLIC_ORIGIN = "https://www.uplaud.ai";
 
-export default function Nav({ businessName, audience }) {
+function buildBusinessReferralUrl(businessName, slug) {
+  const name = businessName || "this business";
+  const url = `${PUBLIC_ORIGIN}/business/public/${slug || ""}`;
+  return `https://wa.me/?text=${encodeURIComponent(`Check out ${name} on Uplaud: ${url}`)}`;
+}
+
+export default function Nav({ businessName, audience, slug }) {
   const isB2B = audience === "b2b";
   return (
     <header
@@ -27,7 +34,7 @@ export default function Nav({ businessName, audience }) {
         </nav>
         <div className="flex items-center gap-3">
           <a
-            href={`https://wa.me/?text=Check out ${encodeURIComponent(businessName || "this business")} on Uplaud`}
+            href={buildBusinessReferralUrl(businessName, slug)}
             target="_blank"
             rel="noreferrer"
             data-testid="nav-refer-btn"
