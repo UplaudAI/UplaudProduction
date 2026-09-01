@@ -50,6 +50,13 @@
     },
     {
       "source": "/business/public/:slug",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(Googlebot|googlebot|Bingbot|bingbot|Slurp|DuckDuckBot|Baiduspider|YandexBot|facebookexternalhit|Twitterbot|LinkedInBot|WhatsApp|GPTBot|ChatGPT-User|OAI-SearchBot|ClaudeBot|Claude-User|anthropic-ai|PerplexityBot|Bytespider|CCBot|SemrushBot|AhrefsBot).*"
+        }
+      ],
       "destination": "/api/index.py?path=business/public/:slug"
     },
     {
