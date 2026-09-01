@@ -131,6 +131,8 @@ def test_public_business_html_is_crawlable(monkeypatch):
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
     assert "<title>AI Fiesta Reviews | Uplaud</title>" in response.text
+    assert '<meta property="og:site_name" content="Uplaud" />' in response.text
+    assert '<link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />' in response.text
     assert "application/ld+json" in response.text
     assert "The side-by-side model comparison helped us pick the right answer." in response.text
     assert "Average rating" in response.text

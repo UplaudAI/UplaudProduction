@@ -1297,9 +1297,19 @@ def render_public_business_html(payload: Dict[str, Any], canonical_url: str) -> 
   <title>{html.escape(title)}</title>
   <meta name="description" content="{html.escape(description)}" />
   <link rel="canonical" href="{html.escape(canonical_url)}" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <meta property="og:site_name" content="Uplaud" />
   <meta property="og:title" content="{html.escape(title)}" />
   <meta property="og:description" content="{html.escape(description)}" />
   <meta property="og:type" content="website" />
+  <meta property="og:url" content="{html.escape(canonical_url)}" />
+  <meta property="og:image" content="/uplaud-logo-purple.webp" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="{html.escape(title)}" />
+  <meta name="twitter:description" content="{html.escape(description)}" />
+  <meta name="twitter:image" content="/uplaud-logo-purple.webp" />
   <script type="application/ld+json">{json_ld}</script>
   <style>
     body {{ margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #111827; background: #f4efe6; }}
