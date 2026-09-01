@@ -2005,6 +2005,18 @@ async def analyze_source(source_id: str, request: Request, regenerate: bool = Fa
         source_id, business_name, insights.model_dump(), doc.get("testimonial_status", "draft"),
         testimonial_draft=testimonial, share_id=doc["share_id"]
     )
+
+    company_name = (insights.company_name or "").strip()
+    speaker_name = (insights.speaker_name or doc.get("client_name") or "").strip()
+    if speaker_name and company_name:
+        try:
+            await airtable_client.find_or_create_user(
+                name=speaker_name,
+                email=doc.get("client_email") or None,
+                extra_fields={"Company": company_name},
+            )
+        except Exception as ae:
+            logger.warning("Failed to sync analyzed speaker company to Airtable User table: %s", ae)
     
     return source_to_out(doc)
 

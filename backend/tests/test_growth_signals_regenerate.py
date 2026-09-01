@@ -122,6 +122,7 @@ async def test_analyze_source_does_not_create_public_uplaud_record(monkeypatch):
         "approval_requested_at": None,
     }
     created_public_records = []
+    synced_users = []
 
     async def fake_resolve_current_business_name(*_args, **_kwargs):
         return "AI Fiesta"
@@ -133,9 +134,14 @@ async def test_analyze_source_does_not_create_public_uplaud_record(monkeypatch):
         created_public_records.append((args, kwargs))
         return "rec_public"
 
+    async def fake_find_or_create_user(*args, **kwargs):
+        synced_users.append((args, kwargs))
+        return "rec_user"
+
     monkeypatch.setattr(server, "generate_insights", _fake_generate_insights)
     monkeypatch.setattr(server, "resolve_current_business_name", fake_resolve_current_business_name)
     monkeypatch.setattr(server.airtable_client, "upsert_growth_signal", fake_upsert_growth_signal)
+    monkeypatch.setattr(server.airtable_client, "find_or_create_user", fake_find_or_create_user)
     monkeypatch.setattr(server.airtable_client, "create_uplaud_record", fake_create_uplaud_record)
 
     out = await server.analyze_source(
@@ -146,6 +152,9 @@ async def test_analyze_source_does_not_create_public_uplaud_record(monkeypatch):
 
     assert out.status == "analyzed"
     assert out.testimonial_draft
+    assert synced_users
+    assert synced_users[0][1]["name"] == "Anand Pandey"
+    assert synced_users[0][1]["extra_fields"] == {"Company": "AI Fiesta"}
     assert created_public_records == []
 
 
