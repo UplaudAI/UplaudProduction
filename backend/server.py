@@ -2006,21 +2006,6 @@ async def analyze_source(source_id: str, request: Request, regenerate: bool = Fa
         testimonial_draft=testimonial, share_id=doc["share_id"]
     )
     
-    # Sync the testimonial to Airtable's Uplaud table immediately upon transcript analysis
-    try:
-        speaker_name = insights.speaker_name or doc.get("client_name") or "Customer"
-        reviewer_id = await airtable_client.find_or_create_user(name=speaker_name, email=doc.get("client_email") or None)
-        share_link = f"{str(request.base_url).rstrip('/')}/t/{doc['share_id']}"
-        await airtable_client.create_uplaud_record(
-            business_name=business_name,
-            testimonial=testimonial,
-            reviewer_record_id=reviewer_id,
-            share_link=share_link,
-            date_added=datetime.now(timezone.utc).date().isoformat()
-        )
-    except Exception as ae:
-        logger.warning(f"Failed to sync testimonial to Airtable Uplaud table on analysis: {ae}")
-        
     return source_to_out(doc)
 
 

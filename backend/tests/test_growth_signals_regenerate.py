@@ -3,6 +3,8 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
+
 os.environ.setdefault("MONGO_URL", "mongodb://localhost:27017")
 os.environ.setdefault("DB_NAME", "uplaud_test")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -24,6 +26,7 @@ motor_module.motor_asyncio = motor_asyncio_module
 sys.modules.setdefault("motor", motor_module)
 sys.modules.setdefault("motor.motor_asyncio", motor_asyncio_module)
 
+import server  # noqa: E402
 from server import _growth_signal_record_to_regen_doc  # noqa: E402
 
 
@@ -58,3 +61,81 @@ def test_regen_doc_uses_all_available_growth_signal_fields_as_context():
     assert "Everything else felt clunky." in doc["transcript"]
     assert "one of the best I've seen so far" in doc["transcript"]
     assert "Can we use unlimited seats?" in doc["transcript"]
+
+
+async def _fake_generate_insights(*_args, **_kwargs):
+    return {
+        "company_name": "AI Fiesta",
+        "speaker_name": "Anand Pandey",
+        "speaker_role": "Customer",
+        "sentiment_label": "Mixed",
+        "signal_score": 82,
+        "call_type": "Feedback",
+        "summary": "Customer shared multilingual feedback about AI Fiesta.",
+        "motivations": ["Compare premium AI model responses."],
+        "pain_points": ["Response quality sometimes differs from original models."],
+        "buying_signals": ["Customer has used the product since launch."],
+        "objections": [],
+        "customer_language": ["I started using AI Fiesta when it launched."],
+        "product_feedback": ["Improve transparency around which model answers each prompt."],
+        "faqs": [],
+        "testimonial": "I've used AI Fiesta since launch and value the model comparison, while wanting clearer response transparency.",
+    }
+
+
+class _FakeRequest:
+    base_url = "https://www.uplaud.ai/"
+
+
+@pytest.mark.asyncio
+async def test_analyze_source_does_not_create_public_uplaud_record(monkeypatch):
+    source_id = "src_multilingual"
+    server.TEMP_SOURCES.clear()
+    server.TEMP_SOURCES[source_id] = {
+        "id": source_id,
+        "owner": "user_123",
+        "filename": "multilingual-feedback.pdf",
+        "file_type": "pdf",
+        "client_name": "Anand Pandey",
+        "brand": "AI Fiesta",
+        "conversation_code": "CV_001",
+        "source_name": "Upload",
+        "duration_min": 12,
+        "transcript": "Hindi and English feedback about AI Fiesta in one conversation.",
+        "word_count": 120,
+        "status": "uploaded",
+        "created_at": "2026-08-31T00:00:00+00:00",
+        "insights": None,
+        "testimonial_draft": None,
+        "testimonial_is_verbatim": True,
+        "share_id": "share_multilingual",
+        "testimonial_status": "draft",
+        "approved_at": None,
+        "approval_requested_at": None,
+    }
+    created_public_records = []
+
+    async def fake_resolve_current_business_name(*_args, **_kwargs):
+        return "AI Fiesta"
+
+    async def fake_upsert_growth_signal(*_args, **_kwargs):
+        return None
+
+    async def fake_create_uplaud_record(*args, **kwargs):
+        created_public_records.append((args, kwargs))
+        return "rec_public"
+
+    monkeypatch.setattr(server, "generate_insights", _fake_generate_insights)
+    monkeypatch.setattr(server, "resolve_current_business_name", fake_resolve_current_business_name)
+    monkeypatch.setattr(server.airtable_client, "upsert_growth_signal", fake_upsert_growth_signal)
+    monkeypatch.setattr(server.airtable_client, "create_uplaud_record", fake_create_uplaud_record)
+
+    out = await server.analyze_source(
+        source_id,
+        _FakeRequest(),
+        current={"id": "user_123", "email": "owner@example.com"},
+    )
+
+    assert out.status == "analyzed"
+    assert out.testimonial_draft
+    assert created_public_records == []
