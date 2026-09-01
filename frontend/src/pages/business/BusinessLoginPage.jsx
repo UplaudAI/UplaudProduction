@@ -6,7 +6,8 @@ import { supabase } from "@/lib/supabase";
 import api, { formatApiError } from "@/lib/api";
 import { getAuthErrorMessage } from "@/lib/auth-error-message";
 import { requestPasswordReset } from "@/lib/password-reset";
-import UplaudBrand from "@/components/UplaudBrand";
+
+const LOGO_URL = "/uplaud-main-wordmark.png";
 
 // First-time users go to setup. Returning users land on Warm Pipeline.
 async function resolvePostLoginDestination() {
@@ -207,7 +208,12 @@ export default function BusinessLoginPage() {
           data-testid="login-brand-logo"
           className="inline-flex items-center"
         >
-          <UplaudBrand textClassName="text-3xl" />
+          <img
+            src={LOGO_URL}
+            alt="Uplaud"
+            className="h-10 w-auto object-contain mix-blend-multiply"
+            style={{ maxWidth: 120 }}
+          />
         </a>
 
         <div className="max-w-[440px] w-full mx-auto lg:mx-0 lg:ml-4">
