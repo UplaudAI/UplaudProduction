@@ -1,8 +1,11 @@
 import asyncio
+from pathlib import Path
 import sys
 import types
 
 import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 try:
     import airtable_client
@@ -222,8 +225,7 @@ def test_update_content_post_raises_for_invalid_published_update(monkeypatch):
         )
 
 
-@pytest.mark.asyncio
-async def test_gather_content_sources_returns_reviews_and_growth_signals(monkeypatch):
+def test_gather_content_sources_returns_reviews_and_growth_signals(monkeypatch):
     async def fake_public_page_payload(slug):
         return {
             "business": {"name": "AI Fiesta", "slug": "aifiesta", "category": "AI productivity"},
@@ -237,8 +239,68 @@ async def test_gather_content_sources_returns_reviews_and_growth_signals(monkeyp
     monkeypatch.setattr(server, "public_page_payload", fake_public_page_payload)
     monkeypatch.setattr(airtable_client, "list_growth_signals_by_business", fake_signals)
 
-    sources = await server.gather_content_sources("aifiesta")
+    sources = asyncio.run(server.gather_content_sources("aifiesta"))
 
     assert sources["business"]["name"] == "AI Fiesta"
     assert sources["reviews"][0]["id"] == "rec1"
     assert sources["growth_signals"][0]["id"] == "sig1"
+
+
+def test_gather_content_sources_queries_growth_signals_with_airtable_business_name(monkeypatch):
+    queried_names = []
+
+    async def fake_public_page_payload(slug):
+        return {
+            "business": {
+                "name": "AI Fiesta",
+                "slug": "aifiesta",
+                "airtable_business_name": "AI Fiesta Inc.",
+            },
+            "reviews": [],
+            "stats": {},
+        }
+
+    async def fake_signals(business_name):
+        queried_names.append(business_name)
+        return []
+
+    monkeypatch.setattr(server, "public_page_payload", fake_public_page_payload)
+    monkeypatch.setattr(airtable_client, "list_growth_signals_by_business", fake_signals)
+
+    asyncio.run(server.gather_content_sources("aifiesta"))
+
+    assert queried_names == ["AI Fiesta Inc."]
+
+
+def test_gather_content_sources_queries_growth_signals_with_business_name_fallback(monkeypatch):
+    queried_names = []
+
+    async def fake_public_page_payload(slug):
+        return {
+            "business": {"name": "AI Fiesta", "slug": "aifiesta"},
+            "reviews": [],
+            "stats": {},
+        }
+
+    async def fake_signals(business_name):
+        queried_names.append(business_name)
+        return []
+
+    monkeypatch.setattr(server, "public_page_payload", fake_public_page_payload)
+    monkeypatch.setattr(airtable_client, "list_growth_signals_by_business", fake_signals)
+
+    asyncio.run(server.gather_content_sources("aifiesta"))
+
+    assert queried_names == ["AI Fiesta"]
+
+
+def test_gather_content_sources_raises_404_for_missing_public_business(monkeypatch):
+    async def fake_public_page_payload(slug):
+        return None
+
+    monkeypatch.setattr(server, "public_page_payload", fake_public_page_payload)
+
+    with pytest.raises(server.HTTPException) as exc:
+        asyncio.run(server.gather_content_sources("missing"))
+
+    assert exc.value.status_code == 404
