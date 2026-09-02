@@ -35,6 +35,38 @@ def _mock_airtable(monkeypatch):
         if table == airtable_client.TABLE_BUSINESS:
             raise AssertionError("public business pages must not read the Business table")
         if table == airtable_client.TABLE_UPLAUD:
+            if (params or {}).get("filterByFormula"):
+                formula = (params or {}).get("filterByFormula", "").lower()
+                if "priya menon" in formula:
+                    return {
+                        "records": [
+                            {
+                                "id": "rec_review_1",
+                                "createdTime": "2026-06-20T12:00:00Z",
+                                "fields": {
+                                    "business_name": "AIFiesta",
+                                    "Uplaud": "The side-by-side model comparison helped us pick the right answer.",
+                                    "Uplaud Score": 5,
+                                    "Name_Creator": ["Priya Menon"],
+                                    "Review_Source": "Uplaud",
+                                    "Date_Added": "2026-06-20",
+                                },
+                            },
+                            {
+                                "id": "rec_marshall_review",
+                                "createdTime": "2026-08-27T12:00:00Z",
+                                "fields": {
+                                    "business_name": "Marshall",
+                                    "Uplaud": "Marshall delivered a strong customer experience.",
+                                    "Uplaud Score": 5,
+                                    "Name_Creator": ["Priya Menon"],
+                                    "Review_Source": "Uplaud",
+                                    "Date_Added": "2026-08-27",
+                                },
+                            },
+                        ]
+                    }
+                return {"records": []}
             if (params or {}).get("offset") == "next_page":
                 return {
                     "records": [
@@ -240,7 +272,15 @@ def test_review_source_is_channel_not_reviewer_title():
 
 
 def test_get_public_reviewer_reviews(monkeypatch):
+    calls = []
     _mock_airtable(monkeypatch)
+    original_get = airtable_client._get
+
+    async def tracking_get(table, params=None):
+        calls.append((table, params or {}))
+        return await original_get(table, params)
+
+    monkeypatch.setattr(airtable_client, "_get", tracking_get)
 
     response = client.get("/api/business/public/reviewer/priya-menon")
 
@@ -260,6 +300,13 @@ def test_get_public_reviewer_reviews(monkeypatch):
     assert {review["business_name"] for review in data["reviews"]} == {"AI Fiesta", "Marshall"}
     assert [item["name"] for item in data["businesses_reviewed"]] == ["AI Fiesta", "Marshall"]
     assert data["reviews"][0]["reviewer_name"] == "Priya Menon"
+    uplaud_calls = [params for table, params in calls if table == airtable_client.TABLE_UPLAUD]
+    assert uplaud_calls == [
+        {
+            "pageSize": 100,
+            "filterByFormula": 'FIND(LOWER("priya menon"), LOWER(ARRAYJOIN({Name_Creator})))',
+        }
+    ]
 
 
 def test_legacy_public_business_reviewer_route_still_works(monkeypatch):

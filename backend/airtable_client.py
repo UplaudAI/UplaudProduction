@@ -289,6 +289,29 @@ async def find_user_by_name(name: str) -> Optional[dict]:
         return None
 
 
+async def list_uplaud_records_by_reviewer_name(name: str) -> list:
+    clean = (name or "").strip()
+    if not clean or not _enabled():
+        return []
+    records = []
+    offset = None
+    formula = f'FIND(LOWER("{_escape(clean)}"), LOWER(ARRAYJOIN({{Name_Creator}})))'
+    try:
+        while True:
+            params = {"pageSize": 100, "filterByFormula": formula}
+            if offset:
+                params["offset"] = offset
+            data = await _get(TABLE_UPLAUD, params)
+            records.extend(data.get("records", []))
+            offset = data.get("offset")
+            if not offset:
+                break
+    except Exception as e:
+        logger.warning("Airtable reviewer Uplaud lookup failed: %s", e)
+        return []
+    return records
+
+
 async def create_uplaud_record(
     business_name: str,
     testimonial: str,

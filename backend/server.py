@@ -956,6 +956,10 @@ def public_display_business_name(value: str) -> str:
     return clean
 
 
+def public_display_name_from_slug(slug: str) -> str:
+    return public_display_business_name((slug or "").replace("-", " "))
+
+
 def public_business_name_slugs(value: str) -> set:
     display_name = public_display_business_name(value)
     return {public_slug(value), public_slug(display_name)}
@@ -1313,7 +1317,10 @@ async def public_reviewer_profile_payload(
     reviewer_slug: str,
     current_business: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    records = await public_all_uplaud_records()
+    reviewer_name_guess = public_display_name_from_slug(reviewer_slug)
+    records = await airtable_client.list_uplaud_records_by_reviewer_name(reviewer_name_guess)
+    if not records:
+        records = await public_all_uplaud_records()
     reviews = await public_reviewer_reviews_from_records(records, reviewer_slug, current_business)
     if not reviews:
         raise HTTPException(status_code=404, detail="Reviewer not found")
