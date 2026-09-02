@@ -1880,7 +1880,9 @@ def content_status_from_quality(article: dict) -> str:
         score = int(article.get("quality_score") or 0)
     except (TypeError, ValueError):
         score = 0
-    return "needs_review" if score >= 80 else "draft"
+    quality_report = article.get("quality_report") or {}
+    hard_failures = quality_report.get("hard_failures") if isinstance(quality_report, dict) else []
+    return "needs_review" if score >= 80 and not hard_failures else "draft"
 
 
 def build_content_schema(post: dict, business: dict, canonical_url: str) -> dict:
@@ -1928,6 +1930,27 @@ async def _call_content_json(system: str, prompt: str, temperature: float = 0.2)
         raise HTTPException(status_code=502, detail="Could not parse content from the model.")
 
 
+async def _call_content_research_json(prompt: str) -> dict:
+    try:
+        text = await asyncio.to_thread(_call_openai_web_search, prompt)
+    except Exception as e:  # noqa
+        logger.error("Content agent web research failed: %s", e)
+        raise HTTPException(status_code=502, detail="The public research request failed. Please try again.")
+    try:
+        return _parse_json(text)
+    except Exception as e:
+        logger.error("Failed to parse content research JSON: %s | raw: %s", e, str(text)[:500])
+        raise HTTPException(status_code=502, detail="Could not parse public research from the model.")
+
+
+def _review_score(review: dict, key: str, fallback: int = 0) -> int:
+    value = review.get(key) if key in review else fallback
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return fallback
+
+
 async def generate_content_article(business_slug: str, request: ContentGenerateRequest) -> dict:
     if not openai_client:
         raise HTTPException(status_code=503, detail="OPENAI_API_KEY not configured on the server.")
@@ -1935,11 +1958,7 @@ async def generate_content_article(business_slug: str, request: ContentGenerateR
     sources = await gather_content_sources(business_slug)
     business = sources.get("business") or {}
     brief = _build_content_brief(sources, request)
-    research_packet = await _call_content_json(
-        CONTENT_REVIEW_SYSTEM,
-        build_content_research_prompt(sources, brief),
-        0.2,
-    )
+    research_packet = await _call_content_research_json(build_content_research_prompt(sources, brief))
 
     writer_prompt = build_content_writer_prompt(sources, research_packet, brief)
     article = await _call_content_json(CONTENT_REVIEW_SYSTEM, writer_prompt, 0.35)
@@ -1951,9 +1970,9 @@ async def generate_content_article(business_slug: str, request: ContentGenerateR
     review = await _call_content_json(CONTENT_REVIEW_SYSTEM, build_content_reviewer_prompt(article, sources), 0.1)
     article.update(
         {
-            "quality_score": review.get("quality_score") or article.get("quality_score") or 0,
-            "seo_score": review.get("seo_score") or article.get("seo_score") or 0,
-            "aeo_score": review.get("aeo_score") or article.get("aeo_score") or 0,
+            "quality_score": _review_score(review, "quality_score"),
+            "seo_score": _review_score(review, "seo_score", int(article.get("seo_score") or 0)),
+            "aeo_score": _review_score(review, "aeo_score", int(article.get("aeo_score") or 0)),
             "quality_report": review.get("quality_report") or review,
             "reviewer_notes": review.get("reviewer_notes") or "",
         }
@@ -1981,9 +2000,9 @@ Keep every claim grounded in the public research, proprietary review evidence, o
         )
         rewritten.update(
             {
-                "quality_score": rewrite_review.get("quality_score") or rewritten.get("quality_score") or 0,
-                "seo_score": rewrite_review.get("seo_score") or rewritten.get("seo_score") or 0,
-                "aeo_score": rewrite_review.get("aeo_score") or rewritten.get("aeo_score") or 0,
+                "quality_score": _review_score(rewrite_review, "quality_score"),
+                "seo_score": _review_score(rewrite_review, "seo_score", int(rewritten.get("seo_score") or 0)),
+                "aeo_score": _review_score(rewrite_review, "aeo_score", int(rewritten.get("aeo_score") or 0)),
                 "quality_report": rewrite_review.get("quality_report") or rewrite_review,
                 "reviewer_notes": rewrite_review.get("reviewer_notes") or "",
             }

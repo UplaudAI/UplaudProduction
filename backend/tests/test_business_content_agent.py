@@ -527,6 +527,17 @@ def test_content_quality_gate_rejects_low_scores():
     assert status == "draft"
 
 
+def test_content_quality_gate_rejects_hard_failures():
+    article = {
+        "quality_score": 91,
+        "quality_report": {"hard_failures": ["missing public research"]},
+    }
+
+    status = server.content_status_from_quality(article)
+
+    assert status == "draft"
+
+
 def test_generate_content_article_rewrites_once_when_quality_score_is_low(monkeypatch):
     sources = {
         "business": {"name": "AI Fiesta", "slug": "aifiesta", "category": "AI productivity"},
@@ -549,9 +560,14 @@ def test_generate_content_article_rewrites_once_when_quality_score_is_low(monkey
         prompts.append(user)
         return responses.pop(0)
 
+    async def fake_research_call(user):
+        prompts.append(user)
+        return server._parse_json(responses.pop(0))
+
     monkeypatch.setattr(server, "openai_client", object())
     monkeypatch.setattr(server, "gather_content_sources", fake_sources)
     monkeypatch.setattr(server, "_call_openai", fake_call)
+    monkeypatch.setattr(server, "_call_content_research_json", fake_research_call)
 
     request = server.ContentGenerateRequest(
         content_type="Case Study",
@@ -568,3 +584,46 @@ def test_generate_content_article_rewrites_once_when_quality_score_is_low(monkey
     assert article["source_signal_ids"] == ["sig1"]
     assert article["schema"]["@type"] == "BlogPosting"
     assert any("rewrite" in prompt.lower() for prompt in prompts)
+
+
+def test_generate_content_article_uses_search_and_reviewer_score_is_authoritative(monkeypatch):
+    sources = {
+        "business": {"name": "AI Fiesta", "slug": "aifiesta", "category": "AI productivity"},
+        "reviews": [{"id": "rec1", "reviewer_name": "Anand", "text": "Model comparison helped.", "rating": 5}],
+        "growth_signals": [],
+    }
+    responses = [
+        '{"title":"Is AI Fiesta worth it?","slug":"is-ai-fiesta-worth-it","excerpt":"A guide.","meta_description":"AI Fiesta reviews and public research for buyers comparing AI model workflows.","content_html":"<article><h1>Is AI Fiesta worth it?</h1><p>TL;DR: It helps buyers compare AI models.</p></article>","faq":[],"source_attribution":[{"name":"Google Search Central","url":"https://developers.google.com/search"}],"seo_score":91,"aeo_score":92,"quality_score":99}',
+        '{"quality_score":0,"seo_score":0,"aeo_score":0,"reviewer_notes":"Unsupported.","quality_report":{"score":0,"hard_failures":["unsupported claims"]}}',
+        '{"title":"Is AI Fiesta worth it?","slug":"is-ai-fiesta-worth-it","excerpt":"A revised guide.","meta_description":"AI Fiesta reviews and public research for buyers comparing AI model workflows.","content_html":"<article><h1>Is AI Fiesta worth it?</h1><p>TL;DR: It helps buyers compare AI models.</p></article>","faq":[],"source_attribution":[{"name":"Google Search Central","url":"https://developers.google.com/search"}],"seo_score":82,"aeo_score":83}',
+        '{"quality_score":0,"seo_score":0,"aeo_score":0,"reviewer_notes":"Still unsupported.","quality_report":{"score":0,"hard_failures":["unsupported claims"]}}',
+    ]
+    search_calls = []
+
+    async def fake_sources(slug):
+        return sources
+
+    def fake_search(prompt):
+        search_calls.append(prompt)
+        return '{"sources":[{"name":"Google Search Central","url":"https://developers.google.com/search","tier":1,"claim":"Helpful content should serve readers."}]}'
+
+    def fake_call(system, user, temperature=0.2):
+        return responses.pop(0)
+
+    monkeypatch.setattr(server, "openai_client", object())
+    monkeypatch.setattr(server, "gather_content_sources", fake_sources)
+    monkeypatch.setattr(server, "_call_openai_web_search", fake_search)
+    monkeypatch.setattr(server, "_call_openai", fake_call)
+
+    request = server.ContentGenerateRequest(
+        content_type="Case Study",
+        buyer_question="Is AI Fiesta worth it?",
+        source_review_ids=["rec1"],
+    )
+
+    article = asyncio.run(server.generate_content_article("aifiesta", request))
+
+    assert search_calls
+    assert article["status"] == "draft"
+    assert article["quality_score"] == 0
+    assert article["quality_report"]["hard_failures"] == ["unsupported claims"]
