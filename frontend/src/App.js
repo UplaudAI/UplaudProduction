@@ -34,6 +34,7 @@ function App() {
           <Route path="/blog/:slug" element={<BlogPostPage />} />
           <Route path="/admin/blog" element={<AdminBlogPage />} />
           <Route path="/business/public/:slug" element={<PublicBusinessPage />} />
+          <Route path="/business/public/reviewer/:reviewerSlug" element={<ReviewerPage />} />
           <Route path="/business/public/:slug/reviewer/:reviewerSlug" element={<ReviewerPage />} />
           <Route path="/business/public/:slug/blog/:csSlug" element={<CaseStudyPage />} />
 

@@ -1239,8 +1239,8 @@ async def public_reviews_from_records(business: Dict[str, Any], records: List[Di
 
 async def public_reviewer_reviews_from_records(
     records: List[Dict[str, Any]],
-    current_business: Dict[str, Any],
     reviewer_slug: str,
+    current_business: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     business_names: Dict[str, str] = {}
     reviews: List[Dict[str, Any]] = []
@@ -1253,7 +1253,7 @@ async def public_reviewer_reviews_from_records(
         slug_candidates = public_business_name_slugs(raw_name)
         business_slug = (
             current_business["slug"]
-            if current_business["slug"] in slug_candidates
+            if current_business and current_business["slug"] in slug_candidates
             else public_slug(display_name)
         )
         testimonial = public_testimonial_from_uplaud_record(rec)
@@ -1276,6 +1276,54 @@ async def public_reviewer_reviews_from_records(
             set(),
         )
     return reviews
+
+
+async def public_reviewer_profile_payload(
+    reviewer_slug: str,
+    current_business: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    records = await public_all_uplaud_records()
+    reviews = await public_reviewer_reviews_from_records(records, reviewer_slug, current_business)
+    if not reviews:
+        raise HTTPException(status_code=404, detail="Reviewer not found")
+
+    reviewer_name = reviews[0].get("reviewer_name") or "Uplaud customer"
+    ratings = [review.get("rating") for review in reviews if review.get("rating")]
+    avg_rating = round(sum(ratings) / len(ratings), 1) if ratings else 0
+    referred_count = sum(1 for review in reviews if review.get("referred") is True)
+    reviews.sort(key=lambda review: review.get("date", ""), reverse=True)
+    businesses_by_slug = {}
+    for review in reviews:
+        business_slug = review.get("business_slug") or ""
+        business_name = review.get("business_name") or "Verified business"
+        if business_slug and business_slug not in businesses_by_slug:
+            businesses_by_slug[business_slug] = {
+                "slug": business_slug,
+                "name": business_name,
+                "category": "Verified business",
+            }
+    primary_business = current_business or {
+        "slug": "",
+        "name": "Uplaud",
+        "audience": "b2c",
+        "category": "Verified reviews",
+    }
+    return {
+        "business": primary_business,
+        "reviewer": {
+            "name": reviewer_name,
+            "slug": reviewer_slug,
+            "member_since": min((review.get("date") for review in reviews if review.get("date")), default=""),
+        },
+        "stats": {
+            "total_reviews": len(reviews),
+            "avg_rating": avg_rating,
+            "total_referrals": referred_count,
+            "verified_demo_count": sum(1 for review in reviews if review.get("verification_type") == "demo"),
+        },
+        "businesses_reviewed": sorted(businesses_by_slug.values(), key=lambda item: item["name"]),
+        "reviews": reviews,
+    }
 
 
 async def public_referral_count_for_business(business_name: str) -> int:
@@ -1648,6 +1696,11 @@ async def get_public_reviews(
     return {"count": len(limited), "reviews": limited}
 
 
+@api_router.get("/business/public/reviewer/{reviewer_slug}")
+async def get_public_reviewer(reviewer_slug: str):
+    return await public_reviewer_profile_payload(reviewer_slug)
+
+
 @api_router.get("/business/public/{slug}/reviewers/{reviewer_slug}")
 async def get_public_business_reviewer(slug: str, reviewer_slug: str):
     records = await public_all_uplaud_records()
@@ -1662,41 +1715,7 @@ async def get_public_business_reviewer(slug: str, reviewer_slug: str):
     if not biz:
         raise HTTPException(status_code=404, detail="Business not found")
 
-    reviews = await public_reviewer_reviews_from_records(records, biz, reviewer_slug)
-    if not reviews:
-        raise HTTPException(status_code=404, detail="Reviewer not found")
-
-    reviewer_name = reviews[0].get("reviewer_name") or "Uplaud customer"
-    ratings = [review.get("rating") for review in reviews if review.get("rating")]
-    avg_rating = round(sum(ratings) / len(ratings), 1) if ratings else 0
-    referred_count = sum(1 for review in reviews if review.get("referred") is True)
-    reviews.sort(key=lambda review: review.get("date", ""), reverse=True)
-    businesses_by_slug = {}
-    for review in reviews:
-        business_slug = review.get("business_slug") or ""
-        business_name = review.get("business_name") or payload["business"]["name"]
-        if business_slug and business_slug not in businesses_by_slug:
-            businesses_by_slug[business_slug] = {
-                "slug": business_slug,
-                "name": business_name,
-                "category": "Verified business",
-            }
-    return {
-        "business": biz,
-        "reviewer": {
-            "name": reviewer_name,
-            "slug": reviewer_slug,
-            "member_since": min((review.get("date") for review in reviews if review.get("date")), default=""),
-        },
-        "stats": {
-            "total_reviews": len(reviews),
-            "avg_rating": avg_rating,
-            "total_referrals": referred_count,
-            "verified_demo_count": sum(1 for review in reviews if review.get("verification_type") == "demo"),
-        },
-        "businesses_reviewed": sorted(businesses_by_slug.values(), key=lambda item: item["name"]),
-        "reviews": reviews,
-    }
+    return await public_reviewer_profile_payload(reviewer_slug, biz)
 
 
 @api_router.get("/business/public/{slug}/stats")

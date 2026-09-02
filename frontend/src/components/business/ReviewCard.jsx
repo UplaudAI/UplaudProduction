@@ -45,9 +45,8 @@ export function normalizeReviewRating(rating) {
 }
 
 export function reviewerProfilePath(review) {
-  const businessSlug = review?.business_slug || "";
   const reviewerSlug = review?.reviewer_slug || "";
-  return `/business/public/${businessSlug}/reviewer/${reviewerSlug}`;
+  return `/business/public/reviewer/${reviewerSlug}`;
 }
 
 function businessInitials(name) {

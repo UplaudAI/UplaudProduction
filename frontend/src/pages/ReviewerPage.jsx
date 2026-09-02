@@ -41,7 +41,7 @@ export default function ReviewerPage() {
     setError(false);
     setProfile(null);
     api
-      .get(`/business/public/${slug}/reviewers/${reviewerSlug}`)
+      .get(`/business/public/reviewer/${reviewerSlug}`)
       .then(({ data }) => {
         if (!ignore) setProfile(data);
       })
@@ -49,7 +49,7 @@ export default function ReviewerPage() {
         if (!ignore) setError(true);
       });
     return () => { ignore = true; };
-  }, [slug, reviewerSlug]);
+  }, [reviewerSlug]);
 
   if (error) {
     return (
@@ -57,7 +57,7 @@ export default function ReviewerPage() {
         <div className="text-center max-w-md px-6">
           <h1 className="font-display text-3xl font-semibold mb-3">Reviewer not found</h1>
           <p className="text-[color:var(--u-muted)]">No reviews found for <span className="font-mono">{reviewerSlug}</span>.</p>
-          <Link to={`/business/public/${slug}`} className="u-btn u-btn-dark mt-5 inline-flex">Back to business</Link>
+          <Link to="/" className="u-btn u-btn-dark mt-5 inline-flex">Back to Uplaud</Link>
         </div>
       </div>
     );
@@ -76,6 +76,7 @@ export default function ReviewerPage() {
   const stats = profile.stats || {};
   const reviews = profile.reviews || [];
   const businessesReviewed = profile.businesses_reviewed || [];
+  const backBusiness = businessesReviewed.find((item) => item.slug === slug) || businessesReviewed[0];
   const visibleBusinesses = businessesReviewed.slice(0, 6);
   const hiddenBusinessCount = Math.max(businessesReviewed.length - visibleBusinesses.length, 0);
   const initials = (reviewer.name || "?").split(" ").slice(0, 2).map((word) => word[0]).join("").toUpperCase();
@@ -87,11 +88,11 @@ export default function ReviewerPage() {
 
       <main className="max-w-[1080px] mx-auto px-6 lg:px-10 py-10 lg:py-14">
         <Link
-          to={`/business/public/${slug}`}
+          to={backBusiness ? `/business/public/${backBusiness.slug}` : "/"}
           data-testid="reviewer-back-link"
           className="inline-flex items-center gap-2 text-sm text-[color:var(--u-muted)] hover:text-[color:var(--u-ink)] transition mb-6 group"
         >
-          <ArrowLeft size={15} className="transition group-hover:-translate-x-0.5" /> Back to {business.name}
+          <ArrowLeft size={15} className="transition group-hover:-translate-x-0.5" /> Back to {backBusiness?.name || "Uplaud"}
         </Link>
 
         <section className="relative rounded-[28px] overflow-hidden reveal" data-testid="reviewer-header">

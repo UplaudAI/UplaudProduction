@@ -220,14 +220,14 @@ def test_review_source_is_channel_not_reviewer_title():
     assert review["reviewer_title"] == ""
 
 
-def test_get_public_business_reviewer_reviews(monkeypatch):
+def test_get_public_reviewer_reviews(monkeypatch):
     _mock_airtable(monkeypatch)
 
-    response = client.get("/api/business/public/ai-fiesta/reviewers/priya-menon")
+    response = client.get("/api/business/public/reviewer/priya-menon")
 
     assert response.status_code == 200
     data = response.json()
-    assert data["business"]["name"] == "AI Fiesta"
+    assert data["business"]["name"] == "Uplaud"
     assert data["reviewer"]["name"] == "Priya Menon"
     assert data["reviewer"]["slug"] == "priya-menon"
     assert data["stats"]["total_reviews"] == 2
@@ -238,10 +238,22 @@ def test_get_public_business_reviewer_reviews(monkeypatch):
     assert data["reviews"][0]["reviewer_name"] == "Priya Menon"
 
 
+def test_legacy_public_business_reviewer_route_still_works(monkeypatch):
+    _mock_airtable(monkeypatch)
+
+    response = client.get("/api/business/public/ai-fiesta/reviewers/priya-menon")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["business"]["name"] == "AI Fiesta"
+    assert data["reviewer"]["slug"] == "priya-menon"
+    assert data["stats"]["total_reviews"] == 2
+
+
 def test_unknown_public_business_reviewer_404(monkeypatch):
     _mock_airtable(monkeypatch)
 
-    response = client.get("/api/business/public/ai-fiesta/reviewers/not-a-reviewer")
+    response = client.get("/api/business/public/reviewer/not-a-reviewer")
 
     assert response.status_code == 404
 

@@ -64,6 +64,10 @@
       "destination": "/index.html"
     },
     {
+      "source": "/business/public/reviewer/:reviewerSlug",
+      "destination": "/index.html"
+    },
+    {
       "source": "/api/:path*",
       "destination": "/api/index.py"
     },

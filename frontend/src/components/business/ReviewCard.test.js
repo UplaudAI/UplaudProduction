@@ -28,9 +28,9 @@ describe("normalizeReviewRating", () => {
 });
 
 describe("reviewerProfilePath", () => {
-  test("links reviewer names into the business-scoped public reviewer page", () => {
+  test("links reviewer names into the global public reviewer page", () => {
     expect(reviewerProfilePath({ business_slug: "aifiesta", reviewer_slug: "priya-menon" })).toBe(
-      "/business/public/aifiesta/reviewer/priya-menon"
+      "/business/public/reviewer/priya-menon"
     );
   });
 });
