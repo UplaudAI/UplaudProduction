@@ -3467,6 +3467,111 @@ def _content_not_found() -> HTTPException:
     return HTTPException(status_code=404, detail="Content post not found")
 
 
+def render_public_content_html(post: dict, canonical_url: str) -> str:
+    title = post.get("title") or "Published content"
+    meta_description = post.get("meta_description") or post.get("excerpt") or ""
+    buyer_question = post.get("buyer_question") or ""
+    content_html = post.get("content_html") or ""
+    schema = post.get("schema") or {}
+    if not schema:
+        schema = {
+            "@context": "https://schema.org",
+            "@type": "Article",
+            "headline": title,
+            "description": meta_description,
+            "datePublished": post.get("published_at") or post.get("created_at") or "",
+            "dateModified": post.get("updated_at") or post.get("published_at") or "",
+            "mainEntityOfPage": canonical_url,
+        }
+    schema_json = json.dumps(schema, ensure_ascii=False)
+    safe_schema_json = schema_json.replace("</", "<\\/")
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{html.escape(title)}</title>
+  <meta name="description" content="{html.escape(meta_description)}" />
+  <link rel="canonical" href="{html.escape(canonical_url)}" />
+  <script type="application/ld+json">{safe_schema_json}</script>
+  <style>
+    body {{ margin: 0; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #17211b; background: #fbfaf6; }}
+    main {{ max-width: 820px; margin: 0 auto; padding: 48px 20px 72px; }}
+    nav {{ margin-bottom: 28px; font-size: 14px; }}
+    a {{ color: #166534; }}
+    h1 {{ font-size: clamp(2rem, 5vw, 3.75rem); line-height: 1.04; margin: 0 0 18px; letter-spacing: 0; }}
+    .meta {{ color: #526057; font-size: 16px; line-height: 1.6; margin-bottom: 28px; }}
+    .question {{ border-left: 4px solid #22c55e; padding: 14px 18px; background: #f0fdf4; margin: 24px 0 36px; }}
+    article {{ font-size: 18px; line-height: 1.75; }}
+    article h1, article h2, article h3 {{ line-height: 1.18; margin-top: 1.5em; }}
+    article p {{ margin: 0 0 1.1em; }}
+  </style>
+</head>
+<body>
+  <main>
+    <nav><a href="/business/public/{html.escape(post.get("business_slug") or "")}">Back to profile</a></nav>
+    <header>
+      <h1>{html.escape(title)}</h1>
+      {f'<p class="meta">{html.escape(meta_description)}</p>' if meta_description else ''}
+      {f'<section class="question"><strong>Buyer question:</strong> {html.escape(buyer_question)}</section>' if buyer_question else ''}
+    </header>
+    {content_html}
+  </main>
+</body>
+</html>"""
+
+
+def render_legacy_public_case_study_html(
+    business_slug: str,
+    story: dict,
+    canonical_url: str,
+) -> str:
+    title = story.get("title") or "Customer story"
+    excerpt = story.get("excerpt") or ""
+    body_html = story.get("body_html") or ""
+    schema = {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "headline": title,
+        "description": excerpt,
+        "datePublished": story.get("published") or "",
+        "mainEntityOfPage": canonical_url,
+    }
+    safe_schema_json = json.dumps(schema, ensure_ascii=False).replace("</", "<\\/")
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{html.escape(title)}</title>
+  <meta name="description" content="{html.escape(excerpt)}" />
+  <link rel="canonical" href="{html.escape(canonical_url)}" />
+  <script type="application/ld+json">{safe_schema_json}</script>
+  <style>
+    body {{ margin: 0; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #17211b; background: #fbfaf6; }}
+    main {{ max-width: 820px; margin: 0 auto; padding: 48px 20px 72px; }}
+    a {{ color: #166534; }}
+    h1 {{ font-size: clamp(2rem, 5vw, 3.75rem); line-height: 1.04; margin: 0 0 18px; letter-spacing: 0; }}
+    .meta {{ color: #526057; font-size: 16px; line-height: 1.6; margin-bottom: 36px; }}
+    article {{ font-size: 18px; line-height: 1.75; }}
+    .story-testimonial {{ border-left: 4px solid #22c55e; padding: 14px 18px; background: #f0fdf4; margin: 22px 0; }}
+    .story-testimonial-label {{ margin: 0 0 8px; color: #166534; font-weight: 700; font-size: 13px; text-transform: uppercase; }}
+    .story-testimonial-role, .story-testimonial-links {{ display: block; color: #526057; font-size: 14px; margin-top: 4px; }}
+  </style>
+</head>
+<body>
+  <main>
+    <nav><a href="/business/public/{html.escape(business_slug)}">Back to profile</a></nav>
+    <header>
+      <h1>{html.escape(title)}</h1>
+      {f'<p class="meta">{html.escape(excerpt)}</p>' if excerpt else ''}
+    </header>
+    <article>{body_html}</article>
+  </main>
+</body>
+</html>"""
+
+
 @api_router.get("/business/content", response_model=ContentListResponse)
 async def list_business_content(request: Request, current=Depends(get_current_user)):
     business_slug = await _current_business_slug_or_404(current, request)
@@ -3554,6 +3659,43 @@ async def archive_business_content(slug: str, request: Request, current=Depends(
     if not post:
         raise _content_not_found()
     return post
+
+
+@api_router.get("/business/public/{business_slug}/content", response_model=ContentListResponse)
+async def list_public_business_content(business_slug: str):
+    posts = await airtable_client.list_content_posts_airtable(business_slug, published_only=True)
+    return {"posts": posts}
+
+
+@api_router.get("/business/public/{business_slug}/content/{content_slug}", response_model=ContentPostResponse)
+async def get_public_business_content(business_slug: str, content_slug: str):
+    post = await airtable_client.get_content_post_airtable(business_slug, content_slug, published_only=True)
+    if not post:
+        raise _content_not_found()
+    return post
+
+
+@app.get("/business/public/{business_slug}/blog/{content_slug}", response_class=HTMLResponse)
+async def get_public_business_content_html(business_slug: str, content_slug: str, request: Request):
+    canonical_url = str(request.url.replace(query=None))
+    post = await airtable_client.get_content_post_airtable(business_slug, content_slug, published_only=True)
+    if post:
+        return HTMLResponse(
+            render_public_content_html(post, canonical_url),
+            headers={"Cache-Control": "public, s-maxage=300, stale-while-revalidate=3600"},
+        )
+
+    try:
+        stories = (await get_public_case_studies(business_slug))["case_studies"]
+    except HTTPException:
+        raise _content_not_found()
+    story = next((item for item in stories if item["slug"] == content_slug), None)
+    if not story:
+        raise _content_not_found()
+    return HTMLResponse(
+        render_legacy_public_case_study_html(business_slug, story, canonical_url),
+        headers={"Cache-Control": "public, s-maxage=300, stale-while-revalidate=3600"},
+    )
 
 
 # ---------------------------------------------------------------------------

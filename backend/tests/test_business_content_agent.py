@@ -249,6 +249,96 @@ def test_business_content_archive_marks_content_archived_for_business(
     assert response.json()["status"] == "archived"
 
 
+def test_public_content_lists_only_published(monkeypatch, client):
+    async def fake_list(business_slug, include_archived=False, published_only=False):
+        assert business_slug == "aifiesta"
+        assert include_archived is False
+        assert published_only is True
+        return [_publishable_post(slug="published-post", status="published", title="Published")]
+
+    monkeypatch.setattr(airtable_client, "list_content_posts_airtable", fake_list)
+
+    response = client.get("/api/business/public/aifiesta/content")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["posts"][0]["slug"] == "published-post"
+    assert body["posts"][0]["status"] == "published"
+
+
+def test_public_content_get_returns_only_published_post(monkeypatch, client):
+    async def fake_get(business_slug, content_slug, published_only=False):
+        assert business_slug == "aifiesta"
+        assert content_slug == "published-post"
+        assert published_only is True
+        return _publishable_post(slug="published-post", status="published", title="Published")
+
+    monkeypatch.setattr(airtable_client, "get_content_post_airtable", fake_get)
+
+    response = client.get("/api/business/public/aifiesta/content/published-post")
+
+    assert response.status_code == 200
+    assert response.json()["slug"] == "published-post"
+    assert response.json()["status"] == "published"
+
+
+def test_public_content_html_contains_article_and_schema(monkeypatch, client):
+    async def fake_get(business_slug, content_slug, published_only=False):
+        assert business_slug == "aifiesta"
+        assert content_slug == "published-post"
+        assert published_only is True
+        return _publishable_post(
+            slug="published-post",
+            status="published",
+            title="Published AI Fiesta Guide",
+            meta_description="A published AI Fiesta buyer guide.",
+            buyer_question="Is AI Fiesta worth it?",
+            content_html="<article><h1>Published AI Fiesta Guide</h1><p>Answer first for buyers.</p></article>",
+            schema={"@context": "https://schema.org", "@type": "Article", "headline": "Published AI Fiesta Guide"},
+            updated_at="2026-09-02T20:00:00Z",
+        )
+
+    monkeypatch.setattr(airtable_client, "get_content_post_airtable", fake_get)
+
+    response = client.get("/business/public/aifiesta/blog/published-post")
+
+    assert response.status_code == 200
+    assert "Published AI Fiesta Guide" in response.text
+    assert "Answer first for buyers." in response.text
+    assert 'type="application/ld+json"' in response.text
+    assert '"@type": "Article"' in response.text
+
+
+def test_public_content_html_preserves_legacy_case_study_fallback(monkeypatch, client):
+    async def fake_get(business_slug, content_slug, published_only=False):
+        assert published_only is True
+        return None
+
+    async def fake_case_studies(business_slug):
+        assert business_slug == "aifiesta"
+        return {
+            "case_studies": [
+                {
+                    "slug": "legacy-story",
+                    "title": "Legacy customer story",
+                    "excerpt": "A generated public case study from reviews.",
+                    "body_html": "<p>Legacy story body.</p>",
+                    "published": "2026-09-02",
+                }
+            ]
+        }
+
+    monkeypatch.setattr(airtable_client, "get_content_post_airtable", fake_get)
+    monkeypatch.setattr(server, "get_public_case_studies", fake_case_studies)
+
+    response = client.get("/business/public/aifiesta/blog/legacy-story")
+
+    assert response.status_code == 200
+    assert "Legacy customer story" in response.text
+    assert "Legacy story body." in response.text
+    assert 'type="application/ld+json"' in response.text
+
+
 def test_record_to_content_post_maps_quality_and_research_fields():
     post = airtable_client.record_to_content_post(_record())
 
