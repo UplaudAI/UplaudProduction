@@ -1126,6 +1126,53 @@ def public_referred_reviewers_from_circles(leads: List[Dict[str, Any]]) -> set:
     }
 
 
+PUBLIC_POSITIVE_ADJECTIVES = {
+    "accurate",
+    "affordable",
+    "amazing",
+    "clear",
+    "consistent",
+    "easy",
+    "effective",
+    "efficient",
+    "excellent",
+    "fast",
+    "flexible",
+    "great",
+    "helpful",
+    "impressive",
+    "intuitive",
+    "powerful",
+    "practical",
+    "reliable",
+    "responsive",
+    "seamless",
+    "simple",
+    "smooth",
+    "straightforward",
+    "strong",
+    "useful",
+    "valuable",
+}
+
+
+def public_positive_keyword_cloud(reviews: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    counts = Counter()
+    for review in reviews:
+        try:
+            rating = int(review.get("rating") or 0)
+        except (TypeError, ValueError):
+            rating = 0
+        if rating < 4:
+            continue
+        words = re.findall(r"[a-z][a-z'-]*", (review.get("text") or "").lower())
+        counts.update(word for word in words if word in PUBLIC_POSITIVE_ADJECTIVES)
+    return [
+        {"word": word, "count": count, "sentiment": "positive"}
+        for word, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:12]
+    ]
+
+
 def public_testimonial_from_uplaud_record(rec: Dict[str, Any]) -> Dict[str, Any]:
     fields = rec.get("fields", {})
     creators = airtable_field(fields, "Name_Creator", default=[])
@@ -1195,7 +1242,7 @@ def public_stats_from_reviews(
             "neutral": round(neutral / total * 100),
             "negative": round(negative / total * 100),
         },
-        "keywords": business.get("keywords", []),
+        "keywords": business.get("keywords") or public_positive_keyword_cloud(reviews),
         "top_praise": business.get("top_praise", ""),
     }
 

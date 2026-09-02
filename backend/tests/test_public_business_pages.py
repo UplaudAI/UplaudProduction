@@ -229,6 +229,25 @@ def test_get_public_business_stats_counts_reviews_and_circles(monkeypatch):
     data = response.json()
     assert data["total_reviews"] == 2
     assert data["total_referrals"] == 3
+    assert data["keywords"]
+
+
+def test_public_business_stats_builds_positive_adjective_word_cloud():
+    stats = server.public_stats_from_reviews(
+        {"avg_rating": 4.5, "trust_score": 90},
+        [
+            {"rating": 5, "reviewer_name": "Priya", "text": "The excellent model comparison felt helpful and fast."},
+            {"rating": 4, "reviewer_name": "Rohan", "text": "Helpful onboarding and reliable results."},
+            {"rating": 2, "reviewer_name": "Casey", "text": "Slow and confusing setup."},
+        ],
+        referral_count=0,
+    )
+
+    words = {item["word"]: item["count"] for item in stats["keywords"]}
+    assert words["helpful"] == 2
+    assert words["excellent"] == 1
+    assert words["reliable"] == 1
+    assert "slow" not in words
 
 
 def test_get_public_business_case_study_from_uplaud_review(monkeypatch):
