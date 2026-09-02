@@ -16,6 +16,7 @@ import {
   ChevronDown,
   Radio,
   Mic,
+  FileText,
 } from "lucide-react";
 import { getAuth, clearAuth, updateAuth } from "@/lib/business-storage";
 import { BRAND } from "@/mocks/fintech";
@@ -41,6 +42,7 @@ const NAV = [
     section: "Amplification",
     items: [
       { to: "/business/social", label: "Growth Amplification", icon: Megaphone, testId: "nav-social" },
+      { to: "/business/content", label: "Content Agent", icon: FileText, testId: "nav-content" },
     ],
   },
   {
