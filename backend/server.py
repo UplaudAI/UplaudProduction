@@ -1214,6 +1214,37 @@ def public_testimonial_from_uplaud_record(rec: Dict[str, Any]) -> Dict[str, Any]
     }
 
 
+def public_reviewer_profile_fields_from_user(user_record: Optional[Dict[str, Any]]) -> Dict[str, str]:
+    fields = (user_record or {}).get("fields", {}) if user_record else {}
+    linkedin = airtable_field(
+        fields,
+        "LinkedIn Profile",
+        "LinkedIn",
+        "Linkedin",
+        "Linkedin Profile",
+        default="",
+    )
+    instagram = airtable_field(
+        fields,
+        "Instagram Profile",
+        "Instagram",
+        "Instagram_URL",
+        "Instagram URL",
+        "Instagram Handle",
+        default="",
+    )
+    bio = airtable_field(fields, "Bio", "Profile Bio", "Reviewer Bio", "About", default="")
+    title = airtable_field(fields, "Job_Title", "Title", "Role", default="")
+    company = airtable_field(fields, "Company", "Company_Name", default="")
+    return {
+        "bio": str(bio or ""),
+        "title": str(title or ""),
+        "company": str(company or ""),
+        "linkedin_url": str(linkedin or ""),
+        "instagram_url": str(instagram or ""),
+    }
+
+
 async def public_reviews_for_business(business: Dict[str, Any]) -> List[Dict[str, Any]]:
     records = await public_uplaud_records_by_slug(business["slug"])
     return await public_reviews_from_records(business, records)
@@ -1288,6 +1319,9 @@ async def public_reviewer_profile_payload(
         raise HTTPException(status_code=404, detail="Reviewer not found")
 
     reviewer_name = reviews[0].get("reviewer_name") or "Uplaud customer"
+    user_profile = public_reviewer_profile_fields_from_user(
+        await airtable_client.find_user_by_name(reviewer_name)
+    )
     ratings = [review.get("rating") for review in reviews if review.get("rating")]
     avg_rating = round(sum(ratings) / len(ratings), 1) if ratings else 0
     referred_count = sum(1 for review in reviews if review.get("referred") is True)
@@ -1314,6 +1348,7 @@ async def public_reviewer_profile_payload(
             "name": reviewer_name,
             "slug": reviewer_slug,
             "member_since": min((review.get("date") for review in reviews if review.get("date")), default=""),
+            **user_profile,
         },
         "stats": {
             "total_reviews": len(reviews),

@@ -275,6 +275,20 @@ async def find_or_create_user(
         return None
 
 
+async def find_user_by_name(name: str) -> Optional[dict]:
+    clean = (name or "").strip()
+    if not clean or not _enabled():
+        return None
+    try:
+        formula = f'LOWER({{Name}})="{_escape(clean.lower())}"'
+        data = await _get(TABLE_USER, {"filterByFormula": formula, "maxRecords": 1})
+        recs = data.get("records", [])
+        return recs[0] if recs else None
+    except Exception as e:
+        logger.warning("Airtable user profile lookup failed: %s", e)
+        return None
+
+
 async def create_uplaud_record(
     business_name: str,
     testimonial: str,

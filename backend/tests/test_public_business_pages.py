@@ -81,6 +81,25 @@ def _mock_airtable(monkeypatch):
                     },
                 ]
             }
+        if table == airtable_client.TABLE_USER:
+            formula = (params or {}).get("filterByFormula", "")
+            if "priya menon" in formula.lower():
+                return {
+                    "records": [
+                        {
+                            "id": "usr_priya",
+                            "fields": {
+                                "Name": "Priya Menon",
+                                "Bio": "Product leader who reviews workflow tools that save time.",
+                                "Job_Title": "Product Manager",
+                                "Company": "Fintrail",
+                                "LinkedIn Profile": "https://linkedin.com/in/priya-menon",
+                                "Instagram Handle": "priyamenon",
+                            },
+                        }
+                    ]
+                }
+            return {"records": []}
         return {"records": []}
 
     async def fake_list_circles_by_business(business_name):
@@ -230,6 +249,11 @@ def test_get_public_reviewer_reviews(monkeypatch):
     assert data["business"]["name"] == "Uplaud"
     assert data["reviewer"]["name"] == "Priya Menon"
     assert data["reviewer"]["slug"] == "priya-menon"
+    assert data["reviewer"]["bio"] == "Product leader who reviews workflow tools that save time."
+    assert data["reviewer"]["title"] == "Product Manager"
+    assert data["reviewer"]["company"] == "Fintrail"
+    assert data["reviewer"]["linkedin_url"] == "https://linkedin.com/in/priya-menon"
+    assert data["reviewer"]["instagram_url"] == "priyamenon"
     assert data["stats"]["total_reviews"] == 2
     assert data["stats"]["avg_rating"] == 5.0
     assert len(data["reviews"]) == 2

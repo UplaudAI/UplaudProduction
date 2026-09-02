@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, ArrowUpRight, MessageSquareText } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Instagram, Linkedin, MessageSquareText } from "lucide-react";
 import api from "@/lib/api";
 import Nav from "@/components/business/Nav";
 import Footer from "@/components/business/Footer";
@@ -29,6 +29,16 @@ function StatBit({ label, value, suffix, accent, starColor, testid }) {
       </span>
     </div>
   );
+}
+
+function profileUrl(raw, type) {
+  const value = (raw || "").trim();
+  if (!value) return "";
+  if (/^https?:\/\//i.test(value)) return value;
+  const handle = value.replace(/^@/, "");
+  if (type === "instagram") return `https://instagram.com/${handle}`;
+  if (type === "linkedin") return value.includes("linkedin.com") ? `https://${value}` : `https://linkedin.com/in/${handle}`;
+  return value;
 }
 
 export default function ReviewerPage() {
@@ -81,6 +91,9 @@ export default function ReviewerPage() {
   const hiddenBusinessCount = Math.max(businessesReviewed.length - visibleBusinesses.length, 0);
   const initials = (reviewer.name || "?").split(" ").slice(0, 2).map((word) => word[0]).join("").toUpperCase();
   const firstName = (reviewer.name || "this reviewer").split(" ")[0];
+  const roleLine = [reviewer.title, reviewer.company].filter(Boolean).join(", ");
+  const instagramUrl = profileUrl(reviewer.instagram_url, "instagram");
+  const linkedinUrl = profileUrl(reviewer.linkedin_url, "linkedin");
 
   return (
     <div className="min-h-screen bg-grain" data-testid="reviewer-profile-page">
@@ -121,10 +134,43 @@ export default function ReviewerPage() {
                   {reviewer.name}
                 </h1>
                 <p className="text-sm text-[color:var(--u-ink-2)] mt-0.5" data-testid="reviewer-status">
-                  Verified Uplaud reviewer
+                  {roleLine || "Verified Uplaud reviewer"}
                 </p>
               </div>
             </div>
+
+            {reviewer.bio && (
+              <p className="mt-5 text-[15px] text-[color:var(--u-ink-2)] leading-relaxed max-w-2xl" data-testid="reviewer-bio">
+                {reviewer.bio}
+              </p>
+            )}
+
+            {(instagramUrl || linkedinUrl) && (
+              <div className="mt-5 flex flex-wrap items-center gap-4" data-testid="reviewer-social-links">
+                {instagramUrl && (
+                  <a
+                    href={instagramUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-[color:var(--u-ink-2)] hover:text-[color:var(--u-violet)] transition"
+                    data-testid="reviewer-instagram-link"
+                  >
+                    <Instagram size={14} /> Instagram
+                  </a>
+                )}
+                {linkedinUrl && (
+                  <a
+                    href={linkedinUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-[color:var(--u-ink-2)] hover:text-[color:var(--u-violet)] transition"
+                    data-testid="reviewer-linkedin-link"
+                  >
+                    <Linkedin size={14} /> LinkedIn
+                  </a>
+                )}
+              </div>
+            )}
 
             <div className="mt-6 flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-[color:var(--u-line)] pt-5" data-testid="reviewer-metrics">
               <StatBit label="Reviews written" value={stats.total_reviews || 0} accent testid="reviewer-metric-total" />
