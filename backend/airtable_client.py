@@ -685,6 +685,52 @@ def _ids_for_airtable(value) -> str:
     return ""
 
 
+def _post_value(post: dict, key: str, airtable_json_key: Optional[str] = None):
+    value = post.get(key)
+    if value not in (None, ""):
+        return value
+    if airtable_json_key:
+        return post.get(airtable_json_key)
+    return value
+
+
+def _has_json_object(value) -> bool:
+    return bool(_parse_json_field(value))
+
+
+def _content_post_publish_errors(post: dict) -> list:
+    errors = []
+    if (post.get("quality_score") or 0) < 80:
+        errors.append("quality_score must be at least 80")
+    if post.get("seo_score") is None:
+        errors.append("seo_score is required")
+    if post.get("aeo_score") is None:
+        errors.append("aeo_score is required")
+    if not _has_json_object(_post_value(post, "quality_report", "quality_report_json")):
+        errors.append("quality_report is required")
+    if not _has_json_object(_post_value(post, "schema", "schema_json")):
+        errors.append("schema is required")
+    if not _has_json_object(_post_value(post, "research_packet", "research_packet_json")):
+        errors.append("research_packet is required")
+    if not (post.get("content_html") or "").strip():
+        errors.append("content_html is required")
+    if not (post.get("meta_description") or "").strip():
+        errors.append("meta_description is required")
+    return errors
+
+
+def _ensure_publishable_content_post(post: dict) -> None:
+    if (post.get("status") or "") != "published":
+        return
+    errors = _content_post_publish_errors(post)
+    if errors:
+        raise ValueError("Content post cannot be published: " + "; ".join(errors))
+
+
+def _is_publishable_content_post(post: dict) -> bool:
+    return not _content_post_publish_errors(post)
+
+
 def record_to_content_post(rec: dict) -> dict:
     f = rec.get("fields", {})
     return {
@@ -717,6 +763,7 @@ def record_to_content_post(rec: dict) -> dict:
 
 
 def _content_post_to_fields(post: dict) -> dict:
+    _ensure_publishable_content_post(post)
     now = datetime.now(timezone.utc).isoformat()
     return {
         "Business": post.get("business") or "",
@@ -729,16 +776,16 @@ def _content_post_to_fields(post: dict) -> dict:
         "Content_HTML": post.get("content_html") or "",
         "Excerpt": post.get("excerpt") or "",
         "Status": post.get("status") or "draft",
-        "Content_Brief_JSON": _json_for_airtable(post.get("content_brief")),
-        "Research_Packet_JSON": _json_for_airtable(post.get("research_packet")),
+        "Content_Brief_JSON": _json_for_airtable(_post_value(post, "content_brief", "content_brief_json")),
+        "Research_Packet_JSON": _json_for_airtable(_post_value(post, "research_packet", "research_packet_json")),
         "Source_Review_IDs": _ids_for_airtable(post.get("source_review_ids")),
         "Source_Signal_IDs": _ids_for_airtable(post.get("source_signal_ids")),
         "SEO_Score": post.get("seo_score") or 0,
         "AEO_Score": post.get("aeo_score") or 0,
         "Quality_Score": post.get("quality_score") or 0,
-        "Quality_Report_JSON": _json_for_airtable(post.get("quality_report")),
+        "Quality_Report_JSON": _json_for_airtable(_post_value(post, "quality_report", "quality_report_json")),
         "Reviewer_Notes": post.get("reviewer_notes") or "",
-        "Schema_JSON": _json_for_airtable(post.get("schema")),
+        "Schema_JSON": _json_for_airtable(_post_value(post, "schema", "schema_json")),
         "Published_At": post.get("published_at") or "",
         "Updated_At": post.get("updated_at") or now,
         "Created_At": post.get("created_at") or now,
@@ -757,6 +804,7 @@ async def list_content_posts_airtable(
     filters = [f'LOWER({{Business_Slug}})="{_escape(business_slug.lower())}"']
     if published_only:
         filters.append('{Status}="published"')
+        filters.append("{Quality_Score}>=80")
     elif not include_archived:
         filters.append('{Status}!="archived"')
     formula = filters[0] if len(filters) == 1 else "AND(" + ",".join(filters) + ")"
@@ -774,6 +822,10 @@ async def list_content_posts_airtable(
     except Exception as e:
         logger.warning("Airtable list_content_posts failed for business %s: %s", business_slug, e)
         return []
+    if published_only:
+        posts = [p for p in posts if p["status"] == "published" and _is_publishable_content_post(p)]
+    elif not include_archived:
+        posts = [p for p in posts if p["status"] != "archived"]
     posts.sort(key=lambda p: p["updated_at"] or p["created_at"], reverse=True)
     return posts
 
@@ -792,19 +844,23 @@ async def get_content_post_airtable(
         ]
         if published_only:
             filters.append('{Status}="published"')
+            filters.append("{Quality_Score}>=80")
         formula = "AND(" + ",".join(filters) + ")"
         data = await _get(TABLE_CONTENT_POSTS, {"filterByFormula": formula, "maxRecords": 1})
         records = data.get("records", [])
         if records:
-            return record_to_content_post(records[0])
+            post = record_to_content_post(records[0])
+            if not published_only or _is_publishable_content_post(post):
+                return post
     except Exception as e:
         logger.warning("Airtable get_content_post failed for business %s slug %s: %s", business_slug, slug, e)
     return None
 
 
 async def create_content_post_airtable(post: dict) -> Optional[dict]:
+    fields = _content_post_to_fields(post)
     try:
-        rec = await _create(TABLE_CONTENT_POSTS, _content_post_to_fields(post))
+        rec = await _create(TABLE_CONTENT_POSTS, fields)
         return record_to_content_post(rec) if rec else None
     except Exception as e:
         logger.warning("Airtable create_content_post failed: %s", e)
@@ -826,6 +882,12 @@ async def update_content_post_airtable(business_slug: str, slug: str, updates: d
             return None
         fields = _content_post_to_fields({**record_to_content_post(records[0]), **(updates or {})})
         fields.pop("Created_At", None)
+    except ValueError:
+        raise
+    except Exception as e:
+        logger.warning("Airtable update_content_post failed for business %s slug %s: %s", business_slug, slug, e)
+        return None
+    try:
         rec = await _update(TABLE_CONTENT_POSTS, records[0]["id"], fields)
         return record_to_content_post(rec) if rec else None
     except Exception as e:
