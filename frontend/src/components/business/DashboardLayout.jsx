@@ -261,6 +261,7 @@ function Topbar({ user, pathname }) {
     "/business/conversations": "Growth Signals",
     "/business/reviews": "Trust Assets",
     "/business/social": "Growth Amplification",
+    "/business/content": "Content Agent",
     "/business/referrals": "Warm Pipeline",
     "/business/reddit": "High-Intent Demand",
     "/business/settings": "Settings",

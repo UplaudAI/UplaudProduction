@@ -33,7 +33,7 @@ export default function CaseStudies({ slug, caseStudies }) {
     };
   }, [slug]);
 
-  const stories = publishedContent.length > 0 ? publishedContent.map(contentPostToStory) : caseStudies || [];
+  const stories = loadedContent && publishedContent.length > 0 ? publishedContent.map(contentPostToStory) : loadedContent ? caseStudies || [] : [];
 
   if (!stories.length && loadedContent) return null;
   if (!stories.length) return null;
@@ -88,17 +88,27 @@ export default function CaseStudies({ slug, caseStudies }) {
                 {cs.excerpt}
               </p>
 
-              <blockquote className="mt-5 pt-5 border-t border-[color:var(--u-line)] relative">
-                <p className="font-serif-italic text-[15px] leading-snug text-[color:var(--u-ink)]">
-                  “{cs.hero_quote}”
-                </p>
-                <cite className="not-italic block mt-2 text-[11px] text-[color:var(--u-muted)]">
-                  — {cs.hero_quote_author}
-                </cite>
-              </blockquote>
+              {cs.kind === "content" ? (
+                <div className="mt-5 pt-5 border-t border-[color:var(--u-line)] relative">
+                  <div className="flex flex-wrap gap-3 text-[11px] font-mono uppercase tracking-[0.12em] text-[color:var(--u-muted)]">
+                    <span>{cs.review_count} review signals</span>
+                    <span>{cs.source_count} research sources</span>
+                    {cs.updated_at && <span>Updated {formatDate(cs.updated_at)}</span>}
+                  </div>
+                </div>
+              ) : (
+                <blockquote className="mt-5 pt-5 border-t border-[color:var(--u-line)] relative">
+                  <p className="font-serif-italic text-[15px] leading-snug text-[color:var(--u-ink)]">
+                    “{cs.hero_quote}”
+                  </p>
+                  <cite className="not-italic block mt-2 text-[11px] text-[color:var(--u-muted)]">
+                    — {cs.hero_quote_author}
+                  </cite>
+                </blockquote>
+              )}
 
               <div className="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-[color:var(--u-ink)] relative">
-                Read the story
+                {cs.kind === "content" ? "Read the article" : "Read the story"}
                 <ArrowUpRight size={15} className="transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
               </div>
             </Link>
@@ -112,13 +122,15 @@ export default function CaseStudies({ slug, caseStudies }) {
 function contentPostToStory(post) {
   return {
     id: post.id || post.slug,
+    kind: "content",
     slug: post.slug,
     title: post.title,
     excerpt: post.excerpt || post.meta_description,
     tag: post.content_type || "Buyer guide",
     read_time: estimateReadTime(post.content_html),
-    hero_quote: post.buyer_question || post.meta_description || post.excerpt || "",
-    hero_quote_author: "Uplaud Content Agent",
+    review_count: (post.source_review_ids || []).length,
+    source_count: (post.research_packet?.sources || []).length,
+    updated_at: post.updated_at || post.published_at,
   };
 }
 
@@ -126,4 +138,11 @@ function estimateReadTime(contentHtml) {
   const text = (contentHtml || "").replace(/<[^>]+>/g, " ");
   const words = text.trim().split(/\s+/).filter(Boolean).length;
   return `${Math.max(1, Math.ceil(words / 220))} min read`;
+}
+
+function formatDate(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }

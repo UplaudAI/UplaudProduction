@@ -4,10 +4,12 @@ import {
   ArrowUpRight,
   BookOpenText,
   CheckCircle2,
+  Code2,
   FileText,
   Globe2,
   Loader2,
   RefreshCcw,
+  Save,
   Search,
   Sparkles,
 } from "lucide-react";
@@ -29,6 +31,32 @@ function firstSentence(text) {
   return text.split(/(?<=[.!?])\s+/)[0] || text;
 }
 
+function sanitizePreviewHtml(contentHtml) {
+  if (typeof window === "undefined" || !contentHtml) return "";
+  const template = document.createElement("template");
+  template.innerHTML = contentHtml;
+  template.content
+    .querySelectorAll("script,style,iframe,object,embed,link,meta,form,input,button")
+    .forEach((node) => node.remove());
+  template.content.querySelectorAll("*").forEach((node) => {
+    [...node.attributes].forEach((attr) => {
+      const name = attr.name.toLowerCase();
+      const value = (attr.value || "").trim().toLowerCase();
+      if (name.startsWith("on") || value.startsWith("javascript:") || value.startsWith("data:")) {
+        node.removeAttribute(attr.name);
+      }
+    });
+  });
+  return template.innerHTML;
+}
+
+function formatDate(value) {
+  if (!value) return "Not updated";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
 export default function ContentAgentPage() {
   const user = getAuth();
   const businessName = user?.workspace || user?.company || "My Company";
@@ -39,10 +67,16 @@ export default function ContentAgentPage() {
   const [savingSlug, setSavingSlug] = useState("");
   const [contentType, setContentType] = useState("Buyer Guide");
   const [buyerQuestion, setBuyerQuestion] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(null);
 
   const selectedPost = useMemo(
     () => posts.find((post) => post.slug === selectedSlug) || posts[0],
     [posts, selectedSlug]
+  );
+  const safePreviewHtml = useMemo(
+    () => sanitizePreviewHtml(selectedPost?.content_html || "<p>No article body yet.</p>"),
+    [selectedPost?.content_html]
   );
 
   const refreshPosts = async () => {
@@ -74,6 +108,8 @@ export default function ContentAgentPage() {
       const next = [data, ...posts.filter((post) => post.slug !== data.slug)];
       setPosts(next);
       setSelectedSlug(data.slug);
+      setEditing(false);
+      setDraft(null);
       toast.success("Draft generated for review", {
         description: data.quality_score >= 80 ? "Passed the content quality gate." : "Needs edits before publishing.",
       });
@@ -92,6 +128,41 @@ export default function ContentAgentPage() {
       toast.success(action === "publish" ? "Published to the public business page" : "Content updated");
     } catch (err) {
       toast.error(formatApiError(err.response?.data?.detail) || "Could not update content");
+    } finally {
+      setSavingSlug("");
+    }
+  };
+
+  const startEditing = () => {
+    if (!selectedPost) return;
+    setDraft({
+      title: selectedPost.title || "",
+      slug: selectedPost.slug || "",
+      meta_description: selectedPost.meta_description || "",
+      excerpt: selectedPost.excerpt || "",
+      content_html: selectedPost.content_html || "",
+      reviewer_notes: selectedPost.reviewer_notes || "",
+      status: selectedPost.status || "draft",
+    });
+    setEditing(true);
+  };
+
+  const updateDraft = (field, value) => {
+    setDraft((current) => ({ ...(current || {}), [field]: value }));
+  };
+
+  const saveDraft = async () => {
+    if (!selectedPost || !draft) return;
+    setSavingSlug(selectedPost.slug);
+    try {
+      const { data } = await api.put(`/business/content/${selectedPost.slug}`, draft);
+      setPosts((current) => current.map((post) => (post.slug === selectedPost.slug ? data : post)));
+      setSelectedSlug(data.slug);
+      setEditing(false);
+      setDraft(null);
+      toast.success("Content edits saved");
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail) || "Could not save content edits");
     } finally {
       setSavingSlug("");
     }
@@ -223,11 +294,22 @@ export default function ContentAgentPage() {
                           {post.status}
                         </span>
                         <span className={`text-[12px] font-semibold ${scoreTone(post.quality_score)}`}>
-                          {post.quality_score || 0}/100
+                          Q {post.quality_score || 0}
+                        </span>
+                        <span className={`text-[12px] font-semibold ${scoreTone(post.seo_score)}`}>
+                          SEO {post.seo_score || 0}
+                        </span>
+                        <span className={`text-[12px] font-semibold ${scoreTone(post.aeo_score)}`}>
+                          AEO {post.aeo_score || 0}
                         </span>
                       </div>
                       <h3 className="mt-3 line-clamp-2 font-display text-[18px] font-semibold text-[#111827]">{post.title}</h3>
-                      <p className="mt-1 line-clamp-2 text-[13px] leading-relaxed text-[#6b6258]">{post.excerpt || post.meta_description}</p>
+                      <p className="mt-1 line-clamp-2 text-[13px] leading-relaxed text-[#6b6258]">{post.buyer_question || post.excerpt || post.meta_description}</p>
+                      <div className="mt-3 flex flex-wrap gap-3 text-[11px] font-mono uppercase tracking-[0.12em] text-[#9f968b]">
+                        <span>{post.content_type || "Content"}</span>
+                        <span>{(post.source_review_ids || []).length} reviews</span>
+                        <span>{formatDate(post.updated_at)}</span>
+                      </div>
                     </div>
                     <FileText className="mt-1 h-5 w-5 shrink-0 text-[#9f968b]" />
                   </div>
@@ -261,15 +343,34 @@ export default function ContentAgentPage() {
                   </button>
                 )}
                 {selectedPost.status === "published" && (
-                  <a
-                    href={`/business/public/${selectedPost.business_slug}/blog/${selectedPost.slug}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-2 rounded-xl border border-[#ded3bf] bg-white px-4 py-2.5 text-[13px] font-semibold text-[#111827]"
-                  >
-                    View live <ArrowUpRight className="h-4 w-4" />
-                  </a>
+                  <>
+                    <button
+                      type="button"
+                      disabled={savingSlug === selectedPost.slug}
+                      onClick={() => updateStatus(selectedPost.slug, "unpublish")}
+                      className="inline-flex items-center gap-2 rounded-xl border border-[#ded3bf] bg-white px-4 py-2.5 text-[13px] font-semibold text-[#554f48] disabled:opacity-60"
+                    >
+                      Unpublish
+                    </button>
+                    <a
+                      href={`/business/public/${selectedPost.business_slug}/blog/${selectedPost.slug}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-2 rounded-xl border border-[#ded3bf] bg-white px-4 py-2.5 text-[13px] font-semibold text-[#111827]"
+                    >
+                      View live <ArrowUpRight className="h-4 w-4" />
+                    </a>
+                  </>
                 )}
+                <button
+                  type="button"
+                  onClick={editing ? saveDraft : startEditing}
+                  disabled={savingSlug === selectedPost.slug}
+                  className="inline-flex items-center gap-2 rounded-xl border border-[#ded3bf] bg-white px-4 py-2.5 text-[13px] font-semibold text-[#554f48] disabled:opacity-60"
+                >
+                  {editing ? <Save className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+                  {editing ? "Save edits" : "Edit"}
+                </button>
                 <button
                   type="button"
                   disabled={savingSlug === selectedPost.slug}
@@ -282,10 +383,21 @@ export default function ContentAgentPage() {
               </div>
             </div>
 
-            <div
-              className="prose prose-neutral mt-6 max-w-none prose-headings:font-display prose-p:leading-relaxed prose-blockquote:border-l-[#6442ff] prose-blockquote:bg-[#f8f6ff] prose-blockquote:py-2 prose-blockquote:not-italic"
-              dangerouslySetInnerHTML={{ __html: selectedPost.content_html || "<p>No article body yet.</p>" }}
-            />
+            {editing ? (
+              <div className="mt-6 space-y-4">
+                <EditField label="Title" value={draft?.title || ""} onChange={(value) => updateDraft("title", value)} />
+                <EditField label="Slug" value={draft?.slug || ""} onChange={(value) => updateDraft("slug", value)} />
+                <EditField label="Meta description" value={draft?.meta_description || ""} onChange={(value) => updateDraft("meta_description", value)} multiline />
+                <EditField label="Excerpt" value={draft?.excerpt || ""} onChange={(value) => updateDraft("excerpt", value)} multiline />
+                <EditField label="Article HTML" value={draft?.content_html || ""} onChange={(value) => updateDraft("content_html", value)} multiline tall />
+                <EditField label="Reviewer notes" value={draft?.reviewer_notes || ""} onChange={(value) => updateDraft("reviewer_notes", value)} multiline />
+              </div>
+            ) : (
+              <div
+                className="prose prose-neutral mt-6 max-w-none prose-headings:font-display prose-p:leading-relaxed prose-blockquote:border-l-[#6442ff] prose-blockquote:bg-[#f8f6ff] prose-blockquote:py-2 prose-blockquote:not-italic"
+                dangerouslySetInnerHTML={{ __html: safePreviewHtml }}
+              />
+            )}
           </article>
 
           <aside className="space-y-4">
@@ -322,10 +434,37 @@ export default function ContentAgentPage() {
                 Schema is stored with the post and rendered server-side when published.
               </p>
             </Panel>
+
+            <Panel title="Schema" icon={Code2}>
+              <pre className="max-h-72 overflow-auto rounded-lg bg-[#111827] p-3 text-[11px] leading-relaxed text-white">
+                {JSON.stringify(selectedPost.schema || {}, null, 2)}
+              </pre>
+            </Panel>
           </aside>
         </section>
       )}
     </div>
+  );
+}
+
+function EditField({ label, value, onChange, multiline = false, tall = false }) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-[11px] font-mono uppercase tracking-[0.18em] text-[#7c7469]">{label}</span>
+      {multiline ? (
+        <textarea
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className={`w-full rounded-xl border border-[#ded3bf] bg-white px-4 py-3 text-[14px] leading-relaxed text-[#111827] outline-none focus:border-[#6442ff] focus:ring-4 focus:ring-[#6442ff]/10 ${tall ? "min-h-[320px] font-mono text-[12px]" : "min-h-[92px]"}`}
+        />
+      ) : (
+        <input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="w-full rounded-xl border border-[#ded3bf] bg-white px-4 py-3 text-[14px] text-[#111827] outline-none focus:border-[#6442ff] focus:ring-4 focus:ring-[#6442ff]/10"
+        />
+      )}
+    </label>
   );
 }
 

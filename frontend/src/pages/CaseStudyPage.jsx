@@ -77,8 +77,18 @@ export default function CaseStudyPage() {
 
         <div className="mt-8 flex items-center justify-between border-y border-[color:var(--u-line)] py-4">
           <div className="text-sm">
-            <span className="text-[color:var(--u-muted)]">Featured customer · </span>
-            <span className="font-medium">{cs.hero_quote_author}</span>
+            {cs.kind === "content" ? (
+              <div className="flex flex-wrap gap-4 text-[12px] font-mono uppercase tracking-[0.12em] text-[color:var(--u-muted)]">
+                <span>{cs.review_count} review signals</span>
+                <span>{cs.source_count} research sources</span>
+                {cs.updated_at && <span>Updated {formatDate(cs.updated_at)}</span>}
+              </div>
+            ) : (
+              <>
+                <span className="text-[color:var(--u-muted)]">Featured customer · </span>
+                <span className="font-medium">{cs.hero_quote_author}</span>
+              </>
+            )}
           </div>
           <button className="u-btn u-btn-ghost text-sm" data-testid="cs-share-btn">
             <Share2 size={14} /> Share
@@ -91,15 +101,17 @@ export default function CaseStudyPage() {
           data-testid="cs-body"
         />
 
-        <div
-          className="mt-14 rounded-2xl p-8 relative overflow-hidden"
-          style={{ background: "linear-gradient(135deg, #EEE9FF 0%, #DFF7EE 100%)" }}
-        >
-          <p className="font-serif-italic text-2xl leading-snug text-[color:var(--u-ink)] max-w-lg">
-            “{cs.hero_quote}”
-          </p>
-          <p className="mt-3 text-sm text-[color:var(--u-ink-2)]">— {cs.hero_quote_author}</p>
-        </div>
+        {cs.kind !== "content" && (
+          <div
+            className="mt-14 rounded-2xl p-8 relative overflow-hidden"
+            style={{ background: "linear-gradient(135deg, #EEE9FF 0%, #DFF7EE 100%)" }}
+          >
+            <p className="font-serif-italic text-2xl leading-snug text-[color:var(--u-ink)] max-w-lg">
+              “{cs.hero_quote}”
+            </p>
+            <p className="mt-3 text-sm text-[color:var(--u-ink-2)]">— {cs.hero_quote_author}</p>
+          </div>
+        )}
 
         <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-[color:var(--u-line)] pt-8">
           <div>
@@ -120,14 +132,17 @@ export default function CaseStudyPage() {
 function contentPostToCaseStudy(post) {
   return {
     id: post.id || post.slug,
+    kind: "content",
     slug: post.slug,
     title: post.title,
     excerpt: post.excerpt || post.meta_description,
     tag: post.content_type || "Buyer guide",
     read_time: estimateReadTime(post.content_html),
     body_html: post.content_html || "",
-    hero_quote: post.buyer_question || post.meta_description || post.excerpt || "",
-    hero_quote_author: "Uplaud Content Agent",
+    review_count: (post.source_review_ids || []).length,
+    source_count: (post.research_packet?.sources || []).length,
+    updated_at: post.updated_at || post.published_at,
+    schema: post.schema || {},
   };
 }
 
@@ -135,4 +150,11 @@ function estimateReadTime(contentHtml) {
   const text = (contentHtml || "").replace(/<[^>]+>/g, " ");
   const words = text.trim().split(/\s+/).filter(Boolean).length;
   return `${Math.max(1, Math.ceil(words / 220))} min read`;
+}
+
+function formatDate(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
