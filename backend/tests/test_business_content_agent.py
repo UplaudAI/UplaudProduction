@@ -12,6 +12,8 @@ except ModuleNotFoundError as exc:
     sys.modules["httpx"] = types.SimpleNamespace(AsyncClient=object)
     import airtable_client
 
+import server
+
 
 def _record(record_id="rec_content", **field_overrides):
     fields = {
@@ -218,3 +220,25 @@ def test_update_content_post_raises_for_invalid_published_update(monkeypatch):
                 {"status": "published", "content_html": ""},
             )
         )
+
+
+@pytest.mark.asyncio
+async def test_gather_content_sources_returns_reviews_and_growth_signals(monkeypatch):
+    async def fake_public_page_payload(slug):
+        return {
+            "business": {"name": "AI Fiesta", "slug": "aifiesta", "category": "AI productivity"},
+            "reviews": [{"id": "rec1", "text": "Model comparison helped us choose.", "rating": 5}],
+            "stats": {"avg_rating": 5.0, "total_reviews": 1},
+        }
+
+    async def fake_signals(business_name):
+        return [{"id": "sig1", "pain_points": ["hard to compare model outputs"], "company_name": "Fintrail"}]
+
+    monkeypatch.setattr(server, "public_page_payload", fake_public_page_payload)
+    monkeypatch.setattr(airtable_client, "list_growth_signals_by_business", fake_signals)
+
+    sources = await server.gather_content_sources("aifiesta")
+
+    assert sources["business"]["name"] == "AI Fiesta"
+    assert sources["reviews"][0]["id"] == "rec1"
+    assert sources["growth_signals"][0]["id"] == "sig1"

@@ -1628,6 +1628,22 @@ async def public_page_payload(slug: str) -> Optional[Dict[str, Any]]:
     }
 
 
+async def gather_content_sources(business_slug: str) -> Dict[str, Any]:
+    payload = await public_page_payload(business_slug)
+    if not payload or not payload.get("business"):
+        raise HTTPException(status_code=404, detail="Business not found")
+
+    business = payload["business"]
+    business_name = business.get("airtable_business_name") or business.get("name")
+    growth_signals = await airtable_client.list_growth_signals_by_business(business_name)
+    return {
+        "business": business,
+        "reviews": payload.get("reviews", []),
+        "stats": payload.get("stats", {}),
+        "growth_signals": growth_signals or [],
+    }
+
+
 def public_business_json_ld(payload: Dict[str, Any], canonical_url: str) -> Dict[str, Any]:
     business = payload["business"]
     stats = payload["stats"]
