@@ -112,25 +112,14 @@ export default function ReviewerPage() {
 
             <div className="relative z-10 max-w-2xl mt-5" data-testid="reviewer-trust-summary">
               <p className="text-[10px] text-white/45 font-mono uppercase tracking-[0.16em] mb-3">
-                Reviewer activity
+                Uplaud reviewer profile
               </p>
               <h1 className="font-display text-3xl lg:text-[3.25rem] font-semibold tracking-tight leading-[0.98] text-white">
-                {reviewer.name}
+                Verified, attributed reviews.
               </h1>
-              <p className="mt-3 text-base lg:text-lg text-white/70 leading-relaxed">
-                Verified reviewer for {business.name}.
+              <p className="mt-3 max-w-xl text-base lg:text-lg text-white/70 leading-relaxed">
+                This profile groups reviews from a verified Uplaud reviewer, with the full review history shown below.
               </p>
-              <div className="mt-6 flex flex-wrap gap-3">
-                <span className="u-pill" style={{ background: "rgba(255,255,255,0.08)", borderColor: "rgba(255,255,255,0.16)", color: "white" }}>
-                  {stats.total_reviews || 0} {(stats.total_reviews || 0) === 1 ? "review" : "reviews"} written
-                </span>
-                <span className="u-pill" style={{ background: "rgba(255,255,255,0.08)", borderColor: "rgba(255,255,255,0.16)", color: "white" }}>
-                  {(stats.avg_rating || 0).toFixed(1)} avg rating
-                </span>
-                <span className="u-pill" style={{ background: "rgba(255,255,255,0.08)", borderColor: "rgba(255,255,255,0.16)", color: "white" }}>
-                  {stats.total_referrals || 0} referred {(stats.total_referrals || 0) === 1 ? "review" : "reviews"}
-                </span>
-              </div>
             </div>
           </div>
 
