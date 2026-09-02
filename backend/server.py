@@ -1421,23 +1421,84 @@ def public_stats_from_reviews(
     }
 
 
+def public_story_author_list(names: List[str]) -> str:
+    clean = [name for name in dict.fromkeys(name for name in names if name)]
+    if not clean:
+        return "Uplaud reviewers"
+    if len(clean) == 1:
+        return clean[0]
+    if len(clean) == 2:
+        return f"{clean[0]} and {clean[1]}"
+    return f"{', '.join(clean[:-1])}, and {clean[-1]}"
+
+
+def public_story_chunks(reviews: List[Dict[str, Any]], size: int = 4) -> List[List[Dict[str, Any]]]:
+    return [reviews[index:index + size] for index in range(0, len(reviews), size) if reviews[index:index + size]]
+
+
+def public_combined_story_body(business_name: str, grouped_reviews: List[Dict[str, Any]]) -> str:
+    review_paragraphs = "".join(
+        f"<blockquote><p>{html.escape(review.get('text') or '')}</p>"
+        f"<cite>— {html.escape(review.get('reviewer_name') or 'Uplaud reviewer')}</cite></blockquote>"
+        for review in grouped_reviews
+        if review.get("text")
+    )
+    reviewer_count = len({review.get("reviewer_name") for review in grouped_reviews if review.get("reviewer_name")})
+    intro = (
+        f"{html.escape(business_name)} is described through {reviewer_count} verified customer perspectives. "
+        "Together, the reviews point to the recurring details customers noticed most."
+    )
+    return f"<p>{intro}</p>{review_paragraphs}"
+
+
+def public_story_theme(grouped_reviews: List[Dict[str, Any]]) -> str:
+    combined_text = " ".join(review.get("text", "") for review in grouped_reviews).lower()
+    if any(term in combined_text for term in ["compare", "comparison", "side by side", "side-by-side", "model"]):
+        return "AI model comparison"
+    if any(term in combined_text for term in ["price", "cost", "affordable", "value", "worth"]):
+        return "better value"
+    if any(term in combined_text for term in ["fast", "speed", "quick", "time", "save"]):
+        return "saving time"
+    if any(term in combined_text for term in ["easy", "simple", "straightforward", "onboarding"]):
+        return "easier onboarding"
+    return "verified customer trust"
+
+
+def public_story_title(business_name: str, grouped_reviews: List[Dict[str, Any]], story_index: int) -> str:
+    theme = public_story_theme(grouped_reviews)
+    if story_index % 2 == 1:
+        if theme == "AI model comparison":
+            return f"Is {business_name} worth it for comparing AI models?"
+        return f"Is {business_name} worth it for {theme}?"
+    return f"{business_name} reviews highlight {theme}"
+
+
 def public_case_studies_from_reviews(slug: str, business: Dict[str, Any], reviews: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    items = [
-        {
-            "id": review["id"],
-            "business_slug": slug,
-            "slug": public_slug(review["text"][:64]) or review["id"],
-            "title": f"{review['reviewer_name']}'s experience with {business['name']}",
-            "excerpt": review["text"][:180],
-            "hero_quote": review["text"],
-            "hero_quote_author": review["reviewer_name"],
-            "body_html": f"<p>{html.escape(review['text'])}</p>",
-            "tag": "Customer story",
-            "read_time": "2 min read",
-            "published": review["date"],
-        }
-        for review in reviews[:6]
-    ]
+    items = []
+    for index, grouped_reviews in enumerate(public_story_chunks(reviews[:12], 4), start=1):
+        authors = public_story_author_list([review.get("reviewer_name") for review in grouped_reviews])
+        combined_text = " ".join(review.get("text", "").strip() for review in grouped_reviews if review.get("text")).strip()
+        first_review = grouped_reviews[0]
+        review_count = len(grouped_reviews)
+        title = public_story_title(business["name"], grouped_reviews, index)
+        story_slug = public_slug(f"{business['name']} reviewer story {index}")
+        items.append(
+            {
+                "id": f"{slug}-story-{index}",
+                "business_slug": slug,
+                "slug": story_slug,
+                "title": title,
+                "excerpt": combined_text[:220],
+                "hero_quote": first_review.get("text", ""),
+                "hero_quote_author": authors,
+                "body_html": public_combined_story_body(business["name"], grouped_reviews),
+                "tag": "Customer story",
+                "read_time": "2 min read",
+                "published": max((review.get("date", "") for review in grouped_reviews), default=""),
+                "review_count": review_count,
+                "review_ids": [review.get("id") for review in grouped_reviews],
+            }
+        )
     items.sort(key=lambda cs: cs.get("published", ""), reverse=True)
     return items
 

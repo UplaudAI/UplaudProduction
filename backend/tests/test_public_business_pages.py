@@ -175,7 +175,7 @@ def test_get_public_business_page_payload_uses_single_airtable_lookup(monkeypatc
     assert data["stats"]["total_referrals"] == 3
     assert len(data["reviews"]) == 2
     assert len(data["top_reviews"]) == 2
-    assert data["case_studies"][0]["hero_quote_author"] == "Priya Menon"
+    assert data["case_studies"][0]["hero_quote_author"] == "Priya Menon and Rohan Bakshi"
 
 
 def test_public_business_html_is_crawlable(monkeypatch):
@@ -368,6 +368,57 @@ def test_public_business_stats_builds_positive_adjective_word_cloud():
     assert "slow" not in words
 
 
+def test_public_case_studies_group_three_to_four_reviews_into_one_story():
+    business = {"name": "AI Fiesta"}
+    reviews = [
+        {"id": "r1", "reviewer_name": "Anand", "text": "Fast model comparison helped me choose.", "date": "2026-08-01"},
+        {"id": "r2", "reviewer_name": "Deepthi", "text": "Affordable access to frontier AI models.", "date": "2026-08-02"},
+        {"id": "r3", "reviewer_name": "Hitanshi", "text": "Simple side by side answers saved time.", "date": "2026-08-03"},
+        {"id": "r4", "reviewer_name": "Raushan", "text": "Useful product with strong value.", "date": "2026-08-04"},
+    ]
+
+    stories = server.public_case_studies_from_reviews("aifiesta", business, reviews)
+
+    assert len(stories) == 1
+    story = stories[0]
+    assert story["title"] == "Is AI Fiesta worth it for comparing AI models?"
+    assert story["review_count"] == 4
+    assert story["hero_quote_author"] == "Anand, Deepthi, Hitanshi, and Raushan"
+    assert "Fast model comparison helped me choose." in story["body_html"]
+    assert "Useful product with strong value." in story["body_html"]
+
+
+def test_public_case_studies_create_multiple_grouped_stories_for_larger_review_sets():
+    business = {"name": "AI Fiesta"}
+    reviews = [
+        {"id": f"r{i}", "reviewer_name": f"Reviewer {i}", "text": f"Review {i} text with useful feedback.", "date": f"2026-08-0{i}"}
+        for i in range(1, 8)
+    ]
+
+    stories = server.public_case_studies_from_reviews("aifiesta", business, reviews)
+
+    assert len(stories) == 2
+    assert [story["review_count"] for story in stories] == [4, 3]
+
+
+def test_public_case_study_titles_alternate_question_and_statement():
+    business = {"name": "AI Fiesta"}
+    reviews = [
+        {
+            "id": f"r{i}",
+            "reviewer_name": f"Reviewer {i}",
+            "text": "AI Fiesta helps compare AI models and choose better answers.",
+            "date": f"2026-08-0{i}",
+        }
+        for i in range(1, 8)
+    ]
+
+    stories = server.public_case_studies_from_reviews("aifiesta", business, reviews)
+
+    assert stories[0]["title"] == "Is AI Fiesta worth it for comparing AI models?"
+    assert stories[1]["title"] == "AI Fiesta reviews highlight better AI model comparison"
+
+
 def test_get_public_business_case_study_from_uplaud_review(monkeypatch):
     _mock_airtable(monkeypatch)
 
@@ -377,7 +428,7 @@ def test_get_public_business_case_study_from_uplaud_review(monkeypatch):
     story = response.json()["case_studies"][0]
     detail = client.get(f"/api/business/public/ai-fiesta/case-studies/{story['slug']}")
     assert detail.status_code == 200
-    assert detail.json()["hero_quote_author"] == "Priya Menon"
+    assert detail.json()["hero_quote_author"] == "Priya Menon and Rohan Bakshi"
 
 
 def test_unknown_public_business_404(monkeypatch):
