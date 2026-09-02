@@ -3467,11 +3467,62 @@ def _content_not_found() -> HTTPException:
     return HTTPException(status_code=404, detail="Content post not found")
 
 
+def sanitize_public_content_html(content_html: str) -> str:
+    soup = BeautifulSoup(content_html or "", "html.parser")
+    for tag in soup.find_all(["script", "style", "iframe", "object", "embed", "link", "meta", "form", "input", "button"]):
+        tag.decompose()
+
+    allowed_tags = {
+        "article",
+        "section",
+        "header",
+        "footer",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "p",
+        "blockquote",
+        "cite",
+        "strong",
+        "em",
+        "b",
+        "i",
+        "ul",
+        "ol",
+        "li",
+        "a",
+        "br",
+        "span",
+        "div",
+    }
+    allowed_attrs = {"a": {"href", "title", "rel", "target"}, "blockquote": {"cite"}}
+    url_attrs = {"href", "cite"}
+
+    for tag in soup.find_all(True):
+        if tag.name not in allowed_tags:
+            tag.unwrap()
+            continue
+        for attr, value in list(tag.attrs.items()):
+            attr_name = attr.lower()
+            if attr_name.startswith("on") or attr_name not in allowed_attrs.get(tag.name, set()):
+                del tag.attrs[attr]
+                continue
+            values = value if isinstance(value, list) else [value]
+            normalized = " ".join(str(v).strip().lower() for v in values)
+            if attr_name in url_attrs and (normalized.startswith("javascript:") or normalized.startswith("data:")):
+                del tag.attrs[attr]
+        if tag.name == "a":
+            tag["rel"] = "noopener noreferrer"
+            tag["target"] = "_blank"
+    return str(soup)
+
+
 def render_public_content_html(post: dict, canonical_url: str) -> str:
     title = post.get("title") or "Published content"
     meta_description = post.get("meta_description") or post.get("excerpt") or ""
     buyer_question = post.get("buyer_question") or ""
-    content_html = post.get("content_html") or ""
+    content_html = sanitize_public_content_html(post.get("content_html") or "")
     schema = post.get("schema") or {}
     if not schema:
         schema = {

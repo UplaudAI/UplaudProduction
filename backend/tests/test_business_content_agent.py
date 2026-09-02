@@ -309,6 +309,32 @@ def test_public_content_html_contains_article_and_schema(monkeypatch, client):
     assert '"@type": "Article"' in response.text
 
 
+def test_public_content_html_sanitizes_dangerous_markup(monkeypatch, client):
+    async def fake_get(business_slug, content_slug, published_only=False):
+        return _publishable_post(
+            slug="published-post",
+            status="published",
+            title="Published AI Fiesta Guide",
+            content_html=(
+                '<article><h1 onclick="alert(1)">Guide</h1>'
+                '<script>alert("xss")</script>'
+                '<p>Useful content.</p>'
+                '<a href="javascript:alert(1)">Bad link</a></article>'
+            ),
+            schema={"@context": "https://schema.org", "@type": "Article", "headline": "Guide"},
+        )
+
+    monkeypatch.setattr(airtable_client, "get_content_post_airtable", fake_get)
+
+    response = client.get("/business/public/aifiesta/blog/published-post")
+
+    assert response.status_code == 200
+    assert "<script>alert" not in response.text
+    assert "onclick=" not in response.text
+    assert "javascript:alert" not in response.text
+    assert "<p>Useful content.</p>" in response.text
+
+
 def test_public_content_html_preserves_legacy_case_study_fallback(monkeypatch, client):
     async def fake_get(business_slug, content_slug, published_only=False):
         assert published_only is True
