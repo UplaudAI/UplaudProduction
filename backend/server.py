@@ -1437,18 +1437,45 @@ def public_story_chunks(reviews: List[Dict[str, Any]], size: int = 4) -> List[Li
 
 
 def public_combined_story_body(business_name: str, grouped_reviews: List[Dict[str, Any]]) -> str:
-    review_paragraphs = "".join(
-        f"<blockquote><p>{html.escape(review.get('text') or '')}</p>"
-        f"<cite>— {html.escape(review.get('reviewer_name') or 'Uplaud reviewer')}</cite></blockquote>"
-        for review in grouped_reviews
-        if review.get("text")
-    )
-    reviewer_count = len({review.get("reviewer_name") for review in grouped_reviews if review.get("reviewer_name")})
+    usable_reviews = [review for review in grouped_reviews if review.get("text")]
+    reviewer_names = [review.get("reviewer_name") or "a verified reviewer" for review in usable_reviews]
+    reviewer_count = len(dict.fromkeys(reviewer_names))
+    count_label = {
+        1: "One verified reviewer",
+        2: "Two verified reviewers",
+        3: "Three verified reviewers",
+        4: "Four verified reviewers",
+    }.get(reviewer_count, f"{reviewer_count} verified reviewers")
+    theme = public_story_theme(usable_reviews)
+
+    evidence_verbs = ["called out", "pointed to", "noted", "emphasized"]
+    evidence = []
+    for index, review in enumerate(usable_reviews[:4]):
+        reviewer = html.escape(review.get("reviewer_name") or "A verified reviewer")
+        text = html.escape((review.get("text") or "").strip())
+        verb = evidence_verbs[index % len(evidence_verbs)]
+        evidence.append(f"<p>{reviewer} {verb} that \"{text}\"</p>")
+
     intro = (
-        f"{html.escape(business_name)} is described through {reviewer_count} verified customer perspectives. "
-        "Together, the reviews point to the recurring details customers noticed most."
+        f"<p>{count_label} describe {html.escape(business_name)} through a practical buyer lens: "
+        f"whether it actually helps with {html.escape(theme)} once people are using it.</p>"
     )
-    return f"<p>{intro}</p>{review_paragraphs}"
+    question_section = (
+        "<h2>What buyers are trying to figure out</h2>"
+        f"<p>The useful question is not whether {html.escape(business_name)} sounds impressive on a feature list. "
+        "It is whether customers can see a clear job it does for them, where it saves effort, and whether the value shows up in day-to-day use.</p>"
+    )
+    evidence_section = (
+        "<h2>What the reviews consistently point to</h2>"
+        + "".join(evidence)
+        + "<p>Read together, the pattern is more useful than any single quote: customers are describing a product that earns attention when the outcome is concrete, repeatable, and easy to understand.</p>"
+    )
+    bottom_line = (
+        "<h2>Bottom line</h2>"
+        f"<p>For buyers evaluating {html.escape(business_name)}, these reviews suggest the strongest fit is when "
+        f"{html.escape(theme)} matters enough to be part of the purchase decision. The reviews also give future customers a clearer way to judge fit: look for the specific workflow customers mention, not just the rating.</p>"
+    )
+    return intro + question_section + evidence_section + bottom_line
 
 
 def public_story_theme(grouped_reviews: List[Dict[str, Any]]) -> str:
