@@ -1111,7 +1111,10 @@ def public_review_from_uplaud(
         "business_name": business_name,
         "reviewer_name": customer,
         "reviewer_slug": public_slug(customer),
-        "reviewer_title": "",
+        "reviewer_title": testimonial.get("reviewer_title") or "",
+        "reviewer_company": testimonial.get("reviewer_company") or "",
+        "reviewer_linkedin_url": testimonial.get("reviewer_linkedin_url") or "",
+        "reviewer_instagram_url": testimonial.get("reviewer_instagram_url") or "",
         "rating": max(1, min(5, rating)),
         "emoji": "",
         "text": testimonial.get("body") or "",
@@ -1215,6 +1218,25 @@ def public_testimonial_from_uplaud_record(rec: Dict[str, Any]) -> Dict[str, Any]
         "source": airtable_field(fields, "Review_Source", default="Uplaud"),
         "sentiment": str(airtable_field(fields, "NBA_Sentiment", default="")).lower(),
         "date_added": airtable_field(fields, "Date_Added", default=rec.get("createdTime", "")[:10]),
+        "reviewer_title": airtable_field(fields, "Job_Title", "Title", "Role", default=""),
+        "reviewer_company": airtable_field(fields, "Company", "Company_Name", default=""),
+        "reviewer_linkedin_url": airtable_field(
+            fields,
+            "LinkedIn Profile",
+            "LinkedIn",
+            "Linkedin",
+            "Linkedin Profile",
+            default="",
+        ),
+        "reviewer_instagram_url": airtable_field(
+            fields,
+            "Instagram Profile",
+            "Instagram",
+            "Instagram_URL",
+            "Instagram URL",
+            "Instagram Handle",
+            default="",
+        ),
     }
 
 
@@ -1436,6 +1458,53 @@ def public_story_chunks(reviews: List[Dict[str, Any]], size: int = 4) -> List[Li
     return [reviews[index:index + size] for index in range(0, len(reviews), size) if reviews[index:index + size]]
 
 
+def public_story_profile_url(url: str, platform: str) -> str:
+    clean = (url or "").strip()
+    if not clean:
+        return ""
+    if clean.startswith(("http://", "https://")):
+        return clean
+    if platform == "instagram":
+        return f"https://instagram.com/{clean.lstrip('@')}"
+    return clean
+
+
+def public_story_reviewer_attribution(review: Dict[str, Any]) -> str:
+    parts = []
+    title = (review.get("reviewer_title") or "").strip()
+    company = (review.get("reviewer_company") or "").strip()
+    if title and company:
+        parts.append(f"{title}, {company}")
+    elif title:
+        parts.append(title)
+    elif company:
+        parts.append(company)
+    return " · ".join(parts)
+
+
+def public_story_testimonial_block(review: Dict[str, Any], index: int) -> str:
+    reviewer = html.escape(review.get("reviewer_name") or "Verified reviewer")
+    text = html.escape((review.get("text") or "").strip())
+    attribution = public_story_reviewer_attribution(review)
+    attribution_html = f'<span class="story-testimonial-role">{html.escape(attribution)}</span>' if attribution else ""
+    links = []
+    linkedin = public_story_profile_url(review.get("reviewer_linkedin_url") or "", "linkedin")
+    instagram = public_story_profile_url(review.get("reviewer_instagram_url") or "", "instagram")
+    if linkedin:
+        links.append(f'<a href="{html.escape(linkedin)}" rel="nofollow noopener" target="_blank">LinkedIn</a>')
+    if instagram:
+        links.append(f'<a href="{html.escape(instagram)}" rel="nofollow noopener" target="_blank">Instagram</a>')
+    links_html = f'<span class="story-testimonial-links">{" · ".join(links)}</span>' if links else ""
+    label = ["Customer evidence", "Another signal", "Review detail", "Verified note"][index % 4]
+    return (
+        f'<aside class="story-testimonial">'
+        f'<p class="story-testimonial-label">{label}</p>'
+        f'<p class="story-testimonial-quote">“{text}”</p>'
+        f'<footer><strong>{reviewer}</strong>{attribution_html}{links_html}</footer>'
+        f'</aside>'
+    )
+
+
 def public_combined_story_body(business_name: str, grouped_reviews: List[Dict[str, Any]]) -> str:
     usable_reviews = [review for review in grouped_reviews if review.get("text")]
     reviewer_names = [review.get("reviewer_name") or "a verified reviewer" for review in usable_reviews]
@@ -1447,33 +1516,29 @@ def public_combined_story_body(business_name: str, grouped_reviews: List[Dict[st
         4: "Four verified reviewers",
     }.get(reviewer_count, f"{reviewer_count} verified reviewers")
     theme = public_story_theme(usable_reviews)
-
-    evidence_verbs = ["called out", "pointed to", "noted", "emphasized"]
-    evidence = []
-    for index, review in enumerate(usable_reviews[:4]):
-        reviewer = html.escape(review.get("reviewer_name") or "A verified reviewer")
-        text = html.escape((review.get("text") or "").strip())
-        verb = evidence_verbs[index % len(evidence_verbs)]
-        evidence.append(f"<p>{reviewer} {verb} that \"{text}\"</p>")
+    testimonial_blocks = [public_story_testimonial_block(review, index) for index, review in enumerate(usable_reviews[:4])]
 
     intro = (
-        f"<p>{count_label} describe {html.escape(business_name)} through a practical buyer lens: "
-        f"whether it actually helps with {html.escape(theme)} once people are using it.</p>"
+        f"<p>{count_label} describe {html.escape(business_name)} through the lens that matters most to a buyer: "
+        f"what the product helps them do, what feels meaningfully different, and where the value shows up after the first impression.</p>"
     )
     question_section = (
-        "<h2>What buyers are trying to figure out</h2>"
-        f"<p>The useful question is not whether {html.escape(business_name)} sounds impressive on a feature list. "
-        "It is whether customers can see a clear job it does for them, where it saves effort, and whether the value shows up in day-to-day use.</p>"
+        "<h3>What buyers are trying to decide</h3>"
+        f"<p>For someone evaluating {html.escape(business_name)}, the question is not whether the product has an appealing feature list. "
+        f"The sharper question is whether it can make {html.escape(theme)} easier, faster, or more dependable in real use.</p>"
     )
     evidence_section = (
-        "<h2>What the reviews consistently point to</h2>"
-        + "".join(evidence)
-        + "<p>Read together, the pattern is more useful than any single quote: customers are describing a product that earns attention when the outcome is concrete, repeatable, and easy to understand.</p>"
+        "<h3>What the strongest reviews make clear</h3>"
+        "<p>The point is not that every reviewer said the same thing. The useful signal is the overlap: customers keep returning to concrete outcomes instead of vague praise.</p>"
+        + "".join(testimonial_blocks[:2])
+        + f"<p>That makes the reviews more useful than a star rating alone. They show where {html.escape(business_name)} is being judged by the work it helps people complete, not just by whether the product made a good first impression.</p>"
     )
+    if len(testimonial_blocks) > 2:
+        evidence_section += "".join(testimonial_blocks[2:])
     bottom_line = (
-        "<h2>Bottom line</h2>"
-        f"<p>For buyers evaluating {html.escape(business_name)}, these reviews suggest the strongest fit is when "
-        f"{html.escape(theme)} matters enough to be part of the purchase decision. The reviews also give future customers a clearer way to judge fit: look for the specific workflow customers mention, not just the rating.</p>"
+        "<h3>Who this is really for</h3>"
+        f"<p>{html.escape(business_name)} appears most relevant for buyers who already feel the cost of the problem the reviewers are describing. "
+        f"If {html.escape(theme)} is central to the decision, these reviews give a practical way to evaluate fit: look for the same workflow, constraint, or outcome in your own day-to-day work.</p>"
     )
     return intro + question_section + evidence_section + bottom_line
 

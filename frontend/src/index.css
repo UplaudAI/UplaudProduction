@@ -518,3 +518,48 @@ textarea:focus-visible {
     border-radius: 0 12px 12px 0;
     margin: 1.5rem 0;
 }
+.prose-uplaud .story-testimonial {
+    margin: 1.75rem 0;
+    padding: 1.35rem 1.5rem;
+    border: 1px solid var(--u-line);
+    border-left: 4px solid var(--u-mint-2);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.64);
+    box-shadow: 0 16px 36px rgba(27, 24, 50, 0.08);
+}
+.prose-uplaud .story-testimonial-label {
+    margin: 0 0 0.65rem;
+    font-family: "DM Mono", monospace;
+    font-size: 0.72rem;
+    line-height: 1.2;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--u-muted);
+}
+.prose-uplaud .story-testimonial-quote {
+    margin: 0;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 1.35rem;
+    line-height: 1.45;
+    color: var(--u-ink);
+}
+.prose-uplaud .story-testimonial footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 0.95rem;
+    font-size: 0.93rem;
+    color: var(--u-ink-2);
+}
+.prose-uplaud .story-testimonial-role,
+.prose-uplaud .story-testimonial-links {
+    color: var(--u-muted);
+}
+.prose-uplaud .story-testimonial a {
+    color: var(--u-violet-2);
+    text-decoration: none;
+}
+.prose-uplaud .story-testimonial a:hover {
+    text-decoration: underline;
+}

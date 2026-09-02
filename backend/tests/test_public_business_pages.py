@@ -422,21 +422,41 @@ def test_public_case_study_titles_alternate_question_and_statement():
 def test_public_case_study_body_synthesizes_reviews_as_article():
     business = {"name": "AI Fiesta"}
     reviews = [
-        {"id": "r1", "reviewer_name": "Anand", "text": "Fast model comparison helped me choose.", "date": "2026-08-01"},
-        {"id": "r2", "reviewer_name": "Deepthi", "text": "Affordable access to frontier AI models.", "date": "2026-08-02"},
-        {"id": "r3", "reviewer_name": "Hitanshi", "text": "Simple side by side answers saved time.", "date": "2026-08-03"},
+        {
+            "id": "r1",
+            "reviewer_name": "Anand",
+            "reviewer_title": "Product Manager",
+            "reviewer_company": "Fintrail",
+            "reviewer_linkedin_url": "https://linkedin.com/in/anand",
+            "text": "Fast model comparison helped me choose.",
+            "date": "2026-08-01",
+        },
+        {
+            "id": "r2",
+            "reviewer_name": "Deepthi",
+            "reviewer_instagram_url": "deepthirao",
+            "text": "Affordable access to frontier AI models.",
+            "date": "2026-08-02",
+        },
+        {
+            "id": "r3",
+            "reviewer_name": "Hitanshi",
+            "text": "Simple side by side answers saved time.",
+            "date": "2026-08-03",
+        },
     ]
 
     story = server.public_case_studies_from_reviews("aifiesta", business, reviews)[0]
 
-    assert "<h2>What buyers are trying to figure out</h2>" in story["body_html"]
-    assert "<h2>What the reviews consistently point to</h2>" in story["body_html"]
-    assert "<h2>Bottom line</h2>" in story["body_html"]
+    assert "<h3>What buyers are trying to decide</h3>" in story["body_html"]
+    assert "<h3>What the strongest reviews make clear</h3>" in story["body_html"]
+    assert "<h3>Who this is really for</h3>" in story["body_html"]
     assert "Three verified reviewers describe" in story["body_html"]
-    assert "<blockquote>" not in story["body_html"]
-    assert "Anand called out" in story["body_html"]
-    assert "Deepthi pointed to" in story["body_html"]
-    assert "Hitanshi noted" in story["body_html"]
+    assert 'class="story-testimonial"' in story["body_html"]
+    assert "Product Manager, Fintrail" in story["body_html"]
+    assert 'href="https://linkedin.com/in/anand"' in story["body_html"]
+    assert 'href="https://instagram.com/deepthirao"' in story["body_html"]
+    assert "The point is not that every reviewer said the same thing" in story["body_html"]
 
 
 def test_get_public_business_case_study_from_uplaud_review(monkeypatch):
