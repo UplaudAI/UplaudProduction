@@ -76,6 +76,8 @@ export default function ReviewerPage() {
   const stats = profile.stats || {};
   const reviews = profile.reviews || [];
   const businessesReviewed = profile.businesses_reviewed || [];
+  const visibleBusinesses = businessesReviewed.slice(0, 6);
+  const hiddenBusinessCount = Math.max(businessesReviewed.length - visibleBusinesses.length, 0);
   const initials = (reviewer.name || "?").split(" ").slice(0, 2).map((word) => word[0]).join("").toUpperCase();
   const firstName = (reviewer.name || "this reviewer").split(" ")[0];
 
@@ -139,7 +141,7 @@ export default function ReviewerPage() {
               Where <span className="font-serif-italic">{firstName}</span> shows up.
             </h2>
             <div className="grid sm:grid-cols-2 gap-4">
-              {businessesReviewed.map((item, index) => (
+              {visibleBusinesses.map((item, index) => (
                 <Link
                   key={item.slug}
                   to={`/business/public/${item.slug}`}
@@ -160,6 +162,23 @@ export default function ReviewerPage() {
                   <ArrowUpRight size={16} className="text-[color:var(--u-muted)] transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-[color:var(--u-violet)] shrink-0" />
                 </Link>
               ))}
+              {hiddenBusinessCount > 0 && (
+                <div
+                  className="u-card p-4 flex items-center gap-3 reveal"
+                  data-testid="reviewer-business-more"
+                >
+                  <div
+                    className="w-11 h-11 rounded-xl flex items-center justify-center text-white text-sm font-bold shrink-0"
+                    style={{ background: "linear-gradient(135deg, #0B0B10 0%, #2A2545 45%, #5B3EEE 100%)" }}
+                  >
+                    +{hiddenBusinessCount}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium text-sm">more</div>
+                    <div className="text-[11px] text-[color:var(--u-muted)]">Verified businesses</div>
+                  </div>
+                </div>
+              )}
             </div>
           </section>
         )}
@@ -185,6 +204,7 @@ export default function ReviewerPage() {
                   audience={business.audience}
                   delay={index * 0.05}
                   showBusinessTag={reviews.length > 1}
+                  reviewerProfile
                 />
               ))}
             </div>
