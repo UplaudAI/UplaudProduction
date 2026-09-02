@@ -1581,6 +1581,39 @@ async def get_public_reviews(
     return {"count": len(limited), "reviews": limited}
 
 
+@api_router.get("/business/public/{slug}/reviewers/{reviewer_slug}")
+async def get_public_business_reviewer(slug: str, reviewer_slug: str):
+    payload = await public_page_payload(slug)
+    if not payload:
+        raise HTTPException(status_code=404, detail="Business not found")
+
+    reviews = [
+        review for review in payload["reviews"]
+        if review.get("reviewer_slug") == reviewer_slug
+    ]
+    if not reviews:
+        raise HTTPException(status_code=404, detail="Reviewer not found")
+
+    reviewer_name = reviews[0].get("reviewer_name") or "Uplaud customer"
+    ratings = [review.get("rating") for review in reviews if review.get("rating")]
+    avg_rating = round(sum(ratings) / len(ratings), 1) if ratings else 0
+    referred_count = sum(1 for review in reviews if review.get("referred") is True)
+    return {
+        "business": payload["business"],
+        "reviewer": {
+            "name": reviewer_name,
+            "slug": reviewer_slug,
+            "member_since": min((review.get("date") for review in reviews if review.get("date")), default=""),
+        },
+        "stats": {
+            "total_reviews": len(reviews),
+            "avg_rating": avg_rating,
+            "total_referrals": referred_count,
+        },
+        "reviews": reviews,
+    }
+
+
 @api_router.get("/business/public/{slug}/stats")
 async def get_public_stats(slug: str):
     biz = await public_business_by_slug(slug)

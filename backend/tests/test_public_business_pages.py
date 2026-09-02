@@ -220,6 +220,30 @@ def test_review_source_is_channel_not_reviewer_title():
     assert review["reviewer_title"] == ""
 
 
+def test_get_public_business_reviewer_reviews(monkeypatch):
+    _mock_airtable(monkeypatch)
+
+    response = client.get("/api/business/public/ai-fiesta/reviewers/priya-menon")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["business"]["name"] == "AI Fiesta"
+    assert data["reviewer"]["name"] == "Priya Menon"
+    assert data["reviewer"]["slug"] == "priya-menon"
+    assert data["stats"]["total_reviews"] == 1
+    assert data["stats"]["avg_rating"] == 5.0
+    assert len(data["reviews"]) == 1
+    assert data["reviews"][0]["reviewer_name"] == "Priya Menon"
+
+
+def test_unknown_public_business_reviewer_404(monkeypatch):
+    _mock_airtable(monkeypatch)
+
+    response = client.get("/api/business/public/ai-fiesta/reviewers/not-a-reviewer")
+
+    assert response.status_code == 404
+
+
 def test_get_public_business_stats_counts_reviews_and_circles(monkeypatch):
     _mock_airtable(monkeypatch)
 

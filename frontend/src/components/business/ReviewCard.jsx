@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { BadgeCheck, Sparkles, MessageCircle, Share2, Video, ShieldCheck } from "lucide-react";
 
 function Stars({ n }) {
@@ -43,6 +44,12 @@ export function normalizeReviewRating(rating) {
   return Math.max(1, Math.min(5, parsed));
 }
 
+export function reviewerProfilePath(review) {
+  const businessSlug = review?.business_slug || "";
+  const reviewerSlug = review?.reviewer_slug || "";
+  return `/business/public/${businessSlug}/reviewer/${reviewerSlug}`;
+}
+
 function isDisplayEmoji(value) {
   return /\p{Extended_Pictographic}/u.test(value || "");
 }
@@ -81,7 +88,13 @@ export default function ReviewCard({ review, businessName, audience, delay = 0 }
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <span className="font-medium text-sm truncate">{review.reviewer_name}</span>
+            <Link
+              to={reviewerProfilePath(review)}
+              data-testid={`reviewer-link-${review.id}`}
+              className="font-medium text-sm truncate hover:underline"
+            >
+              {review.reviewer_name}
+            </Link>
             {review.verified && <BadgeCheck size={13} className="text-[color:var(--u-violet)] shrink-0" />}
           </div>
           {review.reviewer_title && (

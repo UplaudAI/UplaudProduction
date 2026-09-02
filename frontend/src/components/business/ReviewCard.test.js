@@ -1,4 +1,8 @@
-import { displayReviewSource, normalizeReviewRating } from "./ReviewCard";
+jest.mock("react-router-dom", () => ({
+  Link: ({ children }) => children,
+}), { virtual: true });
+
+import { displayReviewSource, normalizeReviewRating, reviewerProfilePath } from "./ReviewCard";
 
 describe("displayReviewSource", () => {
   test("uses the Airtable review source when present", () => {
@@ -20,5 +24,13 @@ describe("normalizeReviewRating", () => {
   test("falls back to five stars when the score is missing", () => {
     expect(normalizeReviewRating(null)).toBe(5);
     expect(normalizeReviewRating(undefined)).toBe(5);
+  });
+});
+
+describe("reviewerProfilePath", () => {
+  test("links reviewer names into the business-scoped public reviewer page", () => {
+    expect(reviewerProfilePath({ business_slug: "aifiesta", reviewer_slug: "priya-menon" })).toBe(
+      "/business/public/aifiesta/reviewer/priya-menon"
+    );
   });
 });

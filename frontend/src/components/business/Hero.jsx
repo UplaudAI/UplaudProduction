@@ -1,5 +1,6 @@
+import { Link } from "react-router-dom";
 import { ShieldCheck, MapPin, ArrowUpRight, Star } from "lucide-react";
-import { displayReviewSource, normalizeReviewRating } from "./ReviewCard";
+import { displayReviewSource, normalizeReviewRating, reviewerProfilePath } from "./ReviewCard";
 
 export default function Hero({ business, stats, topReviews = [] }) {
   const isB2B = business?.audience === "b2b";
@@ -212,7 +213,13 @@ function PreviewCard({ review, position, business }) {
             {initials}
           </div>
           <div>
-            <div className="text-xs font-medium">{review.reviewer_name}{review.reviewer_title ? `, ${review.reviewer_title}` : ""}</div>
+            <Link
+              to={reviewerProfilePath(review)}
+              className="text-xs font-medium hover:underline"
+              data-testid={`preview-reviewer-link-${review.id}`}
+            >
+              {review.reviewer_name}{review.reviewer_title ? `, ${review.reviewer_title}` : ""}
+            </Link>
             <div className="text-[10px] text-[color:var(--u-muted)]">
               {isDemo ? "verified demo" : isB2B ? "verified subscriber" : "verified"} · {sourceLabel}
             </div>
