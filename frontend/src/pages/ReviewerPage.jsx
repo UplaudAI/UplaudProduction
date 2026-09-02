@@ -76,7 +76,6 @@ export default function ReviewerPage() {
   const stats = profile.stats || {};
   const reviews = profile.reviews || [];
   const initials = (reviewer.name || "?").split(" ").slice(0, 2).map((word) => word[0]).join("").toUpperCase();
-  const featured = [...reviews].sort((a, b) => (b.rating || 0) - (a.rating || 0))[0];
 
   return (
     <div className="min-h-screen bg-grain" data-testid="reviewer-profile-page">
@@ -111,14 +110,28 @@ export default function ReviewerPage() {
               <span className="u-pill-dot" /> Verified reviewer
             </span>
 
-            {featured && (
-              <div className="relative z-10 max-w-lg mt-5" data-testid="reviewer-featured-quote">
-                <p className="font-serif-italic text-white text-lg lg:text-[1.65rem] leading-snug line-clamp-3">
-                  "{featured.text}"
-                </p>
-                <p className="mt-3 text-[10px] text-white/45 font-mono uppercase tracking-wider">on {business.name}</p>
+            <div className="relative z-10 max-w-2xl mt-5" data-testid="reviewer-trust-summary">
+              <p className="text-[10px] text-white/45 font-mono uppercase tracking-[0.16em] mb-3">
+                Reviewer activity
+              </p>
+              <h1 className="font-display text-3xl lg:text-[3.25rem] font-semibold tracking-tight leading-[0.98] text-white">
+                {reviewer.name}
+              </h1>
+              <p className="mt-3 text-base lg:text-lg text-white/70 leading-relaxed">
+                Verified reviewer for {business.name}.
+              </p>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <span className="u-pill" style={{ background: "rgba(255,255,255,0.08)", borderColor: "rgba(255,255,255,0.16)", color: "white" }}>
+                  {stats.total_reviews || 0} {(stats.total_reviews || 0) === 1 ? "review" : "reviews"} written
+                </span>
+                <span className="u-pill" style={{ background: "rgba(255,255,255,0.08)", borderColor: "rgba(255,255,255,0.16)", color: "white" }}>
+                  {(stats.avg_rating || 0).toFixed(1)} avg rating
+                </span>
+                <span className="u-pill" style={{ background: "rgba(255,255,255,0.08)", borderColor: "rgba(255,255,255,0.16)", color: "white" }}>
+                  {stats.total_referrals || 0} referred {(stats.total_referrals || 0) === 1 ? "review" : "reviews"}
+                </span>
               </div>
-            )}
+            </div>
           </div>
 
           <div className="bg-white px-6 lg:px-9 pb-7 relative">
