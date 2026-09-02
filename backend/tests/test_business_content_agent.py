@@ -304,3 +304,71 @@ def test_gather_content_sources_raises_404_for_missing_public_business(monkeypat
         asyncio.run(server.gather_content_sources("missing"))
 
     assert exc.value.status_code == 404
+
+
+def test_content_writer_prompt_requires_public_research_and_review_evidence():
+    sources = {
+        "business": {"name": "AI Fiesta", "slug": "aifiesta"},
+        "reviews": [{"id": "rec1", "reviewer_name": "Anand", "text": "Model comparison helped.", "rating": 5}],
+        "growth_signals": [],
+    }
+    research = {"sources": [{"name": "Google Search Central", "url": "https://developers.google.com/search"}]}
+    brief = {"buyer_question": "Is AI Fiesta worth it for comparing AI models?", "template": "case-study"}
+
+    prompt = server.build_content_writer_prompt(sources, research, brief)
+
+    assert "public research" in prompt.lower()
+    assert "proprietary review evidence" in prompt.lower()
+    assert "do not stitch reviews together" in prompt.lower()
+    assert "TL;DR" in prompt
+
+
+def test_content_quality_gate_rejects_low_scores():
+    article = {"quality_score": 79, "status": "needs_review"}
+
+    status = server.content_status_from_quality(article)
+
+    assert status == "draft"
+
+
+def test_generate_content_article_rewrites_once_when_quality_score_is_low(monkeypatch):
+    sources = {
+        "business": {"name": "AI Fiesta", "slug": "aifiesta", "category": "AI productivity"},
+        "reviews": [{"id": "rec1", "reviewer_name": "Anand", "text": "Model comparison helped.", "rating": 5}],
+        "growth_signals": [{"id": "sig1", "pain_points": ["hard to compare model outputs"]}],
+    }
+    responses = [
+        '{"sources":[{"name":"Google Search Central","url":"https://developers.google.com/search","tier":1,"claim":"Helpful content should serve readers."}]}',
+        '{"title":"Is AI Fiesta worth it for comparing AI models?","slug":"is-ai-fiesta-worth-it","excerpt":"A research-backed guide.","meta_description":"AI Fiesta reviews and public research show who benefits most from model comparison workflows.","content_html":"<article><h1>Is AI Fiesta worth it?</h1><p>Answer first.</p></article>","faq":[{"question":"Who is it for?","answer":"Teams comparing model outputs."}],"source_attribution":[{"name":"Google Search Central","url":"https://developers.google.com/search"}],"seo_score":78,"aeo_score":77}',
+        '{"quality_score":79,"seo_score":78,"aeo_score":77,"reviewer_notes":"Needs stronger evidence.","quality_report":{"score":79}}',
+        '{"title":"Is AI Fiesta worth it for comparing AI models?","slug":"is-ai-fiesta-worth-it","excerpt":"A stronger research-backed guide.","meta_description":"AI Fiesta reviews and public research show who benefits most from model comparison workflows.","content_html":"<article><h1>Is AI Fiesta worth it?</h1><p>Answer first with public research and customer evidence.</p></article>","faq":[{"question":"Who is it for?","answer":"Teams comparing model outputs."}],"source_attribution":[{"name":"Google Search Central","url":"https://developers.google.com/search"}],"seo_score":84,"aeo_score":85}',
+        '{"quality_score":86,"seo_score":84,"aeo_score":85,"reviewer_notes":"Ready for review.","quality_report":{"score":86}}',
+    ]
+    prompts = []
+
+    async def fake_sources(slug):
+        return sources
+
+    def fake_call(system, user, temperature=0.2):
+        prompts.append(user)
+        return responses.pop(0)
+
+    monkeypatch.setattr(server, "openai_client", object())
+    monkeypatch.setattr(server, "gather_content_sources", fake_sources)
+    monkeypatch.setattr(server, "_call_openai", fake_call)
+
+    request = server.ContentGenerateRequest(
+        content_type="Case Study",
+        buyer_question="Is AI Fiesta worth it for comparing AI models?",
+        source_review_ids=["rec1"],
+    )
+
+    article = asyncio.run(server.generate_content_article("aifiesta", request))
+
+    assert article["status"] == "needs_review"
+    assert article["quality_score"] == 86
+    assert article["content_brief"]["buyer_question"] == "Is AI Fiesta worth it for comparing AI models?"
+    assert article["source_review_ids"] == ["rec1"]
+    assert article["source_signal_ids"] == ["sig1"]
+    assert article["schema"]["@type"] == "BlogPosting"
+    assert any("rewrite" in prompt.lower() for prompt in prompts)

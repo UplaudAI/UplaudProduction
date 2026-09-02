@@ -194,6 +194,12 @@ class BusinessProfileRequest(BaseModel):
     website: str
 
 
+class ContentGenerateRequest(BaseModel):
+    content_type: Optional[str] = None
+    buyer_question: Optional[str] = None
+    source_review_ids: List[str] = Field(default_factory=list)
+
+
 class BlogListResponse(BaseModel):
     posts: List[BlogPostOut]
 
@@ -1642,6 +1648,293 @@ async def gather_content_sources(business_slug: str) -> Dict[str, Any]:
         "stats": payload.get("stats", {}),
         "growth_signals": growth_signals or [],
     }
+
+
+CONTENT_REVIEW_SYSTEM = """You are Uplaud's Business Content Agent reviewer.
+Return only valid JSON. Enforce the installed blog quality gates: answer-first formatting, TL;DR, sourced claims, SEO/AEO readiness, schema completeness, paragraph length under 150 words, and anti-pattern rejection. Minimum publishable score is 80."""
+
+
+def _compact_json(value: Any) -> str:
+    return json.dumps(value or {}, ensure_ascii=False, sort_keys=True)
+
+
+def _selected_content_reviews(sources: dict, source_review_ids: List[str]) -> List[dict]:
+    reviews = sources.get("reviews") or []
+    wanted = {rid for rid in (source_review_ids or []) if rid}
+    if wanted:
+        selected = [review for review in reviews if review.get("id") in wanted]
+        if selected:
+            return selected
+    return reviews[:4]
+
+
+def _default_buyer_question(business: dict, content_type: str) -> str:
+    name = business.get("name") or business.get("slug") or "this business"
+    if (content_type or "").lower() == "faq":
+        return f"What should buyers know before choosing {name}?"
+    if (content_type or "").lower() == "comparison":
+        return f"Who is {name} best for?"
+    return f"Is {name} worth it for buyers?"
+
+
+def _content_template(content_type: str) -> str:
+    normalized = (content_type or "").strip().lower()
+    if normalized in {"case study", "case-study"}:
+        return "case-study"
+    if normalized in {"review roundup", "roundup"}:
+        return "roundup"
+    if normalized == "comparison":
+        return "comparison"
+    if normalized == "faq":
+        return "faq-knowledge"
+    return "buyer-guide"
+
+
+def _build_content_brief(sources: dict, request: ContentGenerateRequest) -> dict:
+    business = sources.get("business") or {}
+    content_type = request.content_type or "Buyer Guide"
+    selected_reviews = _selected_content_reviews(sources, request.source_review_ids)
+    buyer_question = (request.buyer_question or "").strip() or _default_buyer_question(business, content_type)
+    target_keyword = public_slug(buyer_question).replace("-", " ")[:80].strip()
+    return {
+        "buyer_question": buyer_question,
+        "content_type": content_type,
+        "template": _content_template(content_type),
+        "target_keyword": target_keyword,
+        "selected_review_ids": [review.get("id") for review in selected_reviews if review.get("id")],
+        "selected_signal_ids": [signal.get("id") for signal in (sources.get("growth_signals") or []) if signal.get("id")],
+        "outline": [
+            "Answer-first summary",
+            "TL;DR",
+            "Public research context",
+            "Proprietary review evidence",
+            "Buyer fit, caveats, and FAQs",
+        ],
+    }
+
+
+def build_content_research_prompt(sources: dict, request: dict) -> str:
+    business = sources.get("business") or {}
+    buyer_question = (request or {}).get("buyer_question") or _default_buyer_question(
+        business, (request or {}).get("content_type") or "Buyer Guide"
+    )
+    return f"""Build Research_Packet_JSON for a Uplaud business article.
+
+Business:
+{_compact_json(business)}
+
+Buyer question:
+{buyer_question}
+
+Find public research that provides the article backbone. Use only tier 1-3 sources and include source name, URL, tier, date when known, and claim summaries. Do not fabricate statistics, metrics, quotes, sources, or claims.
+
+Return JSON with:
+{{
+  "sources": [{{"name": "", "url": "", "tier": 1, "date": "", "claim": ""}}],
+  "market_context": [],
+  "buyer_language": [],
+  "research_gaps": []
+}}"""
+
+
+def build_content_writer_prompt(sources: dict, research_packet: dict, brief: dict) -> str:
+    selected_review_ids = set(brief.get("selected_review_ids") or [])
+    reviews = sources.get("reviews") or []
+    selected_reviews = [r for r in reviews if not selected_review_ids or r.get("id") in selected_review_ids]
+    return f"""Write a structured Business Content Agent article as JSON.
+
+Use public research as the article backbone:
+{_compact_json(research_packet)}
+
+Use proprietary review evidence and Growth Signals as proof points:
+{_compact_json({"reviews": selected_reviews, "growth_signals": sources.get("growth_signals") or []})}
+
+Brief:
+{_compact_json(brief)}
+
+Requirements:
+- Open with answer-first formatting and include a visible TL;DR section.
+- Public research must carry the educational value; proprietary review evidence should sharpen the claims.
+- Do not stitch reviews together. Interlace testimonials as attributed evidence blocks, not raw concatenation.
+- Do not fabricate statistics, metrics, quotes, sources, or claims.
+- Use H1 then H2/H3 hierarchy, keep paragraphs under 150 words, mention caveats when supported, and avoid generic AI phrasing.
+- Include 3-5 FAQ items when appropriate.
+
+Return JSON with exactly these keys:
+{{
+  "title": "",
+  "slug": "",
+  "excerpt": "",
+  "meta_description": "",
+  "content_html": "",
+  "faq": [{{"question": "", "answer": ""}}],
+  "source_attribution": [{{"name": "", "url": ""}}],
+  "seo_score": 0,
+  "aeo_score": 0
+}}"""
+
+
+def build_content_reviewer_prompt(article: dict, sources: dict) -> str:
+    return f"""Review this generated article using the installed blog scoring methodology.
+
+Article:
+{_compact_json(article)}
+
+Available source evidence:
+{_compact_json(sources)}
+
+Score across the 100-point blog rubric:
+- Content Quality: 30
+- SEO Optimization: 25
+- E-E-A-T Signals: 15
+- Technical Elements: 15
+- AI Citation Readiness: 15
+
+Also check public research quality, evidence quality, repetition, tone/readability, structured data completeness, and hard failures: fabricated statistics, unsupported claims, missing public research, tier 4-5 authority sources, stitched reviews, paragraphs over 150 words, missing buyer question, missing evidence blocks, missing meta description, missing schema, or artificial generic prose.
+
+Return JSON with:
+{{
+  "quality_score": 0,
+  "seo_score": 0,
+  "aeo_score": 0,
+  "reviewer_notes": "",
+  "quality_report": {{
+    "content_quality": 0,
+    "seo_optimization": 0,
+    "eeat_signals": 0,
+    "technical_elements": 0,
+    "ai_citation_readiness": 0,
+    "hard_failures": [],
+    "recommendations": []
+  }}
+}}"""
+
+
+def content_status_from_quality(article: dict) -> str:
+    try:
+        score = int(article.get("quality_score") or 0)
+    except (TypeError, ValueError):
+        score = 0
+    return "needs_review" if score >= 80 else "draft"
+
+
+def build_content_schema(post: dict, business: dict, canonical_url: str) -> dict:
+    now = datetime.now(timezone.utc).isoformat()
+    questions = []
+    for item in post.get("faq") or []:
+        question = (item.get("question") or "").strip()
+        answer = (item.get("answer") or "").strip()
+        if question and answer:
+            questions.append(
+                {
+                    "@type": "Question",
+                    "name": question,
+                    "acceptedAnswer": {"@type": "Answer", "text": answer},
+                }
+            )
+    schema = {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": post.get("title") or "",
+        "description": post.get("meta_description") or post.get("excerpt") or "",
+        "url": canonical_url,
+        "mainEntityOfPage": canonical_url,
+        "datePublished": post.get("published_at") or now,
+        "dateModified": post.get("updated_at") or now,
+        "author": {"@type": "Organization", "name": "Uplaud"},
+        "publisher": {"@type": "Organization", "name": "Uplaud"},
+        "about": {"@type": "Organization", "name": business.get("name") or "", "url": business.get("website") or ""},
+    }
+    if questions:
+        schema["mainEntity"] = questions
+    return schema
+
+
+async def _call_content_json(system: str, prompt: str, temperature: float = 0.2) -> dict:
+    try:
+        text = await asyncio.to_thread(_call_openai, system, prompt, temperature)
+    except Exception as e:  # noqa
+        logger.error("Content agent OpenAI call failed: %s", e)
+        raise HTTPException(status_code=502, detail="The language model request failed. Please try again.")
+    try:
+        return _parse_json(text)
+    except Exception as e:
+        logger.error("Failed to parse content agent JSON: %s | raw: %s", e, str(text)[:500])
+        raise HTTPException(status_code=502, detail="Could not parse content from the model.")
+
+
+async def generate_content_article(business_slug: str, request: ContentGenerateRequest) -> dict:
+    if not openai_client:
+        raise HTTPException(status_code=503, detail="OPENAI_API_KEY not configured on the server.")
+
+    sources = await gather_content_sources(business_slug)
+    business = sources.get("business") or {}
+    brief = _build_content_brief(sources, request)
+    research_packet = await _call_content_json(
+        CONTENT_REVIEW_SYSTEM,
+        build_content_research_prompt(sources, brief),
+        0.2,
+    )
+
+    writer_prompt = build_content_writer_prompt(sources, research_packet, brief)
+    article = await _call_content_json(CONTENT_REVIEW_SYSTEM, writer_prompt, 0.35)
+    canonical_slug = public_slug(article.get("slug") or article.get("title") or brief["buyer_question"])
+    canonical_url = f"/business/public/{business.get('slug') or business_slug}/content/{canonical_slug}"
+    article["slug"] = canonical_slug
+    article["schema"] = build_content_schema(article, business, canonical_url)
+
+    review = await _call_content_json(CONTENT_REVIEW_SYSTEM, build_content_reviewer_prompt(article, sources), 0.1)
+    article.update(
+        {
+            "quality_score": review.get("quality_score") or article.get("quality_score") or 0,
+            "seo_score": review.get("seo_score") or article.get("seo_score") or 0,
+            "aeo_score": review.get("aeo_score") or article.get("aeo_score") or 0,
+            "quality_report": review.get("quality_report") or review,
+            "reviewer_notes": review.get("reviewer_notes") or "",
+        }
+    )
+
+    if content_status_from_quality(article) != "needs_review":
+        rewrite_prompt = f"""Rewrite the article once to address the reviewer feedback and clear the minimum publishable score of 80.
+
+Reviewer feedback:
+{_compact_json(review)}
+
+Original article:
+{_compact_json(article)}
+
+Keep every claim grounded in the public research, proprietary review evidence, or Growth Signals. Return the same writer JSON shape."""
+        rewritten = await _call_content_json(CONTENT_REVIEW_SYSTEM, rewrite_prompt, 0.3)
+        rewritten["slug"] = public_slug(rewritten.get("slug") or rewritten.get("title") or canonical_slug)
+        rewritten["schema"] = build_content_schema(
+            rewritten,
+            business,
+            f"/business/public/{business.get('slug') or business_slug}/content/{rewritten['slug']}",
+        )
+        rewrite_review = await _call_content_json(
+            CONTENT_REVIEW_SYSTEM, build_content_reviewer_prompt(rewritten, sources), 0.1
+        )
+        rewritten.update(
+            {
+                "quality_score": rewrite_review.get("quality_score") or rewritten.get("quality_score") or 0,
+                "seo_score": rewrite_review.get("seo_score") or rewritten.get("seo_score") or 0,
+                "aeo_score": rewrite_review.get("aeo_score") or rewritten.get("aeo_score") or 0,
+                "quality_report": rewrite_review.get("quality_report") or rewrite_review,
+                "reviewer_notes": rewrite_review.get("reviewer_notes") or "",
+            }
+        )
+        article = rewritten
+
+    article["status"] = content_status_from_quality(article)
+    article["business"] = business.get("name") or ""
+    article["business_slug"] = business.get("slug") or business_slug
+    article["buyer_question"] = brief["buyer_question"]
+    article["content_type"] = brief["content_type"]
+    article["content_brief"] = brief
+    article["research_packet"] = research_packet
+    article["source_review_ids"] = brief["selected_review_ids"]
+    article["source_signal_ids"] = brief["selected_signal_ids"]
+    return article
 
 
 def public_business_json_ld(payload: Dict[str, Any], canonical_url: str) -> Dict[str, Any]:
