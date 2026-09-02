@@ -255,7 +255,7 @@ def test_get_public_business_stats_counts_reviews_and_circles(monkeypatch):
     data = response.json()
     assert data["total_reviews"] == 2
     assert data["total_referrals"] == 3
-    assert data["keywords"]
+    assert len(data["keywords"]) >= 3
 
 
 def test_public_business_stats_builds_positive_adjective_word_cloud():
