@@ -322,11 +322,20 @@ def test_legacy_public_business_reviewer_route_still_works(monkeypatch):
 
 
 def test_unknown_public_business_reviewer_404(monkeypatch):
+    calls = []
     _mock_airtable(monkeypatch)
+    original_get = airtable_client._get
+
+    async def tracking_get(table, params=None):
+        calls.append((table, params or {}))
+        return await original_get(table, params)
+
+    monkeypatch.setattr(airtable_client, "_get", tracking_get)
 
     response = client.get("/api/business/public/reviewer/not-a-reviewer")
 
     assert response.status_code == 404
+    assert not any(params.get("offset") == "next_page" for _table, params in calls)
 
 
 def test_get_public_business_stats_counts_reviews_and_circles(monkeypatch):

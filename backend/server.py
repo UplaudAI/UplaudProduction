@@ -1300,11 +1300,20 @@ async def public_reviewer_reviews_from_records(
         business_names[business_slug] = display_name
         reviews.append(review)
 
+    circle_results = await asyncio.gather(
+        *[
+            airtable_client.list_circles_by_business(business_name)
+            for business_name in business_names.values()
+        ],
+        return_exceptions=True,
+    )
     circle_cache: Dict[str, set] = {}
-    for business_slug, business_name in business_names.items():
-        circle_cache[business_slug] = public_referred_reviewers_from_circles(
-            await airtable_client.list_circles_by_business(business_name)
-        )
+    for (business_slug, _business_name), leads in zip(business_names.items(), circle_results):
+        if isinstance(leads, Exception):
+            logger.warning("Airtable public reviewer circles lookup failed: %s", leads)
+            circle_cache[business_slug] = set()
+            continue
+        circle_cache[business_slug] = public_referred_reviewers_from_circles(leads)
     for review in reviews:
         review["referred"] = normalize_public_match_name(review.get("reviewer_name", "")) in circle_cache.get(
             review.get("business_slug", ""),
@@ -1319,7 +1328,7 @@ async def public_reviewer_profile_payload(
 ) -> Dict[str, Any]:
     reviewer_name_guess = public_display_name_from_slug(reviewer_slug)
     records = await airtable_client.list_uplaud_records_by_reviewer_name(reviewer_name_guess)
-    if not records:
+    if not records and current_business:
         records = await public_all_uplaud_records()
     reviews = await public_reviewer_reviews_from_records(records, reviewer_slug, current_business)
     if not reviews:
