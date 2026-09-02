@@ -13,13 +13,17 @@ export default function CaseStudyPage() {
 
   useEffect(() => {
     let ignore = false;
-    Promise.all([
-      api.get(`/business/public/${slug}/case-studies/${csSlug}`),
-      api.get(`/business/public/${slug}`),
-    ])
+    const contentRequest = api
+      .get(`/business/public/${slug}/content/${csSlug}`)
+      .then(({ data }) => contentPostToCaseStudy(data))
+      .catch(() =>
+        api.get(`/business/public/${slug}/case-studies/${csSlug}`).then(({ data }) => data)
+      );
+
+    Promise.all([contentRequest, api.get(`/business/public/${slug}`)])
       .then(([csRes, bRes]) => {
         if (ignore) return;
-        setCs(csRes.data);
+        setCs(csRes);
         setBusiness(bRes.data);
       })
       .catch(() => !ignore && setError(true));
@@ -111,4 +115,24 @@ export default function CaseStudyPage() {
       <Footer />
     </div>
   );
+}
+
+function contentPostToCaseStudy(post) {
+  return {
+    id: post.id || post.slug,
+    slug: post.slug,
+    title: post.title,
+    excerpt: post.excerpt || post.meta_description,
+    tag: post.content_type || "Buyer guide",
+    read_time: estimateReadTime(post.content_html),
+    body_html: post.content_html || "",
+    hero_quote: post.buyer_question || post.meta_description || post.excerpt || "",
+    hero_quote_author: "Uplaud Content Agent",
+  };
+}
+
+function estimateReadTime(contentHtml) {
+  const text = (contentHtml || "").replace(/<[^>]+>/g, " ");
+  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  return `${Math.max(1, Math.ceil(words / 220))} min read`;
 }

@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 import { ArrowUpRight, BookOpen } from "lucide-react";
+import { useEffect, useState } from "react";
+import api from "@/lib/api";
 
 const TAG_COLORS = {
   "Case study": { bg: "#EEE9FF", fg: "#4B2FE0" },
@@ -8,7 +10,33 @@ const TAG_COLORS = {
 };
 
 export default function CaseStudies({ slug, caseStudies }) {
-  if (!caseStudies?.length) return null;
+  const [publishedContent, setPublishedContent] = useState([]);
+  const [loadedContent, setLoadedContent] = useState(false);
+
+  useEffect(() => {
+    let ignore = false;
+    setLoadedContent(false);
+    api
+      .get(`/business/public/${slug}/content`)
+      .then(({ data }) => {
+        if (ignore) return;
+        setPublishedContent(data?.posts || []);
+      })
+      .catch(() => {
+        if (!ignore) setPublishedContent([]);
+      })
+      .finally(() => {
+        if (!ignore) setLoadedContent(true);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [slug]);
+
+  const stories = publishedContent.length > 0 ? publishedContent.map(contentPostToStory) : caseStudies || [];
+
+  if (!stories.length && loadedContent) return null;
+  if (!stories.length) return null;
 
   return (
     <section id="stories" className="max-w-[1320px] mx-auto px-6 lg:px-10 py-10 lg:py-14" data-testid="case-studies-section">
@@ -28,7 +56,7 @@ export default function CaseStudies({ slug, caseStudies }) {
       </div>
 
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {caseStudies.map((cs, i) => {
+        {stories.map((cs, i) => {
           const tag = TAG_COLORS[cs.tag] || TAG_COLORS.default;
           return (
             <Link
@@ -79,4 +107,23 @@ export default function CaseStudies({ slug, caseStudies }) {
       </div>
     </section>
   );
+}
+
+function contentPostToStory(post) {
+  return {
+    id: post.id || post.slug,
+    slug: post.slug,
+    title: post.title,
+    excerpt: post.excerpt || post.meta_description,
+    tag: post.content_type || "Buyer guide",
+    read_time: estimateReadTime(post.content_html),
+    hero_quote: post.buyer_question || post.meta_description || post.excerpt || "",
+    hero_quote_author: "Uplaud Content Agent",
+  };
+}
+
+function estimateReadTime(contentHtml) {
+  const text = (contentHtml || "").replace(/<[^>]+>/g, " ");
+  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  return `${Math.max(1, Math.ceil(words / 220))} min read`;
 }
