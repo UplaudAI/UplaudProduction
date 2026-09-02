@@ -1,5 +1,6 @@
 import os
 import re
+import json
 import logging
 from datetime import datetime, timezone
 from typing import Optional
@@ -645,6 +646,191 @@ async def update_circle_agent_plan_status(lead_id: str, status: str) -> None:
 
 
 TABLE_BLOG_POSTS = "Blog_Posts"
+TABLE_CONTENT_POSTS = "Content_Posts"
+
+
+def _parse_json_field(value) -> dict:
+    if isinstance(value, dict):
+        return value
+    if not isinstance(value, str) or not value.strip():
+        return {}
+    try:
+        parsed = json.loads(value)
+        return parsed if isinstance(parsed, dict) else {}
+    except (TypeError, ValueError):
+        return {}
+
+
+def _split_ids(value) -> list:
+    if isinstance(value, list):
+        return [str(v).strip() for v in value if str(v).strip()]
+    if not isinstance(value, str):
+        return []
+    return [v.strip() for v in value.split(",") if v.strip()]
+
+
+def _json_for_airtable(value) -> str:
+    if isinstance(value, str):
+        return value
+    if value in (None, ""):
+        return ""
+    return json.dumps(value)
+
+
+def _ids_for_airtable(value) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return ",".join([str(v).strip() for v in value if str(v).strip()])
+    return ""
+
+
+def record_to_content_post(rec: dict) -> dict:
+    f = rec.get("fields", {})
+    return {
+        "id": rec.get("id"),
+        "created_time": rec.get("createdTime", ""),
+        "business": f.get("Business") or "",
+        "business_slug": f.get("Business_Slug") or "",
+        "title": f.get("Title") or "",
+        "slug": f.get("Slug") or "",
+        "meta_description": f.get("Meta_Description") or "",
+        "buyer_question": f.get("Buyer_Question") or "",
+        "content_type": f.get("Content_Type") or "",
+        "content_html": f.get("Content_HTML") or "",
+        "excerpt": f.get("Excerpt") or "",
+        "status": f.get("Status") or "draft",
+        "content_brief": _parse_json_field(f.get("Content_Brief_JSON")),
+        "research_packet": _parse_json_field(f.get("Research_Packet_JSON")),
+        "source_review_ids": _split_ids(f.get("Source_Review_IDs")),
+        "source_signal_ids": _split_ids(f.get("Source_Signal_IDs")),
+        "seo_score": f.get("SEO_Score"),
+        "aeo_score": f.get("AEO_Score"),
+        "quality_score": f.get("Quality_Score"),
+        "quality_report": _parse_json_field(f.get("Quality_Report_JSON")),
+        "reviewer_notes": f.get("Reviewer_Notes") or "",
+        "schema": _parse_json_field(f.get("Schema_JSON")),
+        "published_at": f.get("Published_At") or "",
+        "updated_at": f.get("Updated_At") or "",
+        "created_at": f.get("Created_At") or rec.get("createdTime", ""),
+    }
+
+
+def _content_post_to_fields(post: dict) -> dict:
+    now = datetime.now(timezone.utc).isoformat()
+    return {
+        "Business": post.get("business") or "",
+        "Business_Slug": post.get("business_slug") or "",
+        "Title": post.get("title") or "",
+        "Slug": post.get("slug") or "",
+        "Meta_Description": post.get("meta_description") or "",
+        "Buyer_Question": post.get("buyer_question") or "",
+        "Content_Type": post.get("content_type") or "",
+        "Content_HTML": post.get("content_html") or "",
+        "Excerpt": post.get("excerpt") or "",
+        "Status": post.get("status") or "draft",
+        "Content_Brief_JSON": _json_for_airtable(post.get("content_brief")),
+        "Research_Packet_JSON": _json_for_airtable(post.get("research_packet")),
+        "Source_Review_IDs": _ids_for_airtable(post.get("source_review_ids")),
+        "Source_Signal_IDs": _ids_for_airtable(post.get("source_signal_ids")),
+        "SEO_Score": post.get("seo_score") or 0,
+        "AEO_Score": post.get("aeo_score") or 0,
+        "Quality_Score": post.get("quality_score") or 0,
+        "Quality_Report_JSON": _json_for_airtable(post.get("quality_report")),
+        "Reviewer_Notes": post.get("reviewer_notes") or "",
+        "Schema_JSON": _json_for_airtable(post.get("schema")),
+        "Published_At": post.get("published_at") or "",
+        "Updated_At": post.get("updated_at") or now,
+        "Created_At": post.get("created_at") or now,
+    }
+
+
+async def list_content_posts_airtable(
+    business_slug: str,
+    include_archived: bool = False,
+    published_only: bool = False,
+) -> list:
+    if not business_slug:
+        return []
+    posts = []
+    offset = None
+    filters = [f'LOWER({{Business_Slug}})="{_escape(business_slug.lower())}"']
+    if published_only:
+        filters.append('{Status}="published"')
+    elif not include_archived:
+        filters.append('{Status}!="archived"')
+    formula = filters[0] if len(filters) == 1 else "AND(" + ",".join(filters) + ")"
+    try:
+        while True:
+            params = {"pageSize": 100, "filterByFormula": formula}
+            if offset:
+                params["offset"] = offset
+            data = await _get(TABLE_CONTENT_POSTS, params)
+            records = data.get("records", [])
+            posts.extend([record_to_content_post(r) for r in records])
+            offset = data.get("offset")
+            if not offset or not records:
+                break
+    except Exception as e:
+        logger.warning("Airtable list_content_posts failed for business %s: %s", business_slug, e)
+        return []
+    posts.sort(key=lambda p: p["updated_at"] or p["created_at"], reverse=True)
+    return posts
+
+
+async def get_content_post_airtable(
+    business_slug: str,
+    slug: str,
+    published_only: bool = False,
+) -> Optional[dict]:
+    if not business_slug or not slug:
+        return None
+    try:
+        filters = [
+            f'LOWER({{Business_Slug}})="{_escape(business_slug.lower())}"',
+            f'LOWER({{Slug}})="{_escape(slug.lower())}"',
+        ]
+        if published_only:
+            filters.append('{Status}="published"')
+        formula = "AND(" + ",".join(filters) + ")"
+        data = await _get(TABLE_CONTENT_POSTS, {"filterByFormula": formula, "maxRecords": 1})
+        records = data.get("records", [])
+        if records:
+            return record_to_content_post(records[0])
+    except Exception as e:
+        logger.warning("Airtable get_content_post failed for business %s slug %s: %s", business_slug, slug, e)
+    return None
+
+
+async def create_content_post_airtable(post: dict) -> Optional[dict]:
+    try:
+        rec = await _create(TABLE_CONTENT_POSTS, _content_post_to_fields(post))
+        return record_to_content_post(rec) if rec else None
+    except Exception as e:
+        logger.warning("Airtable create_content_post failed: %s", e)
+        return None
+
+
+async def update_content_post_airtable(business_slug: str, slug: str, updates: dict) -> Optional[dict]:
+    if not business_slug or not slug:
+        return None
+    try:
+        filters = [
+            f'LOWER({{Business_Slug}})="{_escape(business_slug.lower())}"',
+            f'LOWER({{Slug}})="{_escape(slug.lower())}"',
+        ]
+        formula = "AND(" + ",".join(filters) + ")"
+        data = await _get(TABLE_CONTENT_POSTS, {"filterByFormula": formula, "maxRecords": 1})
+        records = data.get("records", [])
+        if not records:
+            return None
+        fields = _content_post_to_fields({**record_to_content_post(records[0]), **(updates or {})})
+        fields.pop("Created_At", None)
+        rec = await _update(TABLE_CONTENT_POSTS, records[0]["id"], fields)
+        return record_to_content_post(rec) if rec else None
+    except Exception as e:
+        logger.warning("Airtable update_content_post failed for business %s slug %s: %s", business_slug, slug, e)
+        return None
 
 
 def _record_to_blog_post(rec: dict) -> dict:
