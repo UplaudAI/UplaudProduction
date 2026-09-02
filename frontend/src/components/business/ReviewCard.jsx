@@ -37,6 +37,12 @@ export function displayReviewSource(source) {
   return (source || "").trim() || "WA";
 }
 
+export function normalizeReviewRating(rating) {
+  const parsed = Number.parseInt(rating, 10);
+  if (!Number.isFinite(parsed)) return 5;
+  return Math.max(1, Math.min(5, parsed));
+}
+
 function isDisplayEmoji(value) {
   return /\p{Extended_Pictographic}/u.test(value || "");
 }
@@ -47,7 +53,8 @@ export default function ReviewCard({ review, businessName, audience, delay = 0 }
   const initials = (review.reviewer_name || "?").split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
   const colorIdx = (review.reviewer_name?.charCodeAt(0) || 0) % AVATAR_COLORS.length;
   const [c1, c2] = AVATAR_COLORS[colorIdx];
-  const isFiveStar = review.rating >= 5;
+  const rating = normalizeReviewRating(review.rating);
+  const isFiveStar = rating >= 5;
   const sourceLabel = displayReviewSource(review.channel || review.source);
 
   return (
@@ -90,7 +97,7 @@ export default function ReviewCard({ review, businessName, audience, delay = 0 }
       </div>
 
       <div className="flex items-center justify-between mb-2.5">
-        <Stars n={review.rating} />
+        <Stars n={rating} />
         {review.referred && (
           <span className="inline-flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full text-[color:var(--u-violet)]" style={{ background: "var(--u-violet-soft)" }}>
             <Sparkles size={9} /> referred

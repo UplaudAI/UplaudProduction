@@ -71,6 +71,15 @@ def test_review_source_label_from_call_type():
     assert server.review_source_for_call_type("") == ""
 
 
+def test_review_rating_from_sentiment():
+    assert server.review_rating_from_insights({"review_rating": 4}) == 4
+    assert server.review_rating_from_insights({"testimonial_rating": "3"}) == 3
+    assert server.review_rating_from_insights({"sentiment_label": "Positive"}) == 5
+    assert server.review_rating_from_insights({"sentiment_label": "Neutral"}) == 3
+    assert server.review_rating_from_insights({"sentiment_label": "Negative"}) == 2
+    assert server.review_rating_from_insights({}) == 5
+
+
 async def _fake_generate_insights(*_args, **_kwargs):
     return {
         "company_name": "AI Fiesta",
@@ -79,6 +88,7 @@ async def _fake_generate_insights(*_args, **_kwargs):
         "sentiment_label": "Mixed",
         "signal_score": 82,
         "call_type": "Feedback",
+        "review_rating": 4,
         "summary": "Customer shared multilingual feedback about AI Fiesta.",
         "motivations": ["Compare premium AI model responses."],
         "pain_points": ["Response quality sometimes differs from original models."],
@@ -177,7 +187,7 @@ async def test_approval_writes_review_source_to_public_uplaud_record(monkeypatch
         "word_count": 120,
         "status": "analyzed",
         "created_at": "2026-08-31T00:00:00+00:00",
-        "insights": {"speaker_name": "Anand Pandey", "call_type": "Feedback"},
+        "insights": {"speaker_name": "Anand Pandey", "call_type": "Feedback", "review_rating": 4},
         "testimonial_draft": "AI Fiesta helps me compare models, with room for better transparency.",
         "testimonial_is_verbatim": False,
         "share_id": share_id,
@@ -206,3 +216,4 @@ async def test_approval_writes_review_source_to_public_uplaud_record(monkeypatch
     assert out.status == "approved"
     assert created_public_records
     assert created_public_records[0][1]["review_source"] == "Post Sales Testimonial"
+    assert created_public_records[0][1]["uplaud_score"] == 4

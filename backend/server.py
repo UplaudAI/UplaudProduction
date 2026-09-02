@@ -89,6 +89,7 @@ class Insights(BaseModel):
     ae_name: str = ""
     sentiment_label: str = "Positive"
     signal_score: int = 0
+    review_rating: int = 5
     call_type: str = "Demo"
     summary: str = ""
     motivations: List[str] = []
@@ -469,6 +470,7 @@ Return ONLY a JSON object with EXACTLY these keys:
   "ae_name": "name of the seller / account executive, if mentioned",
   "sentiment_label": "one of: Positive, Neutral, Negative — the customer's genuine overall sentiment",
   "signal_score": 0,
+  "review_rating": 5,
   "call_type": "one of: Demo, Discovery, Feedback, Testimonial, Onboarding, Support, Renewal",
   "summary": "3-4 sentences capturing the real arc of the conversation AND the genuine sentiment, including any hesitation or nuance",
   "motivations": ["what is driving the customer / why they're looking — 3-6 specific items when supported"],
@@ -489,6 +491,7 @@ CRITICAL RULES for "testimonial" (the customer's testimonial, in their own voice
 
 Other rules:
 - signal_score: integer 0-100 for overall opportunity strength (sentiment + intent + fit).
+- review_rating: integer 1-5 reflecting the testimonial/review sentiment. Use 5 only for strongly positive praise, 4 for positive-with-caveats, 3 for mixed/neutral, 2 for mostly negative with some positives, and 1 for clearly negative.
 - customer_language items are verbatim customer quotes (no added quotation marks in the string).
 - Every list item must be genuinely supported by the transcript. Keep each item to one concrete line.{variation_note}
 
@@ -2149,6 +2152,24 @@ def review_source_for_call_type(call_type: str) -> str:
     return ""
 
 
+def review_rating_from_insights(insights: dict) -> int:
+    for key in ("review_rating", "testimonial_rating", "rating"):
+        try:
+            value = int(insights.get(key))
+            return max(1, min(5, value))
+        except (TypeError, ValueError):
+            pass
+
+    sentiment = re.sub(r"[^a-z]+", " ", (insights.get("sentiment_label") or "").lower()).strip()
+    if sentiment in {"negative", "critical", "mostly negative"}:
+        return 2
+    if sentiment in {"neutral", "mixed"}:
+        return 3
+    if sentiment in {"positive with caveats", "mixed positive"}:
+        return 4
+    return 5
+
+
 @api_router.get("/public/testimonial/{share_id}", response_model=PublicTestimonial)
 async def public_get_testimonial(share_id: str):
     doc = await find_public_source(share_id)
@@ -2198,6 +2219,7 @@ async def public_approve_testimonial(share_id: str, request: Request):
         share_link=share_link,
         date_added=now[:10],
         review_source=review_source_for_call_type(ins.get("call_type", "")),
+        uplaud_score=review_rating_from_insights(ins),
     )
     return _public_payload(doc)
 
