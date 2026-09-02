@@ -4,6 +4,7 @@ import sys
 import types
 
 import pytest
+from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -16,6 +17,36 @@ except ModuleNotFoundError as exc:
     import airtable_client
 
 import server
+
+
+@pytest.fixture()
+def client():
+    server.app.dependency_overrides.clear()
+    with TestClient(server.app) as test_client:
+        yield test_client
+    server.app.dependency_overrides.clear()
+
+
+@pytest.fixture()
+def auth_headers():
+    return {"Authorization": "Bearer local-test-token"}
+
+
+@pytest.fixture()
+def authenticated_business():
+    async def fake_current_user(request: server.Request):
+        return {
+            "id": "user_1",
+            "email": "owner@aifiesta.ai",
+            "name": "Owner",
+            "role": "business",
+            "company": "AI Fiesta",
+            "approved": True,
+            "selected_brand_domain": "aifiesta.ai",
+        }
+
+    server.app.dependency_overrides[server.get_current_user] = fake_current_user
+    return fake_current_user
 
 
 def _record(record_id="rec_content", **field_overrides):
@@ -51,6 +82,171 @@ def _publishable_post(**overrides):
     post = airtable_client.record_to_content_post(_record(Status="published"))
     post.update(overrides)
     return post
+
+
+def test_business_content_list_requires_authenticated_business(client):
+    response = client.get("/api/business/content")
+
+    assert response.status_code in {401, 403}
+
+
+def test_business_content_list_returns_posts_for_authenticated_business(
+    monkeypatch, client, auth_headers, authenticated_business
+):
+    async def fake_business_slug(current, request):
+        return "aifiesta"
+
+    async def fake_list(business_slug, include_archived=False, published_only=False):
+        assert business_slug == "aifiesta"
+        assert include_archived is False
+        assert published_only is False
+        return [_publishable_post(status="needs_review")]
+
+    monkeypatch.setattr(server, "resolve_current_business_slug", fake_business_slug)
+    monkeypatch.setattr(airtable_client, "list_content_posts_airtable", fake_list)
+
+    response = client.get("/api/business/content", headers=auth_headers)
+
+    assert response.status_code == 200
+    assert response.json()["posts"][0]["business_slug"] == "aifiesta"
+
+
+def test_business_content_generate_persists_generated_post_for_business(
+    monkeypatch, client, auth_headers, authenticated_business
+):
+    async def fake_business_slug(current, request):
+        return "aifiesta"
+
+    async def fake_generate(business_slug, request):
+        assert business_slug == "aifiesta"
+        assert request.content_type == "Case Study"
+        return _publishable_post(
+            status="needs_review",
+            slug="generated-post",
+            content_type=request.content_type,
+            buyer_question=request.buyer_question,
+        )
+
+    async def fake_create(post):
+        assert post["business_slug"] == "aifiesta"
+        assert post["slug"] == "generated-post"
+        return post
+
+    monkeypatch.setattr(server, "resolve_current_business_slug", fake_business_slug)
+    monkeypatch.setattr(server, "generate_content_article", fake_generate)
+    monkeypatch.setattr(airtable_client, "create_content_post_airtable", fake_create)
+
+    response = client.post(
+        "/api/business/content/generate",
+        headers=auth_headers,
+        json={"content_type": "Case Study", "buyer_question": "Is AI Fiesta worth it?"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["slug"] == "generated-post"
+    assert response.json()["status"] == "needs_review"
+
+
+def test_business_content_get_fetches_post_for_business(monkeypatch, client, auth_headers, authenticated_business):
+    async def fake_business_slug(current, request):
+        return "aifiesta"
+
+    async def fake_get(business_slug, slug, published_only=False):
+        assert business_slug == "aifiesta"
+        assert slug == "post-slug"
+        assert published_only is False
+        return _publishable_post(slug=slug, status="needs_review")
+
+    monkeypatch.setattr(server, "resolve_current_business_slug", fake_business_slug)
+    monkeypatch.setattr(airtable_client, "get_content_post_airtable", fake_get)
+
+    response = client.get("/api/business/content/post-slug", headers=auth_headers)
+
+    assert response.status_code == 200
+    assert response.json()["slug"] == "post-slug"
+
+
+def test_business_content_update_sends_allowed_fields_for_business(
+    monkeypatch, client, auth_headers, authenticated_business
+):
+    async def fake_business_slug(current, request):
+        return "aifiesta"
+
+    async def fake_update(business_slug, slug, updates):
+        assert business_slug == "aifiesta"
+        assert slug == "post-slug"
+        assert updates == {"title": "Updated title", "reviewer_notes": "Ready"}
+        return _publishable_post(slug=slug, title=updates["title"], reviewer_notes=updates["reviewer_notes"])
+
+    monkeypatch.setattr(server, "resolve_current_business_slug", fake_business_slug)
+    monkeypatch.setattr(airtable_client, "update_content_post_airtable", fake_update)
+
+    response = client.put(
+        "/api/business/content/post-slug",
+        headers=auth_headers,
+        json={"title": "Updated title", "reviewer_notes": "Ready"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["title"] == "Updated title"
+
+
+def test_publish_marks_content_published_for_business(monkeypatch, client, auth_headers, authenticated_business):
+    async def fake_business_slug(current, request):
+        return "aifiesta"
+
+    async def fake_update(business_slug, slug, updates):
+        assert business_slug == "aifiesta"
+        assert updates["status"] == "published"
+        assert updates["published_at"]
+        return {"slug": slug, "business_slug": business_slug, "status": "published", "title": "Post"}
+
+    monkeypatch.setattr(server, "resolve_current_business_slug", fake_business_slug)
+    monkeypatch.setattr(airtable_client, "update_content_post_airtable", fake_update)
+    response = client.post("/api/business/content/post-slug/publish", headers=auth_headers)
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "published"
+
+
+def test_business_content_unpublish_marks_content_approved_for_business(
+    monkeypatch, client, auth_headers, authenticated_business
+):
+    async def fake_business_slug(current, request):
+        return "aifiesta"
+
+    async def fake_update(business_slug, slug, updates):
+        assert business_slug == "aifiesta"
+        assert updates == {"status": "approved", "published_at": ""}
+        return {"slug": slug, "business_slug": business_slug, "status": "approved", "title": "Post"}
+
+    monkeypatch.setattr(server, "resolve_current_business_slug", fake_business_slug)
+    monkeypatch.setattr(airtable_client, "update_content_post_airtable", fake_update)
+
+    response = client.post("/api/business/content/post-slug/unpublish", headers=auth_headers)
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "approved"
+
+
+def test_business_content_archive_marks_content_archived_for_business(
+    monkeypatch, client, auth_headers, authenticated_business
+):
+    async def fake_business_slug(current, request):
+        return "aifiesta"
+
+    async def fake_update(business_slug, slug, updates):
+        assert business_slug == "aifiesta"
+        assert updates == {"status": "archived"}
+        return {"slug": slug, "business_slug": business_slug, "status": "archived", "title": "Post"}
+
+    monkeypatch.setattr(server, "resolve_current_business_slug", fake_business_slug)
+    monkeypatch.setattr(airtable_client, "update_content_post_airtable", fake_update)
+
+    response = client.post("/api/business/content/post-slug/archive", headers=auth_headers)
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "archived"
 
 
 def test_record_to_content_post_maps_quality_and_research_fields():

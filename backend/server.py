@@ -200,6 +200,47 @@ class ContentGenerateRequest(BaseModel):
     source_review_ids: List[str] = Field(default_factory=list)
 
 
+class ContentUpdateRequest(BaseModel):
+    title: Optional[str] = None
+    slug: Optional[str] = None
+    meta_description: Optional[str] = None
+    content_html: Optional[str] = None
+    excerpt: Optional[str] = None
+    status: Optional[str] = None
+    reviewer_notes: Optional[str] = None
+
+
+class ContentPostResponse(BaseModel):
+    id: Optional[str] = None
+    business: Optional[str] = ""
+    business_slug: str
+    title: str
+    slug: str
+    meta_description: Optional[str] = ""
+    buyer_question: Optional[str] = ""
+    content_type: Optional[str] = ""
+    content_html: Optional[str] = ""
+    excerpt: Optional[str] = ""
+    status: str
+    content_brief: Dict[str, Any] = Field(default_factory=dict)
+    research_packet: Dict[str, Any] = Field(default_factory=dict)
+    source_review_ids: List[str] = Field(default_factory=list)
+    source_signal_ids: List[str] = Field(default_factory=list)
+    seo_score: Optional[int] = 0
+    aeo_score: Optional[int] = 0
+    quality_score: Optional[int] = 0
+    quality_report: Dict[str, Any] = Field(default_factory=dict)
+    reviewer_notes: Optional[str] = ""
+    schema_: Dict[str, Any] = Field(default_factory=dict, alias="schema")
+    published_at: Optional[str] = ""
+    updated_at: Optional[str] = ""
+    created_at: Optional[str] = ""
+
+
+class ContentListResponse(BaseModel):
+    posts: List[ContentPostResponse]
+
+
 class BlogListResponse(BaseModel):
     posts: List[BlogPostOut]
 
@@ -248,6 +289,30 @@ async def resolve_current_business_name(current: dict, request: Optional[Request
     if header_domain or stored_domain:
         return derive_business_name("user@" + domain)
     return current.get("company", "My Company")
+
+
+async def resolve_current_business_slug(current: dict, request: Optional[Request] = None) -> str:
+    selected_domain = selected_brand_domain(request, current)
+    if airtable_client._enabled() and selected_domain:
+        try:
+            rec = await get_business_record_by_domain(selected_domain)
+            if rec:
+                fields = rec.get("fields", {})
+                slug = (
+                    fields.get("Slug")
+                    or fields.get("Business_Slug")
+                    or fields.get("Business Slug")
+                    or fields.get("Public_Slug")
+                )
+                if slug:
+                    return public_slug(slug)
+                name = fields.get("Business Name")
+                if name:
+                    return public_slug(name)
+        except Exception as ae:
+            logger.warning("Failed to resolve business slug from Airtable: %s", ae)
+    business_name = await resolve_current_business_name(current, request)
+    return public_slug(business_name)
 
 
 # ---------------------------------------------------------------------------
@@ -3354,6 +3419,122 @@ async def update_agent_plan_status(lead_id: str, action: str, current=Depends(ge
     await airtable_client.update_circle_agent_plan_status(lead_id, new_status)
     existing["status"] = new_status
     return AgentPlanOut(**existing)
+
+
+# ---------------------------------------------------------------------------
+# Routes: business content agent
+# ---------------------------------------------------------------------------
+def _content_update_payload(body: ContentUpdateRequest) -> dict:
+    allowed = {
+        "title",
+        "slug",
+        "meta_description",
+        "content_html",
+        "excerpt",
+        "status",
+        "reviewer_notes",
+    }
+    return {key: value for key, value in body.model_dump(exclude_unset=True).items() if key in allowed}
+
+
+async def _current_business_slug_or_404(current: dict, request: Request) -> str:
+    business_slug = await resolve_current_business_slug(current, request)
+    if not business_slug:
+        raise HTTPException(status_code=404, detail="Business not found")
+    return business_slug
+
+
+def _content_not_found() -> HTTPException:
+    return HTTPException(status_code=404, detail="Content post not found")
+
+
+@api_router.get("/business/content", response_model=ContentListResponse)
+async def list_business_content(request: Request, current=Depends(get_current_user)):
+    business_slug = await _current_business_slug_or_404(current, request)
+    posts = await airtable_client.list_content_posts_airtable(business_slug)
+    return {"posts": posts}
+
+
+@api_router.post("/business/content/generate", response_model=ContentPostResponse)
+async def generate_business_content(
+    body: ContentGenerateRequest,
+    request: Request,
+    current=Depends(get_current_user),
+):
+    business_slug = await _current_business_slug_or_404(current, request)
+    post = await generate_content_article(business_slug, body)
+    post["business_slug"] = business_slug
+    saved = await airtable_client.create_content_post_airtable(post)
+    if not saved:
+        raise HTTPException(status_code=502, detail="Failed to save generated content post")
+    return saved
+
+
+@api_router.get("/business/content/{slug}", response_model=ContentPostResponse)
+async def get_business_content(slug: str, request: Request, current=Depends(get_current_user)):
+    business_slug = await _current_business_slug_or_404(current, request)
+    post = await airtable_client.get_content_post_airtable(business_slug, slug)
+    if not post:
+        raise _content_not_found()
+    return post
+
+
+@api_router.put("/business/content/{slug}", response_model=ContentPostResponse)
+async def update_business_content(
+    slug: str,
+    body: ContentUpdateRequest,
+    request: Request,
+    current=Depends(get_current_user),
+):
+    updates = _content_update_payload(body)
+    if not updates:
+        raise HTTPException(status_code=400, detail="No content fields provided")
+    business_slug = await _current_business_slug_or_404(current, request)
+    try:
+        post = await airtable_client.update_content_post_airtable(business_slug, slug, updates)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not post:
+        raise _content_not_found()
+    return post
+
+
+@api_router.post("/business/content/{slug}/publish", response_model=ContentPostResponse)
+async def publish_business_content(slug: str, request: Request, current=Depends(get_current_user)):
+    business_slug = await _current_business_slug_or_404(current, request)
+    try:
+        post = await airtable_client.update_content_post_airtable(
+            business_slug,
+            slug,
+            {"status": "published", "published_at": datetime.now(timezone.utc).isoformat()},
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not post:
+        raise _content_not_found()
+    return post
+
+
+@api_router.post("/business/content/{slug}/unpublish", response_model=ContentPostResponse)
+async def unpublish_business_content(slug: str, request: Request, current=Depends(get_current_user)):
+    business_slug = await _current_business_slug_or_404(current, request)
+    post = await airtable_client.update_content_post_airtable(
+        business_slug,
+        slug,
+        {"status": "approved", "published_at": ""},
+    )
+    if not post:
+        raise _content_not_found()
+    return post
+
+
+@api_router.post("/business/content/{slug}/archive", response_model=ContentPostResponse)
+async def archive_business_content(slug: str, request: Request, current=Depends(get_current_user)):
+    business_slug = await _current_business_slug_or_404(current, request)
+    post = await airtable_client.update_content_post_airtable(business_slug, slug, {"status": "archived"})
+    if not post:
+        raise _content_not_found()
+    return post
 
 
 # ---------------------------------------------------------------------------
