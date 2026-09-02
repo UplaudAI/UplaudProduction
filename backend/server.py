@@ -1277,7 +1277,6 @@ async def public_reviewer_reviews_from_records(
     reviewer_slug: str,
     current_business: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
-    business_names: Dict[str, str] = {}
     reviews: List[Dict[str, Any]] = []
     for rec in records:
         fields = rec.get("fields", {})
@@ -1297,9 +1296,17 @@ async def public_reviewer_reviews_from_records(
         review = public_review_from_uplaud(testimonial, business_slug, display_name)
         if review.get("reviewer_slug") != reviewer_slug:
             continue
-        business_names[business_slug] = display_name
         reviews.append(review)
+    return reviews
 
+
+async def public_mark_referred_reviews(reviews: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    business_names: Dict[str, str] = {}
+    for review in reviews:
+        business_slug = review.get("business_slug") or ""
+        business_name = review.get("business_name") or ""
+        if business_slug and business_name:
+            business_names[business_slug] = business_name
     circle_results = await asyncio.gather(
         *[
             airtable_client.list_circles_by_business(business_name)
@@ -1340,8 +1347,9 @@ async def public_reviewer_profile_payload(
     )
     ratings = [review.get("rating") for review in reviews if review.get("rating")]
     avg_rating = round(sum(ratings) / len(ratings), 1) if ratings else 0
-    referred_count = sum(1 for review in reviews if review.get("referred") is True)
     reviews.sort(key=lambda review: review.get("date", ""), reverse=True)
+    visible_reviews = await public_mark_referred_reviews(reviews[:48])
+    referred_count = sum(1 for review in visible_reviews if review.get("referred") is True)
     businesses_by_slug = {}
     for review in reviews:
         business_slug = review.get("business_slug") or ""
@@ -1373,7 +1381,7 @@ async def public_reviewer_profile_payload(
             "verified_demo_count": sum(1 for review in reviews if review.get("verification_type") == "demo"),
         },
         "businesses_reviewed": sorted(businesses_by_slug.values(), key=lambda item: item["name"]),
-        "reviews": reviews,
+        "reviews": visible_reviews,
     }
 
 
