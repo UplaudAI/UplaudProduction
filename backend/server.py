@@ -1090,7 +1090,11 @@ async def public_business_by_slug(slug: str) -> Optional[Dict[str, Any]]:
     return public_business_from_uplaud_records(slug, records)
 
 
-def public_review_from_uplaud(testimonial: Dict[str, Any], business_slug: str) -> Dict[str, Any]:
+def public_review_from_uplaud(
+    testimonial: Dict[str, Any],
+    business_slug: str,
+    business_name: str = "",
+) -> Dict[str, Any]:
     customer = testimonial.get("customer") or "Uplaud customer"
     rating = testimonial.get("rating")
     try:
@@ -1100,6 +1104,7 @@ def public_review_from_uplaud(testimonial: Dict[str, Any], business_slug: str) -
     return {
         "id": testimonial.get("id") or str(uuid.uuid4()),
         "business_slug": business_slug,
+        "business_name": business_name,
         "reviewer_name": customer,
         "reviewer_slug": public_slug(customer),
         "reviewer_title": "",
@@ -1195,7 +1200,7 @@ async def public_reviews_for_business(business: Dict[str, Any]) -> List[Dict[str
 
 async def public_reviews_from_records(business: Dict[str, Any], records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     reviews = [
-        public_review_from_uplaud(testimonial, business["slug"])
+        public_review_from_uplaud(testimonial, business["slug"], business["name"])
         for testimonial in [public_testimonial_from_uplaud_record(rec) for rec in records]
         if testimonial["body"] and testimonial["sentiment"] != "low"
     ]
@@ -1208,6 +1213,41 @@ async def public_reviews_from_records(business: Dict[str, Any], records: List[Di
     if db is not None:
         stored = await db.public_reviews.find({"business_slug": business["slug"]}, {"_id": 0}).to_list(500)
         reviews.extend(stored)
+    return reviews
+
+
+async def public_reviews_from_all_uplaud_records(current_business: Dict[str, Any]) -> List[Dict[str, Any]]:
+    records = await public_all_uplaud_records()
+    business_names: Dict[str, str] = {}
+    reviews: List[Dict[str, Any]] = []
+    for rec in records:
+        fields = rec.get("fields", {})
+        raw_name = str(airtable_field(fields, "business_name", default="")).strip()
+        if not raw_name:
+            continue
+        display_name = public_display_business_name(raw_name)
+        slug_candidates = public_business_name_slugs(raw_name)
+        business_slug = (
+            current_business["slug"]
+            if current_business["slug"] in slug_candidates
+            else public_slug(display_name)
+        )
+        testimonial = public_testimonial_from_uplaud_record(rec)
+        if not testimonial["body"] or testimonial["sentiment"] == "low":
+            continue
+        business_names[business_slug] = display_name
+        reviews.append(public_review_from_uplaud(testimonial, business_slug, display_name))
+
+    circle_cache: Dict[str, set] = {}
+    for business_slug, business_name in business_names.items():
+        circle_cache[business_slug] = public_referred_reviewers_from_circles(
+            await airtable_client.list_circles_by_business(business_name)
+        )
+    for review in reviews:
+        review["referred"] = normalize_public_match_name(review.get("reviewer_name", "")) in circle_cache.get(
+            review.get("business_slug", ""),
+            set(),
+        )
     return reviews
 
 
@@ -1587,8 +1627,9 @@ async def get_public_business_reviewer(slug: str, reviewer_slug: str):
     if not payload:
         raise HTTPException(status_code=404, detail="Business not found")
 
+    all_reviews = await public_reviews_from_all_uplaud_records(payload["business"])
     reviews = [
-        review for review in payload["reviews"]
+        review for review in all_reviews
         if review.get("reviewer_slug") == reviewer_slug
     ]
     if not reviews:
@@ -1598,6 +1639,17 @@ async def get_public_business_reviewer(slug: str, reviewer_slug: str):
     ratings = [review.get("rating") for review in reviews if review.get("rating")]
     avg_rating = round(sum(ratings) / len(ratings), 1) if ratings else 0
     referred_count = sum(1 for review in reviews if review.get("referred") is True)
+    reviews.sort(key=lambda review: review.get("date", ""), reverse=True)
+    businesses_by_slug = {}
+    for review in reviews:
+        business_slug = review.get("business_slug") or ""
+        business_name = review.get("business_name") or payload["business"]["name"]
+        if business_slug and business_slug not in businesses_by_slug:
+            businesses_by_slug[business_slug] = {
+                "slug": business_slug,
+                "name": business_name,
+                "category": "Verified business",
+            }
     return {
         "business": payload["business"],
         "reviewer": {
@@ -1609,7 +1661,9 @@ async def get_public_business_reviewer(slug: str, reviewer_slug: str):
             "total_reviews": len(reviews),
             "avg_rating": avg_rating,
             "total_referrals": referred_count,
+            "verified_demo_count": sum(1 for review in reviews if review.get("verification_type") == "demo"),
         },
+        "businesses_reviewed": sorted(businesses_by_slug.values(), key=lambda item: item["name"]),
         "reviews": reviews,
     }
 

@@ -45,7 +45,7 @@ def _mock_airtable(monkeypatch):
                                 "business_name": "Marshall",
                                 "Uplaud": "Marshall delivered a strong customer experience.",
                                 "Uplaud Score": 5,
-                                "Name_Creator": ["Casey"],
+                                "Name_Creator": ["Priya Menon"],
                                 "Review_Source": "Uplaud",
                                 "Date_Added": "2026-08-27",
                             },
@@ -230,9 +230,11 @@ def test_get_public_business_reviewer_reviews(monkeypatch):
     assert data["business"]["name"] == "AI Fiesta"
     assert data["reviewer"]["name"] == "Priya Menon"
     assert data["reviewer"]["slug"] == "priya-menon"
-    assert data["stats"]["total_reviews"] == 1
+    assert data["stats"]["total_reviews"] == 2
     assert data["stats"]["avg_rating"] == 5.0
-    assert len(data["reviews"]) == 1
+    assert len(data["reviews"]) == 2
+    assert {review["business_name"] for review in data["reviews"]} == {"AI Fiesta", "Marshall"}
+    assert [item["name"] for item in data["businesses_reviewed"]] == ["AI Fiesta", "Marshall"]
     assert data["reviews"][0]["reviewer_name"] == "Priya Menon"
 
 

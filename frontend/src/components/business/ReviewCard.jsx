@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { BadgeCheck, Sparkles, MessageCircle, Share2, Video, ShieldCheck } from "lucide-react";
+import { BadgeCheck, Sparkles, MessageCircle, Share2, Video, ShieldCheck, ArrowUpRight } from "lucide-react";
 
 function Stars({ n }) {
   return (
@@ -50,11 +50,15 @@ export function reviewerProfilePath(review) {
   return `/business/public/${businessSlug}/reviewer/${reviewerSlug}`;
 }
 
+function businessInitials(name) {
+  return (name || "?").split(" ").slice(0, 2).map((word) => word[0]).join("").toUpperCase();
+}
+
 function isDisplayEmoji(value) {
   return /\p{Extended_Pictographic}/u.test(value || "");
 }
 
-export default function ReviewCard({ review, businessName, audience, delay = 0 }) {
+export default function ReviewCard({ review, businessName, audience, delay = 0, showBusinessTag = false }) {
   const isB2B = audience === "b2b";
   const isDemo = review.verification_type === "demo";
   const initials = (review.reviewer_name || "?").split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
@@ -70,6 +74,23 @@ export default function ReviewCard({ review, businessName, audience, delay = 0 }
       style={{ animationDelay: `${delay}s` }}
       data-testid={`review-card-${review.id}`}
     >
+      {showBusinessTag && review.business_name && (
+        <Link
+          to={`/business/public/${review.business_slug}`}
+          data-testid={`review-business-link-${review.id}`}
+          className="mb-4 pb-3 border-b border-[color:var(--u-line)] flex items-center gap-2 group/business"
+        >
+          <span
+            className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+            style={{ background: "linear-gradient(135deg, #0B0B10 0%, #2A2545 45%, #5B3EEE 100%)" }}
+          >
+            {businessInitials(review.business_name)}
+          </span>
+          <span className="text-sm font-medium truncate">{review.business_name}</span>
+          <ArrowUpRight size={13} className="text-[color:var(--u-muted)] transition group-hover/business:translate-x-0.5 group-hover/business:-translate-y-0.5 shrink-0" />
+        </Link>
+      )}
+
       {isFiveStar && (
         <span
           className="absolute -top-2 -right-2 inline-flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider px-2 py-1 rounded-full"

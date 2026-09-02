@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, MessageSquareText } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, MessageSquareText } from "lucide-react";
 import api from "@/lib/api";
 import Nav from "@/components/business/Nav";
 import Footer from "@/components/business/Footer";
@@ -75,7 +75,9 @@ export default function ReviewerPage() {
   const reviewer = profile.reviewer || {};
   const stats = profile.stats || {};
   const reviews = profile.reviews || [];
+  const businessesReviewed = profile.businesses_reviewed || [];
   const initials = (reviewer.name || "?").split(" ").slice(0, 2).map((word) => word[0]).join("").toUpperCase();
+  const firstName = (reviewer.name || "this reviewer").split(" ")[0];
 
   return (
     <div className="min-h-screen bg-grain" data-testid="reviewer-profile-page">
@@ -92,39 +94,14 @@ export default function ReviewerPage() {
 
         <section className="relative rounded-[28px] overflow-hidden reveal" data-testid="reviewer-header">
           <div
-            className="relative flex flex-col justify-between px-6 lg:px-9 pt-6 lg:pt-9 pb-16 lg:pb-20 min-h-[230px] lg:min-h-[250px]"
+            className="relative h-14 md:h-16"
             style={{ background: "linear-gradient(135deg, #0B0B10 0%, #1A1A22 40%, #2E245C 100%)" }}
           >
-            <div
-              className="absolute -top-20 -right-16 w-80 h-80 rounded-full opacity-45 blur-3xl pointer-events-none"
-              style={{ background: "radial-gradient(closest-side, #7CE8C8, transparent 70%)" }}
-            />
-            <div
-              className="absolute -bottom-28 -left-20 w-96 h-96 rounded-full opacity-35 blur-3xl pointer-events-none"
-              style={{ background: "radial-gradient(closest-side, #5B3EEE, transparent 70%)" }}
-            />
-            <span
-              className="u-pill relative z-10 self-end"
-              style={{ background: "rgba(255,255,255,0.08)", borderColor: "rgba(255,255,255,0.18)", color: "white" }}
-            >
-              <span className="u-pill-dot" /> Verified reviewer
-            </span>
-
-            <div className="relative z-10 max-w-2xl mt-5" data-testid="reviewer-trust-summary">
-              <p className="text-[10px] text-white/45 font-mono uppercase tracking-[0.16em] mb-3">
-                Uplaud reviewer profile
-              </p>
-              <h1 className="font-display text-3xl lg:text-[3.25rem] font-semibold tracking-tight leading-[0.98] text-white">
-                Verified, attributed reviews.
-              </h1>
-              <p className="mt-3 max-w-xl text-base lg:text-lg text-white/70 leading-relaxed">
-                This profile groups reviews from a verified Uplaud reviewer, with the full review history shown below.
-              </p>
-            </div>
+            <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_78%_8%,rgba(124,232,200,0.35),transparent_34%)]" />
           </div>
 
-          <div className="bg-white px-6 lg:px-9 pb-7 relative">
-            <div className="flex flex-col md:flex-row gap-5 md:items-end -mt-12 md:-mt-14">
+          <div className="bg-white px-6 lg:px-9 pt-8 pb-7 relative">
+            <div className="flex flex-col md:flex-row gap-5 md:items-center">
               <div
                 className="w-24 h-24 rounded-3xl flex items-center justify-center text-white font-display text-3xl font-bold shrink-0"
                 style={{
@@ -140,8 +117,8 @@ export default function ReviewerPage() {
                 <h1 className="font-display text-2xl lg:text-[2rem] font-semibold tracking-tight leading-tight" data-testid="reviewer-name">
                   {reviewer.name}
                 </h1>
-                <p className="text-sm text-[color:var(--u-ink-2)] mt-0.5" data-testid="reviewer-business">
-                  Reviews for {business.name}
+                <p className="text-sm text-[color:var(--u-ink-2)] mt-0.5" data-testid="reviewer-status">
+                  Verified Uplaud reviewer
                 </p>
               </div>
             </div>
@@ -155,10 +132,42 @@ export default function ReviewerPage() {
           </div>
         </section>
 
+        {businessesReviewed.length > 0 && (
+          <section className="mt-12" data-testid="reviewer-businesses">
+            <span className="u-pill"><span className="u-pill-dot" /> 01 · trusted by</span>
+            <h2 className="font-display text-2xl lg:text-3xl font-semibold tracking-tight mt-3 mb-6 leading-[1.05]">
+              Where <span className="font-serif-italic">{firstName}</span> shows up.
+            </h2>
+            <div className="grid sm:grid-cols-2 gap-4">
+              {businessesReviewed.map((item, index) => (
+                <Link
+                  key={item.slug}
+                  to={`/business/public/${item.slug}`}
+                  data-testid={`reviewer-business-chip-${item.slug}`}
+                  className="u-card p-4 flex items-center gap-3 reveal group"
+                  style={{ animationDelay: `${index * 0.06}s` }}
+                >
+                  <div
+                    className="w-11 h-11 rounded-xl flex items-center justify-center text-white text-sm font-bold shrink-0"
+                    style={{ background: "linear-gradient(135deg, #0B0B10 0%, #2A2545 45%, #5B3EEE 100%)" }}
+                  >
+                    {(item.name || "?").split(" ").slice(0, 2).map((word) => word[0]).join("").toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium text-sm truncate">{item.name}</div>
+                    <div className="text-[11px] text-[color:var(--u-muted)] truncate">{item.category}</div>
+                  </div>
+                  <ArrowUpRight size={16} className="text-[color:var(--u-muted)] transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-[color:var(--u-violet)] shrink-0" />
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
         <section className="mt-14">
-          <span className="u-pill"><span className="u-pill-dot" /> Reviews</span>
+          <span className="u-pill"><span className="u-pill-dot" /> 02 · the receipts</span>
           <h2 className="font-display text-2xl lg:text-3xl font-semibold tracking-tight mt-3 mb-6 leading-[1.05]">
-            Every review from <span className="font-serif-italic mint-underline">{reviewer.name}</span>.
+            Every word, <span className="font-serif-italic">on record.</span>
           </h2>
 
           {reviews.length === 0 ? (
@@ -172,9 +181,10 @@ export default function ReviewerPage() {
                 <ReviewCard
                   key={review.id}
                   review={review}
-                  businessName={business.name}
+                  businessName={review.business_name || business.name}
                   audience={business.audience}
                   delay={index * 0.05}
+                  showBusinessTag={reviews.length > 1}
                 />
               ))}
             </div>
