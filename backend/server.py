@@ -1216,8 +1216,11 @@ async def public_reviews_from_records(business: Dict[str, Any], records: List[Di
     return reviews
 
 
-async def public_reviews_from_all_uplaud_records(current_business: Dict[str, Any]) -> List[Dict[str, Any]]:
-    records = await public_all_uplaud_records()
+async def public_reviewer_reviews_from_records(
+    records: List[Dict[str, Any]],
+    current_business: Dict[str, Any],
+    reviewer_slug: str,
+) -> List[Dict[str, Any]]:
     business_names: Dict[str, str] = {}
     reviews: List[Dict[str, Any]] = []
     for rec in records:
@@ -1235,8 +1238,11 @@ async def public_reviews_from_all_uplaud_records(current_business: Dict[str, Any
         testimonial = public_testimonial_from_uplaud_record(rec)
         if not testimonial["body"] or testimonial["sentiment"] == "low":
             continue
+        review = public_review_from_uplaud(testimonial, business_slug, display_name)
+        if review.get("reviewer_slug") != reviewer_slug:
+            continue
         business_names[business_slug] = display_name
-        reviews.append(public_review_from_uplaud(testimonial, business_slug, display_name))
+        reviews.append(review)
 
     circle_cache: Dict[str, set] = {}
     for business_slug, business_name in business_names.items():
@@ -1623,15 +1629,19 @@ async def get_public_reviews(
 
 @api_router.get("/business/public/{slug}/reviewers/{reviewer_slug}")
 async def get_public_business_reviewer(slug: str, reviewer_slug: str):
-    payload = await public_page_payload(slug)
-    if not payload:
+    records = await public_all_uplaud_records()
+    business_records = [
+        rec
+        for rec in records
+        if slug in public_business_name_slugs(
+            str(airtable_field(rec.get("fields", {}), "business_name", default=""))
+        )
+    ]
+    biz = public_business_from_uplaud_records(slug, business_records)
+    if not biz:
         raise HTTPException(status_code=404, detail="Business not found")
 
-    all_reviews = await public_reviews_from_all_uplaud_records(payload["business"])
-    reviews = [
-        review for review in all_reviews
-        if review.get("reviewer_slug") == reviewer_slug
-    ]
+    reviews = await public_reviewer_reviews_from_records(records, biz, reviewer_slug)
     if not reviews:
         raise HTTPException(status_code=404, detail="Reviewer not found")
 
@@ -1651,7 +1661,7 @@ async def get_public_business_reviewer(slug: str, reviewer_slug: str):
                 "category": "Verified business",
             }
     return {
-        "business": payload["business"],
+        "business": biz,
         "reviewer": {
             "name": reviewer_name,
             "slug": reviewer_slug,
