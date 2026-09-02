@@ -85,9 +85,13 @@ def _mock_airtable(monkeypatch):
 
     async def fake_list_circles_by_business(business_name):
         if business_name == "AIFiesta":
-            return [{"id": "circle_1"}, {"id": "circle_2"}, {"id": "circle_3"}]
+            return [
+                {"id": "circle_1", "referrer_name": "Priya Menon"},
+                {"id": "circle_2", "referrer_name": "Unrelated Referrer"},
+                {"id": "circle_3", "referrer_name": ""},
+            ]
         if business_name == "Marshall":
-            return [{"id": "circle_4"}]
+            return [{"id": "circle_4", "referrer_name": "Casey"}]
         return []
 
     monkeypatch.setattr(airtable_client, "_enabled", lambda: True)
@@ -182,6 +186,21 @@ def test_get_public_business_reviews_from_uplaud_table(monkeypatch):
     assert len(reviews) == 1
     assert reviews[0]["reviewer_name"] == "Priya Menon"
     assert reviews[0]["text"].startswith("The side-by-side")
+    assert reviews[0]["referred"] is True
+
+
+def test_public_business_reviews_only_mark_matching_circle_referrers(monkeypatch):
+    _mock_airtable(monkeypatch)
+
+    response = client.get("/api/business/public/ai-fiesta/reviews")
+
+    assert response.status_code == 200
+    referred_by_name = {
+        review["reviewer_name"]: review["referred"]
+        for review in response.json()["reviews"]
+    }
+    assert referred_by_name["Priya Menon"] is True
+    assert referred_by_name["Rohan Bakshi"] is False
 
 
 def test_review_source_is_channel_not_reviewer_title():

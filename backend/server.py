@@ -1114,6 +1114,18 @@ def public_review_from_uplaud(testimonial: Dict[str, Any], business_slug: str) -
     }
 
 
+def normalize_public_match_name(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", (value or "").lower()).strip()
+
+
+def public_referred_reviewers_from_circles(leads: List[Dict[str, Any]]) -> set:
+    return {
+        normalize_public_match_name(lead.get("referrer_name") or lead.get("initiator") or "")
+        for lead in leads
+        if normalize_public_match_name(lead.get("referrer_name") or lead.get("initiator") or "")
+    }
+
+
 def public_testimonial_from_uplaud_record(rec: Dict[str, Any]) -> Dict[str, Any]:
     fields = rec.get("fields", {})
     creators = airtable_field(fields, "Name_Creator", default=[])
@@ -1140,6 +1152,12 @@ async def public_reviews_from_records(business: Dict[str, Any], records: List[Di
         for testimonial in [public_testimonial_from_uplaud_record(rec) for rec in records]
         if testimonial["body"] and testimonial["sentiment"] != "low"
     ]
+    business_name = business.get("airtable_business_name") or business["name"]
+    referred_reviewers = public_referred_reviewers_from_circles(
+        await airtable_client.list_circles_by_business(business_name)
+    )
+    for review in reviews:
+        review["referred"] = normalize_public_match_name(review.get("reviewer_name", "")) in referred_reviewers
     if db is not None:
         stored = await db.public_reviews.find({"business_slug": business["slug"]}, {"_id": 0}).to_list(500)
         reviews.extend(stored)

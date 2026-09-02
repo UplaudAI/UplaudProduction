@@ -1,4 +1,5 @@
 import { ShieldCheck, MapPin, ArrowUpRight, Star } from "lucide-react";
+import { displayReviewSource, normalizeReviewRating } from "./ReviewCard";
 
 export default function Hero({ business, stats, topReviews = [] }) {
   const isB2B = business?.audience === "b2b";
@@ -124,6 +125,7 @@ function StatBit({ label, value, suffix, accent, starColor }) {
 function FloatingPreview({ reviews, business, stats }) {
   const top5 = reviews.filter((r) => r.rating === 5).slice(0, 2);
   const items = top5.length >= 2 ? top5 : reviews.slice(0, 2);
+  const referredReview = reviews.find((review) => review.referred);
 
   return (
     <div className="relative h-[440px] lg:h-[500px]">
@@ -155,27 +157,28 @@ function FloatingPreview({ reviews, business, stats }) {
       {/* Card 2 */}
       {items[1] && <PreviewCard review={items[1]} position="bottom" business={business} />}
 
-      {/* Referral chip */}
-      <div
-        className="absolute bottom-5 right-5 rounded-xl p-3 pr-4 max-w-[220px]"
-        style={{
-          background: "white",
-          border: "1px solid var(--u-line-2)",
-          boxShadow: "0 16px 40px -20px rgba(11,11,16,0.25)",
-        }}
-      >
-        <div className="flex items-center gap-2 mb-1.5">
-          <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold" style={{ background: "#25D366" }}>
-            W
+      {referredReview && (
+        <div
+          className="absolute bottom-5 right-5 rounded-xl p-3 pr-4 max-w-[220px]"
+          style={{
+            background: "white",
+            border: "1px solid var(--u-line-2)",
+            boxShadow: "0 16px 40px -20px rgba(11,11,16,0.25)",
+          }}
+        >
+          <div className="flex items-center gap-2 mb-1.5">
+            <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold" style={{ background: "#25D366" }}>
+              {referredReview.reviewer_name?.[0]?.toUpperCase() || "R"}
+            </div>
+            <span className="text-[10px] font-mono uppercase tracking-wider text-[color:var(--u-muted)]">
+              Referred
+            </span>
           </div>
-          <span className="text-[10px] font-mono uppercase tracking-wider text-[color:var(--u-muted)]">
-            Referred · 2m ago
-          </span>
+          <p className="text-[12px] leading-snug text-[color:var(--u-ink-2)]">
+            "{referredReview.reviewer_name} referred {business?.name} on Uplaud."
+          </p>
         </div>
-        <p className="text-[12px] leading-snug text-[color:var(--u-ink-2)]">
-          "Try {business?.name} — my review is on Uplaud, {stats?.total_referrals}+ already shared it."
-        </p>
-      </div>
+      )}
     </div>
   );
 }
@@ -185,6 +188,8 @@ function PreviewCard({ review, position, business }) {
   const isB2B = business?.audience === "b2b";
   const isDemo = review.verification_type === "demo";
   const initials = (review.reviewer_name || "?").split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+  const rating = normalizeReviewRating(review.rating);
+  const sourceLabel = displayReviewSource(review.channel || review.source);
 
   return (
     <div
@@ -209,13 +214,13 @@ function PreviewCard({ review, position, business }) {
           <div>
             <div className="text-xs font-medium">{review.reviewer_name}{review.reviewer_title ? `, ${review.reviewer_title}` : ""}</div>
             <div className="text-[10px] text-[color:var(--u-muted)]">
-              {isDemo ? "verified demo" : isB2B ? "verified subscriber" : "verified"} · via WhatsApp
+              {isDemo ? "verified demo" : isB2B ? "verified subscriber" : "verified"} · {sourceLabel}
             </div>
           </div>
         </div>
-        <div className="inline-flex" aria-label={`${review.rating} stars`}>
+        <div className="inline-flex" aria-label={`${rating} stars`}>
           {Array.from({ length: 5 }).map((_, i) => (
-            <Star key={i} size={11} className="fill-current" style={{ color: i < review.rating ? "var(--u-star)" : "var(--u-line-2)" }} />
+            <Star key={i} size={11} className="fill-current" style={{ color: i < rating ? "var(--u-star)" : "var(--u-line-2)" }} />
           ))}
         </div>
       </div>
@@ -224,7 +229,7 @@ function PreviewCard({ review, position, business }) {
       </p>
       <div className="mt-3 pt-3 border-t border-[color:var(--u-line)] flex items-center justify-between text-[10px] text-[color:var(--u-muted)]">
         <span className="uppercase tracking-wider font-mono">{business?.category?.split("·")[0]?.trim() || "Trusted"}</span>
-        <span className="text-[color:var(--u-violet)] font-medium">{isB2B ? "+2.3× pipeline" : "+2.3× conversion"}</span>
+        {review.referred && <span className="text-[color:var(--u-violet)] font-medium">Referred</span>}
       </div>
     </div>
   );
