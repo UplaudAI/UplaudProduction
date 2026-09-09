@@ -519,7 +519,13 @@ INSIGHTS_SYSTEM = (
 )
 
 
-def build_insights_prompt(transcript: str, client_name: str, variation: int = 0, avoid: str = "") -> str:
+def build_insights_prompt(
+    transcript: str,
+    client_name: str,
+    business_name: str = "",
+    variation: int = 0,
+    avoid: str = "",
+) -> str:
     variation_note = ""
     if variation > 0:
         avoid_block = f"\nAlready-used testimonial text to AVOID repeating (pick DIFFERENT verbatim spans):\n\"\"\"{avoid}\"\"\"\n" if avoid else ""
@@ -529,7 +535,19 @@ def build_insights_prompt(transcript: str, client_name: str, variation: int = 0,
             f"before. Re-synthesize every signal list from a fresh angle and surface additional or less-obvious "
             f"points you may have skipped before. Do NOT simply reword the previous selection.{avoid_block}"
         )
+    product_context = ""
+    if business_name:
+        product_context = f"""
+The authenticated Uplaud workspace/business is "{business_name}". Treat "{business_name}" as the seller/product being evaluated in this transcript, even if the uploaded filename or transcript also mentions Uplaud or another company.
+
+Attribution rule:
+- The testimonial must be from the buyer/prospect/customer who took the demo or gave feedback about "{business_name}".
+- Never attribute the testimonial to "{business_name}" or to "{business_name}"'s founder/team unless the transcript explicitly says that person is the buyer/customer.
+- If the buyer/prospect has their own company, put that company in "company_name"; do not use "{business_name}" as "company_name" just because it is the logged-in workspace.
+"""
+
     return f"""Analyze the following client sales/demo call transcript thoroughly. The uploaded file is named after "{client_name}".
+{product_context}
 
 Be THOROUGH and specific. Genuinely mine the transcript — surface concrete details, numbers, timelines, names, workflows and the customer's ACTUAL sentiment (positive, mixed or negative). Do not be lazy or generic; short/empty lists make this useless.
 
@@ -598,13 +616,22 @@ def _call_openai(system: str, user: str, temperature: float = 0.2) -> str:
     return resp.choices[0].message.content or ""
 
 
-async def generate_insights(transcript: str, client_name: str, variation: int = 0, avoid: str = "") -> dict:
+async def generate_insights(
+    transcript: str,
+    client_name: str,
+    business_name: str = "",
+    variation: int = 0,
+    avoid: str = "",
+) -> dict:
     if not openai_client:
         raise HTTPException(status_code=503, detail="OPENAI_API_KEY not configured on the server.")
     temperature = 0.25 if variation == 0 else 0.7
     try:
         text = await asyncio.to_thread(
-            _call_openai, INSIGHTS_SYSTEM, build_insights_prompt(transcript, client_name, variation, avoid), temperature
+            _call_openai,
+            INSIGHTS_SYSTEM,
+            build_insights_prompt(transcript, client_name, business_name=business_name, variation=variation, avoid=avoid),
+            temperature,
         )
     except Exception as e:  # noqa
         logger.error("OpenAI call failed: %s", e)
@@ -2759,9 +2786,9 @@ async def get_source(source_id: str, request: Request, current=Depends(get_curre
 @api_router.post("/sources/{source_id}/analyze", response_model=SourceOut)
 async def analyze_source(source_id: str, request: Request, regenerate: bool = False, current=Depends(get_current_user)):
     doc = TEMP_SOURCES.get(source_id)
+    business_name = await resolve_current_business_name(current, request)
     if not doc:
         # Fallback query from Airtable if they want to regenerate
-        business_name = await resolve_current_business_name(current, request)
         records = await airtable_client.list_growth_signals_by_business(business_name)
         for rec in records:
             f = rec.get("fields", {})
@@ -2779,7 +2806,13 @@ async def analyze_source(source_id: str, request: Request, regenerate: bool = Fa
     
     # Analyze transcript
     transcript_text = doc.get("transcript") or "Happy with the product"
-    result = await generate_insights(transcript_text, doc["client_name"], variation=variation, avoid=avoid)
+    result = await generate_insights(
+        transcript_text,
+        doc["client_name"],
+        business_name=business_name,
+        variation=variation,
+        avoid=avoid,
+    )
     crafted = (result.pop("testimonial", "") or "").strip()
     
     # Only keep keys the Insights model knows about, convert None to empty string for string fields
@@ -2807,8 +2840,6 @@ async def analyze_source(source_id: str, request: Request, regenerate: bool = Fa
     
     # Save back to memory cache
     TEMP_SOURCES[source_id] = doc
-    
-    business_name = await resolve_current_business_name(current, request)
     
     # Upsert directly to Airtable (No MongoDB!)
     await airtable_client.upsert_growth_signal(

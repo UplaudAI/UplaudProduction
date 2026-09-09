@@ -27,7 +27,22 @@ sys.modules.setdefault("motor", motor_module)
 sys.modules.setdefault("motor.motor_asyncio", motor_asyncio_module)
 
 import server  # noqa: E402
-from server import _growth_signal_record_to_regen_doc  # noqa: E402
+from server import _growth_signal_record_to_regen_doc, build_insights_prompt  # noqa: E402
+
+
+def test_insights_prompt_names_authenticated_business_as_product_being_demoed():
+    prompt = build_insights_prompt(
+        transcript=(
+            "Sydney (Iru AE): I can show you Iru's MDM workflows.\n"
+            "Deepthi Rao (Founder, Uplaud): SOC 2 compliance is urgent for us."
+        ),
+        client_name="Iru + Uplaud AI Introduction",
+        business_name="Iru",
+    )
+
+    assert "The authenticated Uplaud workspace/business is \"Iru\"." in prompt
+    assert "Treat \"Iru\" as the seller/product being evaluated" in prompt
+    assert "Never attribute the testimonial to \"Iru\"" in prompt
 
 
 def test_regen_doc_uses_all_available_growth_signal_fields_as_context():
@@ -166,6 +181,79 @@ async def test_analyze_source_does_not_create_public_uplaud_record(monkeypatch):
     assert synced_users[0][1]["name"] == "Anand Pandey"
     assert synced_users[0][1]["extra_fields"] == {"Company": "AI Fiesta"}
     assert created_public_records == []
+
+
+@pytest.mark.asyncio
+async def test_analyze_source_passes_authenticated_business_to_insights_generator(monkeypatch):
+    source_id = "src_iru_demo"
+    server.TEMP_SOURCES.clear()
+    server.TEMP_SOURCES[source_id] = {
+        "id": source_id,
+        "owner": "user_123",
+        "filename": "Iru + Uplaud AI Introduction.pdf",
+        "file_type": "pdf",
+        "client_name": "Iru + Uplaud AI Introduction",
+        "brand": "Iru",
+        "conversation_code": "CV_002",
+        "source_name": "Upload",
+        "duration_min": 24,
+        "transcript": "Sydney from Iru demos MDM software to Deepthi Rao, Founder of Uplaud.",
+        "word_count": 450,
+        "status": "uploaded",
+        "created_at": "2026-09-08T00:00:00+00:00",
+        "insights": None,
+        "testimonial_draft": None,
+        "testimonial_is_verbatim": True,
+        "share_id": "share_iru",
+        "testimonial_status": "draft",
+        "approved_at": None,
+        "approval_requested_at": None,
+    }
+    calls = []
+
+    async def fake_resolve_current_business_name(*_args, **_kwargs):
+        return "Iru"
+
+    async def fake_generate_insights(*args, **kwargs):
+        calls.append((args, kwargs))
+        return {
+            "company_name": "Uplaud",
+            "speaker_name": "Deepthi Rao",
+            "speaker_role": "Founder",
+            "sentiment_label": "Positive",
+            "signal_score": 82,
+            "call_type": "Demo",
+            "review_rating": 4,
+            "summary": "Deepthi evaluated Iru's MDM software for Uplaud.",
+            "motivations": ["Needs fast SOC 2 compliance support."],
+            "pain_points": ["Compliance readiness is time-sensitive."],
+            "buying_signals": ["Asked detailed implementation questions."],
+            "objections": [],
+            "customer_language": ["SOC 2 compliance is urgent for us."],
+            "product_feedback": ["Iru's MDM workflows looked admin-friendly."],
+            "faqs": [],
+            "testimonial": "Iru's MDM workflows looked promising for our compliance needs.",
+        }
+
+    async def fake_upsert_growth_signal(*_args, **_kwargs):
+        return None
+
+    async def fake_find_or_create_user(*_args, **_kwargs):
+        return "rec_user"
+
+    monkeypatch.setattr(server, "resolve_current_business_name", fake_resolve_current_business_name)
+    monkeypatch.setattr(server, "generate_insights", fake_generate_insights)
+    monkeypatch.setattr(server.airtable_client, "upsert_growth_signal", fake_upsert_growth_signal)
+    monkeypatch.setattr(server.airtable_client, "find_or_create_user", fake_find_or_create_user)
+
+    await server.analyze_source(
+        source_id,
+        _FakeRequest(),
+        current={"id": "user_123", "email": "sydney@iru.com", "name": "Sydney"},
+    )
+
+    assert calls
+    assert calls[0][1]["business_name"] == "Iru"
 
 
 @pytest.mark.asyncio
