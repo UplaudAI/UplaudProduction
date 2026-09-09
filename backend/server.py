@@ -569,14 +569,15 @@ Return ONLY a JSON object with EXACTLY these keys:
   "customer_language": ["4-8 short VERBATIM quotes in the customer's own words that are quotable/telling (positive OR critical)"],
   "product_feedback": ["product feedback, feature requests, praise or criticism — 3-6 items when supported"],
   "faqs": ["explicit questions the customer asked"],
-  "testimonial_fragments": ["2-5 longer VERBATIM spans from the customer that, when read in order, make the strongest natural testimonial"],
   "testimonial": "a polished, cohesive, FIRST-PERSON customer testimonial (3-6 flowing sentences) capturing what THIS customer actually said and their genuine sentiment"
 }}
 
 CRITICAL RULES for "testimonial" (the customer's testimonial, in their own voice):
-- Preserve the customer's actual wording as much as possible. Favor lightly cleaned transcript language over polished marketing copy.
-- Write 2-5 sentences in the FIRST PERSON as the customer. It should sound like the customer speaking, not like Uplaud, the seller, or a marketing team wrote it.
-- Ground it strictly in what THIS customer actually said and felt. You MAY add only minimal connective phrasing so it reads naturally, but you must NOT invent facts, numbers, features, company names, or opinions the customer did not express.
+- Synthesize the strongest feedback, buying signals, pains, and product reactions into a usable testimonial. Do NOT merely concatenate a few short quote fragments.
+- Preserve the customer's actual wording and point of view wherever possible. Use their phrases as the backbone, then add only light connective phrasing.
+- Write 3-6 sentences in the FIRST PERSON as the customer. It should sound like the customer speaking, not like Uplaud, the seller, or a marketing team wrote it.
+- Ground it strictly in what THIS customer actually said and felt. You must NOT invent facts, numbers, features, company names, or opinions the customer did not express.
+- Avoid polished AI/marketing filler such as "constantly seeking efficient solutions", "caught my attention", "promises to streamline", "explore how it can fit into our operations", or "as the founder of..." unless the customer actually said those words.
 - Convey the customer's GENUINE emotion and sentiment — enthusiastic if they were positive, honest and balanced if the experience was mixed or critical. Do not fake positivity, but make the feeling come through.
 - Weave in their real, memorable phrases and word choices inside full, well-formed sentences.
 
@@ -584,7 +585,6 @@ Other rules:
 - signal_score: integer 0-100 for overall opportunity strength (sentiment + intent + fit).
 - review_rating: integer 1-5 reflecting the testimonial/review sentiment. Use 5 only for strongly positive praise, 4 for positive-with-caveats, 3 for mixed/neutral, 2 for mostly negative with some positives, and 1 for clearly negative.
 - customer_language items are verbatim customer quotes (no added quotation marks in the string).
-- testimonial_fragments must be exact customer quote spans copied from the transcript, not paraphrases. Prefer complete sentences or clauses that can stand alone.
 - Every list item must be genuinely supported by the transcript. Keep each item to one concrete line.{variation_note}
 
 Transcript:
@@ -2817,7 +2817,6 @@ async def analyze_source(source_id: str, request: Request, regenerate: bool = Fa
         avoid=avoid,
     )
     crafted = (result.pop("testimonial", "") or "").strip()
-    testimonial_fragments = result.pop("testimonial_fragments", [])
     
     # Only keep keys the Insights model knows about, convert None to empty string for string fields
     clean_result = {}
@@ -2829,15 +2828,10 @@ async def analyze_source(source_id: str, request: Request, regenerate: bool = Fa
             else:
                 clean_result[k] = v
     insights = Insights(**clean_result)
-    verbatim_testimonial = build_verbatim_testimonial(
-        testimonial_fragments,
-        transcript_text,
-        insights.customer_language,
-    )
-    testimonial = verbatim_testimonial or crafted or (
+    testimonial = crafted or (
         " ".join(insights.customer_language[:3]).strip() if insights.customer_language else insights.summary
     )
-    is_verbatim = bool(verbatim_testimonial)
+    is_verbatim = False
     
     doc.update({
         "insights": insights.model_dump(),

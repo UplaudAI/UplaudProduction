@@ -27,7 +27,7 @@ sys.modules.setdefault("motor", motor_module)
 sys.modules.setdefault("motor.motor_asyncio", motor_asyncio_module)
 
 import server  # noqa: E402
-from server import _growth_signal_record_to_regen_doc, build_insights_prompt, build_verbatim_testimonial  # noqa: E402
+from server import _growth_signal_record_to_regen_doc, build_insights_prompt  # noqa: E402
 
 
 def test_insights_prompt_names_authenticated_business_as_product_being_demoed():
@@ -45,27 +45,17 @@ def test_insights_prompt_names_authenticated_business_as_product_being_demoed():
     assert "Never attribute the testimonial to \"Iru\"" in prompt
 
 
-def test_verbatim_testimonial_keeps_customer_words_without_polished_rewrite():
-    transcript = (
-        "Deepthi Rao: SOC 2 compliance quickly is crucial for us, especially with fintech customers waiting. "
-        "I'm cautious about AI promises. I like that it keeps compliance in check continuously, rather than just before audits."
+def test_insights_prompt_preserves_synthesis_while_rejecting_ai_marketing_voice():
+    prompt = build_insights_prompt(
+        transcript="Deepthi Rao: SOC 2 compliance quickly is crucial for us.",
+        client_name="Iru demo",
+        business_name="Iru",
     )
 
-    testimonial = build_verbatim_testimonial(
-        [
-            "SOC 2 compliance quickly is crucial for us, especially with fintech customers waiting.",
-            "I'm cautious about AI promises.",
-            "I like that it keeps compliance in check continuously, rather than just before audits.",
-        ],
-        transcript,
-        [],
-    )
-
-    assert testimonial == (
-        "SOC 2 compliance quickly is crucial for us, especially with fintech customers waiting. "
-        "I'm cautious about AI promises. "
-        "I like that it keeps compliance in check continuously, rather than just before audits."
-    )
+    assert "Synthesize the strongest feedback, buying signals, pains, and product reactions" in prompt
+    assert "Do NOT merely concatenate a few short quote fragments" in prompt
+    assert "Preserve the customer's actual wording and point of view" in prompt
+    assert "Avoid polished AI/marketing filler" in prompt
 
 
 def test_regen_doc_uses_all_available_growth_signal_fields_as_context():
@@ -280,8 +270,8 @@ async def test_analyze_source_passes_authenticated_business_to_insights_generato
 
 
 @pytest.mark.asyncio
-async def test_analyze_source_prefers_verbatim_fragments_over_polished_testimonial(monkeypatch):
-    source_id = "src_verbatim_voice"
+async def test_analyze_source_keeps_synthesized_customer_voice_testimonial(monkeypatch):
+    source_id = "src_customer_voice"
     server.TEMP_SOURCES.clear()
     server.TEMP_SOURCES[source_id] = {
         "id": source_id,
@@ -335,14 +325,11 @@ async def test_analyze_source_prefers_verbatim_fragments_over_polished_testimoni
             ],
             "product_feedback": ["Continuous compliance was appealing."],
             "faqs": [],
-            "testimonial_fragments": [
-                "SOC 2 compliance quickly is crucial for us, especially with fintech customers waiting.",
-                "I'm cautious about AI promises.",
-                "I like that it keeps compliance in check continuously, rather than just before audits.",
-            ],
             "testimonial": (
-                "As the founder of Uplaud, I am constantly seeking efficient solutions to achieve SOC 2 "
-                "compliance quickly, especially with fintech customers waiting to sign off."
+                "SOC 2 compliance quickly is crucial for us, especially with fintech customers waiting. "
+                "I like that Iru treats it as an ongoing process, not just something we scramble on before audits. "
+                "I'm still cautious about AI promises, but having compliance in check continuously makes sense for us. "
+                "I want to discuss it with my engineer and understand how it would fit into what we already do."
             ),
         }
 
@@ -364,11 +351,12 @@ async def test_analyze_source_prefers_verbatim_fragments_over_polished_testimoni
         current={"id": "user_123", "email": "sydney@iru.com", "name": "Sydney"},
     )
 
-    assert out.testimonial_is_verbatim is True
+    assert out.testimonial_is_verbatim is False
     assert out.testimonial_draft == (
         "SOC 2 compliance quickly is crucial for us, especially with fintech customers waiting. "
-        "I'm cautious about AI promises. "
-        "I like that it keeps compliance in check continuously, rather than just before audits."
+        "I like that Iru treats it as an ongoing process, not just something we scramble on before audits. "
+        "I'm still cautious about AI promises, but having compliance in check continuously makes sense for us. "
+        "I want to discuss it with my engineer and understand how it would fit into what we already do."
     )
     assert saved[0][1]["testimonial_draft"] == out.testimonial_draft
 
