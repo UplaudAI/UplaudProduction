@@ -27,7 +27,7 @@ sys.modules.setdefault("motor", motor_module)
 sys.modules.setdefault("motor.motor_asyncio", motor_asyncio_module)
 
 import server  # noqa: E402
-from server import _growth_signal_record_to_regen_doc, build_insights_prompt  # noqa: E402
+from server import _growth_signal_record_to_regen_doc, build_insights_prompt, build_verbatim_testimonial  # noqa: E402
 
 
 def test_insights_prompt_names_authenticated_business_as_product_being_demoed():
@@ -43,6 +43,29 @@ def test_insights_prompt_names_authenticated_business_as_product_being_demoed():
     assert "The authenticated Uplaud workspace/business is \"Iru\"." in prompt
     assert "Treat \"Iru\" as the seller/product being evaluated" in prompt
     assert "Never attribute the testimonial to \"Iru\"" in prompt
+
+
+def test_verbatim_testimonial_keeps_customer_words_without_polished_rewrite():
+    transcript = (
+        "Deepthi Rao: SOC 2 compliance quickly is crucial for us, especially with fintech customers waiting. "
+        "I'm cautious about AI promises. I like that it keeps compliance in check continuously, rather than just before audits."
+    )
+
+    testimonial = build_verbatim_testimonial(
+        [
+            "SOC 2 compliance quickly is crucial for us, especially with fintech customers waiting.",
+            "I'm cautious about AI promises.",
+            "I like that it keeps compliance in check continuously, rather than just before audits.",
+        ],
+        transcript,
+        [],
+    )
+
+    assert testimonial == (
+        "SOC 2 compliance quickly is crucial for us, especially with fintech customers waiting. "
+        "I'm cautious about AI promises. "
+        "I like that it keeps compliance in check continuously, rather than just before audits."
+    )
 
 
 def test_regen_doc_uses_all_available_growth_signal_fields_as_context():
@@ -254,6 +277,100 @@ async def test_analyze_source_passes_authenticated_business_to_insights_generato
 
     assert calls
     assert calls[0][1]["business_name"] == "Iru"
+
+
+@pytest.mark.asyncio
+async def test_analyze_source_prefers_verbatim_fragments_over_polished_testimonial(monkeypatch):
+    source_id = "src_verbatim_voice"
+    server.TEMP_SOURCES.clear()
+    server.TEMP_SOURCES[source_id] = {
+        "id": source_id,
+        "owner": "user_123",
+        "filename": "Iru demo.pdf",
+        "file_type": "pdf",
+        "client_name": "Deepthi Rao",
+        "brand": "Iru",
+        "conversation_code": "CV_003",
+        "source_name": "Upload",
+        "duration_min": 24,
+        "transcript": (
+            "Deepthi Rao: SOC 2 compliance quickly is crucial for us, especially with fintech customers waiting. "
+            "I'm cautious about AI promises. "
+            "I like that it keeps compliance in check continuously, rather than just before audits."
+        ),
+        "word_count": 450,
+        "status": "uploaded",
+        "created_at": "2026-09-08T00:00:00+00:00",
+        "insights": None,
+        "testimonial_draft": None,
+        "testimonial_is_verbatim": True,
+        "share_id": "share_verbatim",
+        "testimonial_status": "draft",
+        "approved_at": None,
+        "approval_requested_at": None,
+    }
+    saved = []
+
+    async def fake_resolve_current_business_name(*_args, **_kwargs):
+        return "Iru"
+
+    async def fake_generate_insights(*_args, **_kwargs):
+        return {
+            "company_name": "Uplaud",
+            "speaker_name": "Deepthi Rao",
+            "speaker_role": "Founder",
+            "sentiment_label": "Positive",
+            "signal_score": 82,
+            "call_type": "Demo",
+            "review_rating": 4,
+            "summary": "Deepthi evaluated Iru.",
+            "motivations": ["Needs fast SOC 2 compliance support."],
+            "pain_points": ["Compliance readiness is time-sensitive."],
+            "buying_signals": ["Asked detailed implementation questions."],
+            "objections": [],
+            "customer_language": [
+                "SOC 2 compliance quickly is crucial for us, especially with fintech customers waiting.",
+                "I'm cautious about AI promises.",
+                "I like that it keeps compliance in check continuously, rather than just before audits.",
+            ],
+            "product_feedback": ["Continuous compliance was appealing."],
+            "faqs": [],
+            "testimonial_fragments": [
+                "SOC 2 compliance quickly is crucial for us, especially with fintech customers waiting.",
+                "I'm cautious about AI promises.",
+                "I like that it keeps compliance in check continuously, rather than just before audits.",
+            ],
+            "testimonial": (
+                "As the founder of Uplaud, I am constantly seeking efficient solutions to achieve SOC 2 "
+                "compliance quickly, especially with fintech customers waiting to sign off."
+            ),
+        }
+
+    async def fake_upsert_growth_signal(*args, **kwargs):
+        saved.append((args, kwargs))
+        return None
+
+    async def fake_find_or_create_user(*_args, **_kwargs):
+        return "rec_user"
+
+    monkeypatch.setattr(server, "resolve_current_business_name", fake_resolve_current_business_name)
+    monkeypatch.setattr(server, "generate_insights", fake_generate_insights)
+    monkeypatch.setattr(server.airtable_client, "upsert_growth_signal", fake_upsert_growth_signal)
+    monkeypatch.setattr(server.airtable_client, "find_or_create_user", fake_find_or_create_user)
+
+    out = await server.analyze_source(
+        source_id,
+        _FakeRequest(),
+        current={"id": "user_123", "email": "sydney@iru.com", "name": "Sydney"},
+    )
+
+    assert out.testimonial_is_verbatim is True
+    assert out.testimonial_draft == (
+        "SOC 2 compliance quickly is crucial for us, especially with fintech customers waiting. "
+        "I'm cautious about AI promises. "
+        "I like that it keeps compliance in check continuously, rather than just before audits."
+    )
+    assert saved[0][1]["testimonial_draft"] == out.testimonial_draft
 
 
 @pytest.mark.asyncio
