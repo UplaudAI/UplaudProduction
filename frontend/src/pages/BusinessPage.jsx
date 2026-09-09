@@ -19,6 +19,11 @@ export default function BusinessPage() {
 
   useEffect(() => {
     let ignore = false;
+    setError(false);
+    setBusiness(null);
+    setStats(null);
+    setCaseStudies([]);
+    setTopReviews([]);
     api
       .get(`/business/public/${slug}/page`)
       .then(({ data }) => {
@@ -27,6 +32,7 @@ export default function BusinessPage() {
         setStats(data.stats);
         setCaseStudies(data.case_studies || []);
         setTopReviews(data.top_reviews || []);
+        setError(false);
       })
       .catch(() => !ignore && setError(true));
     return () => { ignore = true; };
@@ -53,14 +59,16 @@ export default function BusinessPage() {
     );
   }
 
+  const publicSlug = business.slug || slug;
+
   return (
     <div className="min-h-screen bg-grain" data-testid="business-page">
-      <Nav businessName={business.name} audience={business.audience} slug={business.slug || slug} />
+      <Nav businessName={business.name} audience={business.audience} slug={publicSlug} />
       <Hero business={business} stats={stats} topReviews={topReviews} />
       <TrustStrip business={business} stats={stats} />
-      <ReviewsSection slug={slug} businessName={business.name} audience={business.audience} />
+      <ReviewsSection slug={publicSlug} businessName={business.name} audience={business.audience} />
       <Insights stats={stats} />
-      <CaseStudies slug={slug} caseStudies={caseStudies} />
+      <CaseStudies slug={publicSlug} caseStudies={caseStudies} />
       <Footer />
     </div>
   );
