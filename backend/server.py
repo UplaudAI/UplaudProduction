@@ -1077,11 +1077,12 @@ def airtable_field(fields: Dict[str, Any], *names: str, default: Any = "") -> An
 async def public_uplaud_records_by_slug(slug: str) -> List[Dict[str, Any]]:
     if not airtable_client._enabled():
         raise HTTPException(status_code=503, detail="Airtable is not configured")
+    normalized_slug = public_slug(slug)
     records = await public_all_uplaud_records()
     return [
         rec
         for rec in records
-        if slug in public_business_name_slugs(
+        if normalized_slug in public_business_name_slugs(
             str(airtable_field(rec.get("fields", {}), "business_name", default=""))
         )
     ]
@@ -1191,8 +1192,9 @@ def public_business_from_uplaud_records(slug: str, records: List[Dict[str, Any]]
 
 
 async def public_business_by_slug(slug: str) -> Optional[Dict[str, Any]]:
-    records = await public_uplaud_records_by_slug(slug)
-    return public_business_from_uplaud_records(slug, records)
+    normalized_slug = public_slug(slug)
+    records = await public_uplaud_records_by_slug(normalized_slug)
+    return public_business_from_uplaud_records(normalized_slug, records)
 
 
 def public_review_from_uplaud(
@@ -1697,8 +1699,9 @@ def public_case_studies_from_reviews(slug: str, business: Dict[str, Any], review
 
 
 async def public_page_payload(slug: str) -> Optional[Dict[str, Any]]:
-    records = await public_uplaud_records_by_slug(slug)
-    biz = public_business_from_uplaud_records(slug, records)
+    normalized_slug = public_slug(slug)
+    records = await public_uplaud_records_by_slug(normalized_slug)
+    biz = public_business_from_uplaud_records(normalized_slug, records)
     if not biz:
         return None
 
@@ -1711,7 +1714,7 @@ async def public_page_payload(slug: str) -> Optional[Dict[str, Any]]:
     )[:4]
     referral_count = await public_referral_count_for_business(biz.get("airtable_business_name") or biz["name"])
     stats = public_stats_from_reviews(biz, reviews, referral_count)
-    case_studies = public_case_studies_from_reviews(slug, biz, reviews)
+    case_studies = public_case_studies_from_reviews(normalized_slug, biz, reviews)
     biz.update(
         {
             "total_reviews": stats["total_reviews"],

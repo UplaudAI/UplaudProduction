@@ -178,6 +178,17 @@ def test_get_public_business_page_payload_uses_single_airtable_lookup(monkeypatc
     assert data["case_studies"][0]["hero_quote_author"] == "Priya Menon and Rohan Bakshi"
 
 
+def test_public_business_page_accepts_mixed_case_slug(monkeypatch):
+    _mock_airtable(monkeypatch)
+
+    response = client.get("/api/business/public/AIFiesta/page")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["business"]["slug"] == "aifiesta"
+    assert data["business"]["name"] == "AI Fiesta"
+
+
 def test_public_business_html_is_crawlable(monkeypatch):
     _mock_airtable(monkeypatch)
 
