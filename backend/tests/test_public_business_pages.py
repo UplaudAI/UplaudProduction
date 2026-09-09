@@ -282,6 +282,40 @@ def test_review_source_is_channel_not_reviewer_title():
     assert review["reviewer_title"] == ""
 
 
+def test_pre_sales_demo_reviews_use_demo_verification_type():
+    review = server.public_review_from_uplaud(
+        {
+            "id": "rec_demo",
+            "customer": "Deepthi Rao",
+            "body": "Iru's ongoing compliance process makes sense.",
+            "rating": 3,
+            "source": "Pre-Sales Demo",
+            "date_added": "2026-09-08",
+        },
+        "iru",
+    )
+
+    assert review["channel"] == "Pre-Sales Demo"
+    assert review["verification_type"] == "demo"
+
+
+def test_post_sales_reviews_use_purchase_verification_type():
+    review = server.public_review_from_uplaud(
+        {
+            "id": "rec_post_sales",
+            "customer": "Anand Pandey",
+            "body": "AI Fiesta helps me compare models.",
+            "rating": 5,
+            "source": "Post Sales Testimonial",
+            "date_added": "2026-08-31",
+        },
+        "aifiesta",
+    )
+
+    assert review["channel"] == "Post Sales Testimonial"
+    assert review["verification_type"] == "purchase"
+
+
 def test_get_public_reviewer_reviews(monkeypatch):
     calls = []
     _mock_airtable(monkeypatch)

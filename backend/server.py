@@ -1208,6 +1208,8 @@ def public_review_from_uplaud(
         rating = int(rating)
     except (TypeError, ValueError):
         rating = 5
+    channel = testimonial.get("source") or "Uplaud"
+    verification_type = "demo" if review_source_for_call_type(channel) == "Pre-Sales Demo" else "purchase"
     return {
         "id": testimonial.get("id") or str(uuid.uuid4()),
         "business_slug": business_slug,
@@ -1223,8 +1225,8 @@ def public_review_from_uplaud(
         "text": testimonial.get("body") or "",
         "date": testimonial.get("date_added") or "",
         "verified": True,
-        "verification_type": "purchase",
-        "channel": testimonial.get("source") or "Uplaud",
+        "verification_type": verification_type,
+        "channel": channel,
         "referred": False,
     }
 
