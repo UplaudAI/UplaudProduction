@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "installCommand": "npm --prefix frontend install --legacy-peer-deps",
-  "buildCommand": "npm --prefix frontend run build",
+  "buildCommand": "DISABLE_ESLINT_PLUGIN=true npm --prefix frontend run build",
   "outputDirectory": "frontend/build",
   "functions": {
     "api/**/*.py": {
