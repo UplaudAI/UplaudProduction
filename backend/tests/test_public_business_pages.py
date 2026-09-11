@@ -1,3 +1,5 @@
+import json
+import re
 import sys
 import types
 from pathlib import Path
@@ -28,6 +30,12 @@ import server  # noqa: E402
 
 
 client = TestClient(server.app)
+
+
+def _json_ld_from_html(html):
+    match = re.search(r'<script type="application/ld\+json">(.*?)</script>', html, re.S)
+    assert match, "Expected JSON-LD script in rendered HTML"
+    return json.loads(match.group(1))
 
 
 def _mock_airtable(monkeypatch):
@@ -202,6 +210,39 @@ def test_public_business_html_is_crawlable(monkeypatch):
     assert "application/ld+json" in response.text
     assert "The side-by-side model comparison helped us pick the right answer." in response.text
     assert "Average rating" in response.text
+
+
+def test_public_business_html_json_ld_exposes_product_reviews(monkeypatch):
+    _mock_airtable(monkeypatch)
+
+    response = client.get("/business/public/ai-fiesta")
+
+    assert response.status_code == 200
+    schema = _json_ld_from_html(response.text)
+    assert schema["@context"] == "https://schema.org"
+    assert schema["@type"] == "Product"
+    assert schema["name"] == "AI Fiesta"
+    assert schema["url"] == "http://testserver/business/public/ai-fiesta"
+    assert schema["brand"] == {"@type": "Brand", "name": "AI Fiesta"}
+    assert schema["aggregateRating"] == {
+        "@type": "AggregateRating",
+        "ratingValue": "4.5",
+        "reviewCount": "2",
+        "bestRating": "5",
+        "worstRating": "1",
+    }
+    assert schema["review"][0] == {
+        "@type": "Review",
+        "author": {"@type": "Person", "name": "Priya Menon"},
+        "datePublished": "2026-06-20",
+        "reviewBody": "The side-by-side model comparison helped us pick the right answer.",
+        "reviewRating": {
+            "@type": "Rating",
+            "ratingValue": "5",
+            "bestRating": "5",
+            "worstRating": "1",
+        },
+    }
 
 
 def test_public_business_html_rewrite_fallback_is_crawlable(monkeypatch):

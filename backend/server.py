@@ -2062,17 +2062,18 @@ def public_business_json_ld(payload: Dict[str, Any], canonical_url: str) -> Dict
     reviews = payload["reviews"][:25]
     return {
         "@context": "https://schema.org",
-        "@type": "LocalBusiness",
+        "@type": "Product",
         "@id": canonical_url,
         "name": business["name"],
         "url": canonical_url,
         "description": business.get("about") or business.get("tagline"),
+        "brand": {"@type": "Brand", "name": business["name"]},
         "aggregateRating": {
             "@type": "AggregateRating",
-            "ratingValue": stats.get("avg_rating") or 0,
-            "reviewCount": stats.get("total_reviews") or 0,
-            "bestRating": 5,
-            "worstRating": 1,
+            "ratingValue": str(stats.get("avg_rating") or 0),
+            "reviewCount": str(stats.get("total_reviews") or 0),
+            "bestRating": "5",
+            "worstRating": "1",
         },
         "review": [
             {
@@ -2082,9 +2083,9 @@ def public_business_json_ld(payload: Dict[str, Any], canonical_url: str) -> Dict
                 "reviewBody": review.get("text"),
                 "reviewRating": {
                     "@type": "Rating",
-                    "ratingValue": review.get("rating") or 5,
-                    "bestRating": 5,
-                    "worstRating": 1,
+                    "ratingValue": str(review.get("rating") or 5),
+                    "bestRating": "5",
+                    "worstRating": "1",
                 },
             }
             for review in reviews
