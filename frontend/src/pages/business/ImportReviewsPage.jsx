@@ -74,6 +74,9 @@ export default function ImportReviewsPage() {
   const [profile, setProfile] = useState(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [domainChoice, setDomainChoice] = useState(null);
+  const [fathomStatus, setFathomStatus] = useState({ connected: false, synced_count: 0 });
+  const [connectingFathom, setConnectingFathom] = useState(false);
+  const [syncingFathom, setSyncingFathom] = useState(false);
   const fileRef = useRef(null);
 
   const fetchSources = () => {
@@ -90,9 +93,21 @@ export default function ImportReviewsPage() {
       .finally(() => setProfileLoaded(true));
   };
 
+  const fetchFathomStatus = () => {
+    api.get("/integrations/fathom/status")
+      .then(({ data }) => setFathomStatus(data || { connected: false, synced_count: 0 }))
+      .catch(() => setFathomStatus({ connected: false, synced_count: 0 }));
+  };
+
   useEffect(() => {
     fetchSources();
     fetchProfile();
+    fetchFathomStatus();
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("fathom") === "connected") {
+      toast.success("Fathom connected. Sync your recent meetings when you're ready.");
+      window.history.replaceState({}, "", window.location.pathname);
+    }
   }, []);
 
   const isPersonalized = Boolean(profile?.brand_voice || profile?.logo_url);
@@ -151,6 +166,44 @@ export default function ImportReviewsPage() {
   };
 
   const pickFile = () => fileRef.current?.click();
+
+  const connectFathom = async () => {
+    setConnectingFathom(true);
+    try {
+      const { data } = await api.post("/integrations/fathom/connect");
+      if (data?.authorization_url) {
+        window.location.href = data.authorization_url;
+      } else {
+        toast.error("Fathom did not return an authorization URL.");
+      }
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail) || "Could not start Fathom connection.");
+    } finally {
+      setConnectingFathom(false);
+    }
+  };
+
+  const syncFathom = async () => {
+    setSyncingFathom(true);
+    try {
+      const { data } = await api.post("/integrations/fathom/sync?limit=10");
+      const importedSources = Array.isArray(data.sources) ? data.sources : [];
+      for (const source of importedSources) {
+        if (source?.id) {
+          await api.post(`/sources/${source.id}/analyze`);
+        }
+      }
+      fetchSources();
+      fetchFathomStatus();
+      toast.success(`Imported and analyzed ${data.imported || 0} Fathom meetings.`, {
+        description: data.skipped ? `${data.skipped} meetings skipped because they had no transcript or were already synced.` : undefined,
+      });
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail) || "Fathom sync failed.");
+    } finally {
+      setSyncingFathom(false);
+    }
+  };
 
   const handleFile = async (file) => {
     if (!file) return;
@@ -491,18 +544,21 @@ export default function ImportReviewsPage() {
       </div>
 
         {/* Right — sources (dual streams) */}
-        <div className="lg:col-span-2 space-y-5 hidden">
+        <div className="lg:col-span-2 space-y-5">
           {/* Conversation sources */}
-          {false && (
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <Mic className="w-3.5 h-3.5 text-[#6d46c6]" strokeWidth={1.75} />
-                <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#4b5563]">
-                  Conversations
-                </div>
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Mic className="w-3.5 h-3.5 text-[#6d46c6]" strokeWidth={1.75} />
+              <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#4b5563]">
+                Conversations
               </div>
-              <div className="space-y-2">
-                {CONVERSATION_SOURCES.slice(0, 4).map((s) => (
+            </div>
+            <div className="space-y-2">
+              {CONVERSATION_SOURCES.slice(0, 4).map((s) => {
+                const isFathom = s.id === "fathom";
+                const connected = isFathom ? fathomStatus.connected : s.connected;
+                const syncs = isFathom ? fathomStatus.synced_count || 0 : s.syncs;
+                return (
                   <div
                     key={s.id}
                     data-testid={`source-card-${s.id}`}
@@ -520,30 +576,43 @@ export default function ImportReviewsPage() {
                           {s.label}
                         </div>
                         <div className="text-[10.5px] font-mono text-[#9ca3af] mt-0.5">
-                          {s.connected
-                            ? `${s.syncs} synced`
+                          {connected
+                            ? `${syncs} synced`
                             : "Not connected"}
                         </div>
                       </div>
-                      {s.connected ? (
-                        <span className="text-[10px] font-mono text-[#0f9b7c] bg-[#ecfdf7] border border-[#c8f0e4] rounded-full px-2 py-0.5">
-                          live
-                        </span>
+                      {connected ? (
+                        isFathom ? (
+                          <button
+                            data-testid="source-sync-fathom"
+                            onClick={syncFathom}
+                            disabled={syncingFathom}
+                            className="text-[11px] font-medium text-[#0f9b7c] bg-[#ecfdf7] border border-[#c8f0e4] rounded-full px-2 py-0.5 disabled:opacity-60"
+                          >
+                            {syncingFathom ? "Syncing" : "Sync"}
+                          </button>
+                        ) : (
+                          <span className="text-[10px] font-mono text-[#0f9b7c] bg-[#ecfdf7] border border-[#c8f0e4] rounded-full px-2 py-0.5">
+                            live
+                          </span>
+                        )
                       ) : (
                         <button
                           data-testid={`source-connect-${s.id}`}
+                          onClick={isFathom ? connectFathom : undefined}
+                          disabled={isFathom && connectingFathom}
                           className="text-[11px] font-medium text-[#6d46c6] hover:underline flex items-center gap-1"
                         >
                           <Plus className="w-3 h-3" strokeWidth={2} />
-                          Connect
+                          {isFathom && connectingFathom ? "Connecting" : "Connect"}
                         </button>
                       )}
                     </div>
                   </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
-          )}
+          </div>
 
           {/* Review sources */}
           <div>

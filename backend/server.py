@@ -15,11 +15,13 @@ import bcrypt
 import jwt
 import httpx
 import html
+import time
+from urllib.parse import urlencode
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, APIRouter, Request, HTTPException, Depends, UploadFile, File, Query
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr, Field
@@ -146,6 +148,24 @@ class EmailDraft(BaseModel):
     subject: str
     body: str
     attachment_name: str
+
+
+class FathomAuthStart(BaseModel):
+    authorization_url: str
+    connected: bool = False
+
+
+class FathomStatus(BaseModel):
+    connected: bool = False
+    connected_at: Optional[str] = None
+    last_sync_at: Optional[str] = None
+    synced_count: int = 0
+
+
+class FathomSyncResponse(BaseModel):
+    imported: int
+    skipped: int = 0
+    sources: List[SourceOut] = Field(default_factory=list)
 
 
 class EventLogRequest(BaseModel):
@@ -2604,6 +2624,269 @@ async def get_business_profile(request: Request, current=Depends(get_current_use
 # Routes: sources (Purely Airtable-driven, No MongoDB!)
 # ---------------------------------------------------------------------------
 TEMP_SOURCES = {}
+TEMP_FATHOM_CONNECTIONS: Dict[str, Dict[str, Any]] = {}
+
+FATHOM_AUTHORIZE_URL = os.environ.get("FATHOM_AUTHORIZE_URL", "https://fathom.video/oauth/authorize")
+FATHOM_TOKEN_URL = os.environ.get("FATHOM_TOKEN_URL", "https://api.fathom.ai/external/v1/oauth2/token")
+FATHOM_API_BASE = os.environ.get("FATHOM_API_BASE", "https://api.fathom.ai/external/v1").rstrip("/")
+
+
+def fathom_redirect_uri(request: Optional[Request] = None) -> str:
+    configured = os.environ.get("FATHOM_REDIRECT_URI", "").strip()
+    if configured:
+        return configured
+    origin = str(request.base_url).rstrip("/") if request is not None else "https://www.uplaud.ai"
+    return f"{origin}/api/integrations/fathom/callback"
+
+
+def encode_fathom_state(current: dict, request: Optional[Request] = None) -> str:
+    now = datetime.now(timezone.utc)
+    payload = {
+        "owner": current["id"],
+        "email": current.get("email", ""),
+        "brand_domain": selected_brand_domain(request, current),
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(minutes=15)).timestamp()),
+        "nonce": uuid.uuid4().hex,
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def decode_fathom_state(state: str) -> dict:
+    try:
+        return jwt.decode(state, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=400, detail="Fathom connection expired. Please try again.")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid Fathom connection state.")
+
+
+def build_fathom_authorization_url(current: dict, request: Optional[Request] = None) -> str:
+    client_id = os.environ.get("FATHOM_CLIENT_ID", "").strip()
+    if not client_id:
+        raise HTTPException(status_code=503, detail="Fathom OAuth is not configured.")
+    params = {
+        "client_id": client_id,
+        "redirect_uri": fathom_redirect_uri(request),
+        "response_type": "code",
+        "scope": "public_api",
+        "state": encode_fathom_state(current, request),
+    }
+    return f"{FATHOM_AUTHORIZE_URL}?{urlencode(params)}"
+
+
+async def store_fathom_connection(connection: Dict[str, Any]) -> None:
+    TEMP_FATHOM_CONNECTIONS[connection["owner"]] = connection
+    if db is not None:
+        await db.fathom_connections.update_one(
+            {"owner": connection["owner"]},
+            {"$set": connection},
+            upsert=True,
+        )
+
+
+async def get_fathom_connection(owner: str) -> Optional[Dict[str, Any]]:
+    if db is not None:
+        stored = await db.fathom_connections.find_one({"owner": owner}, {"_id": 0})
+        if stored:
+            return stored
+    return TEMP_FATHOM_CONNECTIONS.get(owner)
+
+
+async def complete_fathom_oauth(code: str, state: str, request: Optional[Request] = None) -> Dict[str, Any]:
+    client_id = os.environ.get("FATHOM_CLIENT_ID", "").strip()
+    client_secret = os.environ.get("FATHOM_CLIENT_SECRET", "").strip()
+    if not client_id or not client_secret:
+        raise HTTPException(status_code=503, detail="Fathom OAuth is not configured.")
+    state_payload = decode_fathom_state(state)
+    form = {
+        "grant_type": "authorization_code",
+        "code": code,
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "redirect_uri": fathom_redirect_uri(request),
+    }
+    async with httpx.AsyncClient() as http:
+        resp = await http.post(FATHOM_TOKEN_URL, data=form, headers={"Content-Type": "application/x-www-form-urlencoded"}, timeout=20.0)
+    try:
+        resp.raise_for_status()
+    except Exception:
+        logger.warning("Fathom OAuth token exchange failed: %s", getattr(resp, "text", ""))
+        raise HTTPException(status_code=502, detail="Fathom OAuth token exchange failed.")
+    token_data = resp.json()
+    expires_in = int(token_data.get("expires_in") or 3600)
+    now = datetime.now(timezone.utc)
+    connection = {
+        "provider": "fathom",
+        "owner": state_payload["owner"],
+        "email": state_payload.get("email", ""),
+        "brand_domain": normalize_business_domain(state_payload.get("brand_domain", "")),
+        "access_token": token_data.get("access_token", ""),
+        "refresh_token": token_data.get("refresh_token", ""),
+        "expires_at": int(now.timestamp()) + expires_in,
+        "connected_at": now.isoformat(),
+        "last_sync_at": None,
+        "synced_count": 0,
+    }
+    await store_fathom_connection(connection)
+    return connection
+
+
+async def refresh_fathom_connection(connection: Dict[str, Any]) -> Dict[str, Any]:
+    if int(connection.get("expires_at") or 0) > int(time.time()) + 60:
+        return connection
+    refresh_token = connection.get("refresh_token")
+    if not refresh_token:
+        raise HTTPException(status_code=401, detail="Fathom connection has expired. Please reconnect.")
+    form = {
+        "grant_type": "refresh_token",
+        "refresh_token": refresh_token,
+        "client_id": os.environ.get("FATHOM_CLIENT_ID", "").strip(),
+        "client_secret": os.environ.get("FATHOM_CLIENT_SECRET", "").strip(),
+    }
+    async with httpx.AsyncClient() as http:
+        resp = await http.post(FATHOM_TOKEN_URL, data=form, headers={"Content-Type": "application/x-www-form-urlencoded"}, timeout=20.0)
+    try:
+        resp.raise_for_status()
+    except Exception:
+        raise HTTPException(status_code=401, detail="Fathom connection has expired. Please reconnect.")
+    data = resp.json()
+    updated = {
+        **connection,
+        "access_token": data.get("access_token", connection.get("access_token", "")),
+        "refresh_token": data.get("refresh_token", refresh_token),
+        "expires_at": int(time.time()) + int(data.get("expires_in") or 3600),
+    }
+    await store_fathom_connection(updated)
+    return updated
+
+
+def fathom_auth_headers(connection: Dict[str, Any]) -> Dict[str, str]:
+    return {"Authorization": f"Bearer {connection['access_token']}"}
+
+
+def fathom_transcript_to_text(transcript: List[Dict[str, Any]]) -> str:
+    lines = []
+    for item in transcript or []:
+        speaker = item.get("speaker") or {}
+        name = speaker.get("display_name") or "Speaker"
+        timestamp = item.get("timestamp") or ""
+        text = (item.get("text") or "").strip()
+        if text:
+            prefix = f"[{timestamp}] " if timestamp else ""
+            lines.append(f"{prefix}{name}: {text}")
+    return "\n".join(lines)
+
+
+def fathom_external_client_name(meeting: Dict[str, Any]) -> str:
+    invitees = meeting.get("calendar_invitees") or []
+    external = next((i for i in invitees if i.get("is_external") and i.get("name")), None)
+    named = external or next((i for i in invitees if i.get("name")), None)
+    return (named or {}).get("name") or meeting.get("title") or meeting.get("meeting_title") or "Fathom meeting"
+
+
+def fathom_meeting_duration_min(meeting: Dict[str, Any]) -> int:
+    try:
+        start = meeting.get("recording_start_time") or meeting.get("scheduled_start_time")
+        end = meeting.get("recording_end_time") or meeting.get("scheduled_end_time")
+        if start and end:
+            started = datetime.fromisoformat(start.replace("Z", "+00:00"))
+            ended = datetime.fromisoformat(end.replace("Z", "+00:00"))
+            return max(1, round((ended - started).total_seconds() / 60))
+    except Exception:
+        pass
+    return 30
+
+
+def fathom_meeting_to_source_doc(meeting: Dict[str, Any], owner: str, business_name: str) -> Dict[str, Any]:
+    title = meeting.get("meeting_title") or meeting.get("title") or f"Recording {meeting.get('recording_id')}"
+    transcript_text = fathom_transcript_to_text(meeting.get("transcript") or [])
+    source_id = f"fathom_{meeting.get('recording_id') or uuid.uuid4().hex}"
+    return {
+        "id": source_id,
+        "owner": owner,
+        "filename": f"Fathom - {title}.txt",
+        "file_type": "txt",
+        "client_name": fathom_external_client_name(meeting),
+        "brand": business_name,
+        "conversation_code": source_id[:12].upper(),
+        "source_name": "Fathom",
+        "duration_min": fathom_meeting_duration_min(meeting),
+        "transcript": transcript_text,
+        "word_count": len(transcript_text.split()),
+        "status": "uploaded",
+        "created_at": meeting.get("created_at") or datetime.now(timezone.utc).isoformat(),
+        "insights": None,
+        "testimonial_draft": None,
+        "testimonial_is_verbatim": True,
+        "share_id": uuid.uuid4().hex[:12],
+        "testimonial_status": "draft",
+        "approved_at": None,
+        "approval_requested_at": None,
+        "external_id": str(meeting.get("recording_id") or ""),
+        "external_url": meeting.get("share_url") or meeting.get("url") or "",
+    }
+
+
+async def fetch_fathom_meetings(connection: Dict[str, Any], limit: int = 10) -> List[Dict[str, Any]]:
+    connection = await refresh_fathom_connection(connection)
+    headers = fathom_auth_headers(connection)
+    async with httpx.AsyncClient() as http:
+        meetings_resp = await http.get(
+            f"{FATHOM_API_BASE}/meetings",
+            headers=headers,
+            params={"limit": limit, "calendar_invitees_domains_type": "one_or_more_external"},
+            timeout=30.0,
+        )
+        try:
+            meetings_resp.raise_for_status()
+        except Exception:
+            logger.warning("Fathom meetings sync failed: %s", getattr(meetings_resp, "text", ""))
+            raise HTTPException(status_code=502, detail="Failed to fetch Fathom meetings.")
+        meetings = meetings_resp.json().get("items") or []
+        for meeting in meetings:
+            recording_id = meeting.get("recording_id")
+            if not recording_id:
+                continue
+            transcript_resp = await http.get(
+                f"{FATHOM_API_BASE}/recordings/{recording_id}/transcript",
+                headers=headers,
+                timeout=30.0,
+            )
+            if transcript_resp.status_code < 400:
+                meeting["transcript"] = transcript_resp.json().get("transcript") or []
+    return meetings
+
+
+async def import_fathom_meetings(current: dict, request: Request, limit: int = 10) -> FathomSyncResponse:
+    connection = await get_fathom_connection(current["id"])
+    if not connection:
+        raise HTTPException(status_code=404, detail="Fathom is not connected.")
+    business_name = await resolve_current_business_name(current, request)
+    meetings = await fetch_fathom_meetings(connection, limit=limit)
+    imported = []
+    skipped = 0
+    existing_keys = {
+        (doc.get("owner"), doc.get("source_name"), doc.get("external_id"))
+        for doc in TEMP_SOURCES.values()
+    }
+    for meeting in meetings:
+        if not meeting.get("transcript"):
+            skipped += 1
+            continue
+        doc = fathom_meeting_to_source_doc(meeting, owner=current["id"], business_name=business_name)
+        key = (doc["owner"], doc["source_name"], doc.get("external_id"))
+        if key in existing_keys:
+            skipped += 1
+            continue
+        TEMP_SOURCES[doc["id"]] = doc
+        existing_keys.add(key)
+        imported.append(source_to_out(doc))
+    connection["last_sync_at"] = datetime.now(timezone.utc).isoformat()
+    connection["synced_count"] = int(connection.get("synced_count") or 0) + len(imported)
+    await store_fathom_connection(connection)
+    return FathomSyncResponse(imported=len(imported), skipped=skipped, sources=imported)
+
 
 def record_to_source_out(rec: dict, business_name: str = "") -> SourceOut:
     f = rec.get("fields", {})
@@ -2773,6 +3056,41 @@ async def list_sources(request: Request, current=Depends(get_current_user)):
             list_out.append(source_to_out(tdoc))
             
     return list_out
+
+
+@api_router.get("/integrations/fathom/status", response_model=FathomStatus)
+async def fathom_status(current=Depends(get_current_user)):
+    connection = await get_fathom_connection(current["id"])
+    if not connection:
+        return FathomStatus()
+    return FathomStatus(
+        connected=True,
+        connected_at=connection.get("connected_at"),
+        last_sync_at=connection.get("last_sync_at"),
+        synced_count=int(connection.get("synced_count") or 0),
+    )
+
+
+@api_router.post("/integrations/fathom/connect", response_model=FathomAuthStart)
+async def fathom_connect(request: Request, current=Depends(get_current_user)):
+    existing = await get_fathom_connection(current["id"])
+    return FathomAuthStart(
+        authorization_url=build_fathom_authorization_url(current, request),
+        connected=bool(existing),
+    )
+
+
+@api_router.get("/integrations/fathom/callback")
+async def fathom_callback(request: Request, code: str = Query(""), state: str = Query("")):
+    if not code:
+        raise HTTPException(status_code=400, detail="Missing Fathom authorization code.")
+    await complete_fathom_oauth(code, state, request)
+    return RedirectResponse(url="/business/import?fathom=connected")
+
+
+@api_router.post("/integrations/fathom/sync", response_model=FathomSyncResponse)
+async def fathom_sync(request: Request, limit: int = Query(10, ge=1, le=25), current=Depends(get_current_user)):
+    return await import_fathom_meetings(current, request, limit=limit)
 
 
 @api_router.get("/sources/{source_id}", response_model=SourceOut)
@@ -3941,6 +4259,7 @@ async def startup():
     if db is not None:
         await db.sources.create_index("owner")
         await db.agent_plans.create_index("lead_id", unique=True)
+        await db.fathom_connections.create_index("owner", unique=True)
 
 
 @app.on_event("shutdown")
