@@ -2629,6 +2629,7 @@ TEMP_FATHOM_CONNECTIONS: Dict[str, Dict[str, Any]] = {}
 FATHOM_AUTHORIZE_URL = os.environ.get("FATHOM_AUTHORIZE_URL", "https://fathom.video/oauth/authorize")
 FATHOM_TOKEN_URL = os.environ.get("FATHOM_TOKEN_URL", "https://api.fathom.ai/external/v1/oauth2/token")
 FATHOM_API_BASE = os.environ.get("FATHOM_API_BASE", "https://api.fathom.ai/external/v1").rstrip("/")
+FATHOM_CONNECTION_COOKIE = "uplaud_fathom_connection"
 
 
 def fathom_redirect_uri(request: Optional[Request] = None) -> str:
@@ -2685,11 +2686,39 @@ async def store_fathom_connection(connection: Dict[str, Any]) -> None:
         )
 
 
-async def get_fathom_connection(owner: str) -> Optional[Dict[str, Any]]:
+def encode_fathom_connection_cookie(connection: Dict[str, Any]) -> str:
+    payload = {
+        **connection,
+        "exp": int(time.time()) + 60 * 60 * 24 * 30,
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def decode_fathom_connection_cookie(value: str, owner: str) -> Optional[Dict[str, Any]]:
+    if not value:
+        return None
+    try:
+        connection = jwt.decode(value, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except Exception:
+        return None
+    if connection.get("owner") != owner:
+        return None
+    connection.pop("exp", None)
+    return connection
+
+
+async def get_fathom_connection(owner: str, request: Optional[Request] = None) -> Optional[Dict[str, Any]]:
     if db is not None:
         stored = await db.fathom_connections.find_one({"owner": owner}, {"_id": 0})
         if stored:
             return stored
+    if request is not None:
+        cookie_connection = decode_fathom_connection_cookie(
+            request.cookies.get(FATHOM_CONNECTION_COOKIE, ""),
+            owner,
+        )
+        if cookie_connection:
+            return cookie_connection
     return TEMP_FATHOM_CONNECTIONS.get(owner)
 
 
@@ -2859,7 +2888,7 @@ async def fetch_fathom_meetings(connection: Dict[str, Any], limit: int = 10) -> 
 
 
 async def import_fathom_meetings(current: dict, request: Request, limit: int = 10) -> FathomSyncResponse:
-    connection = await get_fathom_connection(current["id"])
+    connection = await get_fathom_connection(current["id"], request)
     if not connection:
         raise HTTPException(status_code=404, detail="Fathom is not connected.")
     business_name = await resolve_current_business_name(current, request)
@@ -3059,8 +3088,8 @@ async def list_sources(request: Request, current=Depends(get_current_user)):
 
 
 @api_router.get("/integrations/fathom/status", response_model=FathomStatus)
-async def fathom_status(current=Depends(get_current_user)):
-    connection = await get_fathom_connection(current["id"])
+async def fathom_status(request: Request, current=Depends(get_current_user)):
+    connection = await get_fathom_connection(current["id"], request)
     if not connection:
         return FathomStatus()
     return FathomStatus(
@@ -3073,7 +3102,7 @@ async def fathom_status(current=Depends(get_current_user)):
 
 @api_router.post("/integrations/fathom/connect", response_model=FathomAuthStart)
 async def fathom_connect(request: Request, current=Depends(get_current_user)):
-    existing = await get_fathom_connection(current["id"])
+    existing = await get_fathom_connection(current["id"], request)
     return FathomAuthStart(
         authorization_url=build_fathom_authorization_url(current, request),
         connected=bool(existing),
@@ -3084,8 +3113,17 @@ async def fathom_connect(request: Request, current=Depends(get_current_user)):
 async def fathom_callback(request: Request, code: str = Query(""), state: str = Query("")):
     if not code:
         raise HTTPException(status_code=400, detail="Missing Fathom authorization code.")
-    await complete_fathom_oauth(code, state, request)
-    return RedirectResponse(url="/business/import?fathom=connected")
+    connection = await complete_fathom_oauth(code, state, request)
+    response = RedirectResponse(url="/business/import?fathom=connected")
+    response.set_cookie(
+        FATHOM_CONNECTION_COOKIE,
+        encode_fathom_connection_cookie(connection),
+        max_age=60 * 60 * 24 * 30,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+    )
+    return response
 
 
 @api_router.post("/integrations/fathom/sync", response_model=FathomSyncResponse)

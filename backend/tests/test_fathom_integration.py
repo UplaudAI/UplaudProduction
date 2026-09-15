@@ -32,6 +32,7 @@ import server  # noqa: E402
 class _FakeRequest:
     base_url = "https://www.uplaud.ai/"
     headers = {}
+    cookies = {}
 
 
 class _FakeResponse:
@@ -150,3 +151,29 @@ def test_fathom_meeting_to_source_doc_formats_transcript():
     assert doc["filename"] == "Fathom - Acme demo.txt"
     assert "[00:00:01] Jane Buyer: This solves our onboarding problem." in doc["transcript"]
     assert doc["duration_min"] == 30
+
+
+@pytest.mark.asyncio
+async def test_fathom_connection_survives_without_mongo_via_cookie(monkeypatch):
+    monkeypatch.setattr(server, "db", None)
+    monkeypatch.setattr(server, "TEMP_FATHOM_CONNECTIONS", {})
+    connection = {
+        "provider": "fathom",
+        "owner": "user_123",
+        "email": "buyer@example.com",
+        "brand_domain": "example.com",
+        "access_token": "access_123",
+        "refresh_token": "refresh_123",
+        "expires_at": int(server.time.time()) + 3600,
+        "connected_at": "2026-09-14T00:00:00+00:00",
+        "last_sync_at": None,
+        "synced_count": 0,
+    }
+    cookie_value = server.encode_fathom_connection_cookie(connection)
+    request = _FakeRequest()
+    request.cookies = {server.FATHOM_CONNECTION_COOKIE: cookie_value}
+
+    restored = await server.get_fathom_connection("user_123", request)
+
+    assert restored["owner"] == "user_123"
+    assert restored["access_token"] == "access_123"
