@@ -20,7 +20,7 @@ from urllib.parse import urlencode
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, APIRouter, Request, HTTPException, Depends, UploadFile, File, Query
+from fastapi import FastAPI, APIRouter, Request, Response, HTTPException, Depends, UploadFile, File, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -160,12 +160,18 @@ class FathomStatus(BaseModel):
     connected_at: Optional[str] = None
     last_sync_at: Optional[str] = None
     synced_count: int = 0
+    auto_sync_enabled: bool = False
+    auto_sync_interval_hours: int = 2
 
 
 class FathomSyncResponse(BaseModel):
     imported: int
     skipped: int = 0
     sources: List[SourceOut] = Field(default_factory=list)
+
+
+class FathomAutoSyncRequest(BaseModel):
+    enabled: bool
 
 
 class EventLogRequest(BaseModel):
@@ -2626,7 +2632,7 @@ async def get_business_profile(request: Request, current=Depends(get_current_use
 TEMP_SOURCES = {}
 TEMP_FATHOM_CONNECTIONS: Dict[str, Dict[str, Any]] = {}
 
-FATHOM_AUTHORIZE_URL = os.environ.get("FATHOM_AUTHORIZE_URL", "https://fathom.video/oauth/authorize")
+FATHOM_AUTHORIZE_URL = os.environ.get("FATHOM_AUTHORIZE_URL", "https://fathom.video/external/v1/oauth2/authorize")
 FATHOM_TOKEN_URL = os.environ.get("FATHOM_TOKEN_URL", "https://api.fathom.ai/external/v1/oauth2/token")
 FATHOM_API_BASE = os.environ.get("FATHOM_API_BASE", "https://api.fathom.ai/external/v1").rstrip("/")
 FATHOM_CONNECTION_COOKIE = "uplaud_fathom_connection"
@@ -2684,6 +2690,22 @@ async def store_fathom_connection(connection: Dict[str, Any]) -> None:
             {"$set": connection},
             upsert=True,
         )
+
+
+async def delete_fathom_connection(owner: str) -> None:
+    TEMP_FATHOM_CONNECTIONS.pop(owner, None)
+    if db is not None:
+        await db.fathom_connections.delete_one({"owner": owner})
+
+
+async def update_fathom_auto_sync(connection: Dict[str, Any], enabled: bool) -> Dict[str, Any]:
+    updated = {
+        **connection,
+        "auto_sync_enabled": bool(enabled),
+        "auto_sync_interval_hours": 2,
+    }
+    await store_fathom_connection(updated)
+    return updated
 
 
 def encode_fathom_connection_cookie(connection: Dict[str, Any]) -> str:
@@ -2756,6 +2778,8 @@ async def complete_fathom_oauth(code: str, state: str, request: Optional[Request
         "connected_at": now.isoformat(),
         "last_sync_at": None,
         "synced_count": 0,
+        "auto_sync_enabled": False,
+        "auto_sync_interval_hours": 2,
     }
     await store_fathom_connection(connection)
     return connection
@@ -3097,6 +3121,8 @@ async def fathom_status(request: Request, current=Depends(get_current_user)):
         connected_at=connection.get("connected_at"),
         last_sync_at=connection.get("last_sync_at"),
         synced_count=int(connection.get("synced_count") or 0),
+        auto_sync_enabled=bool(connection.get("auto_sync_enabled")),
+        auto_sync_interval_hours=int(connection.get("auto_sync_interval_hours") or 2),
     )
 
 
@@ -3127,8 +3153,50 @@ async def fathom_callback(request: Request, code: str = Query(""), state: str = 
 
 
 @api_router.post("/integrations/fathom/sync", response_model=FathomSyncResponse)
-async def fathom_sync(request: Request, limit: int = Query(10, ge=1, le=25), current=Depends(get_current_user)):
-    return await import_fathom_meetings(current, request, limit=limit)
+async def fathom_sync(response: Response, request: Request, limit: int = Query(10, ge=1, le=25), current=Depends(get_current_user)):
+    result = await import_fathom_meetings(current, request, limit=limit)
+    connection = await get_fathom_connection(current["id"])
+    if connection:
+        response.set_cookie(
+            FATHOM_CONNECTION_COOKIE,
+            encode_fathom_connection_cookie(connection),
+            max_age=60 * 60 * 24 * 30,
+            httponly=True,
+            secure=True,
+            samesite="lax",
+        )
+    return result
+
+
+@api_router.post("/integrations/fathom/auto-sync", response_model=FathomStatus)
+async def fathom_auto_sync(body: FathomAutoSyncRequest, response: Response, request: Request, current=Depends(get_current_user)):
+    connection = await get_fathom_connection(current["id"], request)
+    if not connection:
+        raise HTTPException(status_code=404, detail="Fathom is not connected.")
+    updated = await update_fathom_auto_sync(connection, body.enabled)
+    response.set_cookie(
+        FATHOM_CONNECTION_COOKIE,
+        encode_fathom_connection_cookie(updated),
+        max_age=60 * 60 * 24 * 30,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+    )
+    return FathomStatus(
+        connected=True,
+        connected_at=updated.get("connected_at"),
+        last_sync_at=updated.get("last_sync_at"),
+        synced_count=int(updated.get("synced_count") or 0),
+        auto_sync_enabled=bool(updated.get("auto_sync_enabled")),
+        auto_sync_interval_hours=int(updated.get("auto_sync_interval_hours") or 2),
+    )
+
+
+@api_router.post("/integrations/fathom/disconnect", response_model=FathomStatus)
+async def fathom_disconnect(response: Response, current=Depends(get_current_user)):
+    await delete_fathom_connection(current["id"])
+    response.delete_cookie(FATHOM_CONNECTION_COOKIE, secure=True, httponly=True, samesite="lax")
+    return FathomStatus()
 
 
 @api_router.get("/sources/{source_id}", response_model=SourceOut)

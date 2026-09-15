@@ -77,6 +77,8 @@ export default function ImportReviewsPage() {
   const [fathomStatus, setFathomStatus] = useState({ connected: false, synced_count: 0 });
   const [connectingFathom, setConnectingFathom] = useState(false);
   const [syncingFathom, setSyncingFathom] = useState(false);
+  const [disconnectingFathom, setDisconnectingFathom] = useState(false);
+  const [updatingFathomAutoSync, setUpdatingFathomAutoSync] = useState(false);
   const fileRef = useRef(null);
 
   const fetchSources = () => {
@@ -202,6 +204,35 @@ export default function ImportReviewsPage() {
       toast.error(formatApiError(err.response?.data?.detail) || "Fathom sync failed.");
     } finally {
       setSyncingFathom(false);
+    }
+  };
+
+  const disconnectFathom = async () => {
+    setDisconnectingFathom(true);
+    try {
+      const { data } = await api.post("/integrations/fathom/disconnect");
+      setFathomStatus(data || { connected: false, synced_count: 0 });
+      toast.success("Fathom disconnected.");
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail) || "Could not disconnect Fathom.");
+    } finally {
+      setDisconnectingFathom(false);
+    }
+  };
+
+  const toggleFathomAutoSync = async () => {
+    const nextEnabled = !fathomStatus.auto_sync_enabled;
+    setUpdatingFathomAutoSync(true);
+    try {
+      const { data } = await api.post("/integrations/fathom/auto-sync", { enabled: nextEnabled });
+      setFathomStatus(data || { ...fathomStatus, auto_sync_enabled: nextEnabled });
+      toast.success(nextEnabled ? "Fathom auto-sync enabled." : "Fathom auto-sync disabled.", {
+        description: nextEnabled ? "Uplaud will sync connected Fathom meetings every 2 hours once scheduled sync is active." : undefined,
+      });
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail) || "Could not update Fathom auto-sync.");
+    } finally {
+      setUpdatingFathomAutoSync(false);
     }
   };
 
@@ -554,7 +585,7 @@ export default function ImportReviewsPage() {
               </div>
             </div>
             <div className="space-y-2">
-              {CONVERSATION_SOURCES.slice(0, 4).map((s) => {
+              {[...CONVERSATION_SOURCES].sort((a, b) => (a.id === "fathom" ? -1 : b.id === "fathom" ? 1 : 0)).map((s) => {
                 const isFathom = s.id === "fathom";
                 const connected = isFathom ? fathomStatus.connected : s.connected;
                 const syncs = isFathom ? fathomStatus.synced_count || 0 : s.syncs;
@@ -562,12 +593,16 @@ export default function ImportReviewsPage() {
                   <div
                     key={s.id}
                     data-testid={`source-card-${s.id}`}
-                    className="rounded-xl border border-[#eeeaf6] bg-white p-3 hover:border-[#d9d1ee] transition-colors"
+                    className={`rounded-xl border p-3 transition-colors ${
+                      isFathom
+                        ? "border-[#eeeaf6] bg-white hover:border-[#d9d1ee]"
+                        : "border-[#eeeaf6] bg-[#fafafa] opacity-60"
+                    }`}
                   >
                     <div className="flex items-center gap-3">
                       <div
-                        className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-[12px] font-semibold"
-                        style={{ backgroundColor: s.color }}
+                        className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-[12px] font-semibold shrink-0"
+                        style={{ backgroundColor: isFathom ? s.color : "#9ca3af" }}
                       >
                         {s.label[0]}
                       </div>
@@ -576,36 +611,60 @@ export default function ImportReviewsPage() {
                           {s.label}
                         </div>
                         <div className="text-[10.5px] font-mono text-[#9ca3af] mt-0.5">
-                          {connected
+                          {isFathom && connected
                             ? `${syncs} synced`
-                            : "Not connected"}
+                            : isFathom
+                              ? "Not connected"
+                              : "Integration coming soon"}
                         </div>
                       </div>
-                      {connected ? (
-                        isFathom ? (
-                          <button
-                            data-testid="source-sync-fathom"
-                            onClick={syncFathom}
-                            disabled={syncingFathom}
-                            className="text-[11px] font-medium text-[#0f9b7c] bg-[#ecfdf7] border border-[#c8f0e4] rounded-full px-2 py-0.5 disabled:opacity-60"
-                          >
-                            {syncingFathom ? "Syncing" : "Sync"}
-                          </button>
+                      {isFathom ? (
+                        connected ? (
+                          <div className="flex flex-wrap items-center justify-end gap-2">
+                            <button
+                              data-testid="source-auto-sync-fathom"
+                              onClick={toggleFathomAutoSync}
+                              disabled={updatingFathomAutoSync}
+                              className={`text-[11px] font-medium border rounded-full px-2 py-0.5 disabled:opacity-60 ${
+                                fathomStatus.auto_sync_enabled
+                                  ? "text-[#0f9b7c] bg-[#ecfdf7] border-[#c8f0e4]"
+                                  : "text-[#6b7280] bg-white border-[#e5e7eb]"
+                              }`}
+                            >
+                              {fathomStatus.auto_sync_enabled ? "Auto-sync on" : "Auto-sync off"}
+                            </button>
+                            <button
+                              data-testid="source-disconnect-fathom"
+                              onClick={disconnectFathom}
+                              disabled={disconnectingFathom || syncingFathom}
+                              className="text-[11px] font-medium text-[#6b7280] bg-white border border-[#e5e7eb] rounded-full px-2 py-0.5 disabled:opacity-60"
+                            >
+                              {disconnectingFathom ? "Disconnecting" : "Disconnect"}
+                            </button>
+                            <button
+                              data-testid="source-sync-fathom"
+                              onClick={syncFathom}
+                              disabled={syncingFathom || disconnectingFathom}
+                              className="text-[11px] font-medium text-[#0f9b7c] bg-[#ecfdf7] border border-[#c8f0e4] rounded-full px-2 py-0.5 disabled:opacity-60"
+                            >
+                              {syncingFathom ? "Syncing" : "Sync"}
+                            </button>
+                          </div>
                         ) : (
-                          <span className="text-[10px] font-mono text-[#0f9b7c] bg-[#ecfdf7] border border-[#c8f0e4] rounded-full px-2 py-0.5">
-                            live
-                          </span>
+                          <button
+                            data-testid={`source-connect-${s.id}`}
+                            onClick={connectFathom}
+                            disabled={connectingFathom}
+                            className="text-[11px] font-medium text-[#6d46c6] hover:underline flex items-center gap-1 disabled:opacity-60"
+                          >
+                            <Plus className="w-3 h-3" strokeWidth={2} />
+                            {connectingFathom ? "Connecting" : "Connect"}
+                          </button>
                         )
                       ) : (
-                        <button
-                          data-testid={`source-connect-${s.id}`}
-                          onClick={isFathom ? connectFathom : undefined}
-                          disabled={isFathom && connectingFathom}
-                          className="text-[11px] font-medium text-[#6d46c6] hover:underline flex items-center gap-1"
-                        >
-                          <Plus className="w-3 h-3" strokeWidth={2} />
-                          {isFathom && connectingFathom ? "Connecting" : "Connect"}
-                        </button>
+                        <span className="text-[10px] font-mono text-[#6b7280] bg-[#f3f4f6] border border-[#e5e7eb] rounded-full px-2 py-0.5">
+                          Coming Soon
+                        </span>
                       )}
                     </div>
                   </div>
@@ -630,12 +689,12 @@ export default function ImportReviewsPage() {
                 <div
                   key={s.id}
                   data-testid={`source-card-${s.id}`}
-                  className="rounded-xl border border-[#eeeaf6] bg-white p-3 hover:border-[#d9d1ee] transition-colors"
+                  className="rounded-xl border border-[#eeeaf6] bg-[#fafafa] p-3 opacity-60"
                 >
                   <div className="flex items-center gap-3">
                     <div
                       className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-[12px] font-semibold"
-                      style={{ backgroundColor: s.color }}
+                      style={{ backgroundColor: "#9ca3af" }}
                     >
                       {s.label[0]}
                     </div>
@@ -644,24 +703,12 @@ export default function ImportReviewsPage() {
                         {s.label}
                       </div>
                       <div className="text-[10.5px] font-mono text-[#9ca3af] mt-0.5">
-                        {s.connected
-                          ? `${s.count} reviews synced`
-                          : "Not connected"}
+                        Integration coming soon
                       </div>
                     </div>
-                    {s.connected ? (
-                      <span className="text-[10px] font-mono text-[#0f9b7c] bg-[#ecfdf7] border border-[#c8f0e4] rounded-full px-2 py-0.5">
-                        live
-                      </span>
-                    ) : (
-                      <button
-                        data-testid={`source-connect-${s.id}`}
-                        className="text-[11px] font-medium text-[#6d46c6] hover:underline flex items-center gap-1"
-                      >
-                        <Plus className="w-3 h-3" strokeWidth={2} />
-                        Connect
-                      </button>
-                    )}
+                    <span className="text-[10px] font-mono text-[#6b7280] bg-[#f3f4f6] border border-[#e5e7eb] rounded-full px-2 py-0.5">
+                      Coming Soon
+                    </span>
                   </div>
                 </div>
               ))}

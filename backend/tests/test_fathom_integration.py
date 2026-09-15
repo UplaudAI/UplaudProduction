@@ -177,3 +177,36 @@ async def test_fathom_connection_survives_without_mongo_via_cookie(monkeypatch):
 
     assert restored["owner"] == "user_123"
     assert restored["access_token"] == "access_123"
+
+
+@pytest.mark.asyncio
+async def test_fathom_disconnect_clears_connection_without_mongo(monkeypatch):
+    monkeypatch.setattr(server, "db", None)
+    monkeypatch.setattr(server, "TEMP_FATHOM_CONNECTIONS", {"user_123": {"owner": "user_123"}})
+
+    await server.delete_fathom_connection("user_123")
+
+    assert "user_123" not in server.TEMP_FATHOM_CONNECTIONS
+
+
+@pytest.mark.asyncio
+async def test_fathom_auto_sync_preference_updates_connection(monkeypatch):
+    monkeypatch.setattr(server, "db", None)
+    monkeypatch.setattr(server, "TEMP_FATHOM_CONNECTIONS", {})
+    connection = {
+        "provider": "fathom",
+        "owner": "user_123",
+        "email": "buyer@example.com",
+        "brand_domain": "example.com",
+        "access_token": "access_123",
+        "refresh_token": "refresh_123",
+        "expires_at": int(server.time.time()) + 3600,
+        "connected_at": "2026-09-14T00:00:00+00:00",
+        "last_sync_at": None,
+        "synced_count": 0,
+    }
+
+    updated = await server.update_fathom_auto_sync(connection, enabled=True)
+
+    assert updated["auto_sync_enabled"] is True
+    assert updated["auto_sync_interval_hours"] == 2
