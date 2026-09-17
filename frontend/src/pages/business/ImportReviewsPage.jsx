@@ -218,6 +218,9 @@ export default function ImportReviewsPage() {
     } catch (err) {
       setImporting(false);
       setProgress(0);
+      if (err.response?.status === 409) {
+        setFathomStatus({ connected: false, synced_count: 0 });
+      }
       toast.error(formatApiError(err.response?.data?.detail) || "Fathom sync failed.");
     } finally {
       setSyncingFathom(false);

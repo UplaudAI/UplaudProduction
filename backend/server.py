@@ -2790,7 +2790,7 @@ async def refresh_fathom_connection(connection: Dict[str, Any]) -> Dict[str, Any
         return connection
     refresh_token = connection.get("refresh_token")
     if not refresh_token:
-        raise HTTPException(status_code=401, detail="Fathom connection has expired. Please reconnect.")
+        raise HTTPException(status_code=409, detail="Fathom connection has expired. Please reconnect.")
     form = {
         "grant_type": "refresh_token",
         "refresh_token": refresh_token,
@@ -2802,7 +2802,7 @@ async def refresh_fathom_connection(connection: Dict[str, Any]) -> Dict[str, Any
     try:
         resp.raise_for_status()
     except Exception:
-        raise HTTPException(status_code=401, detail="Fathom connection has expired. Please reconnect.")
+        raise HTTPException(status_code=409, detail="Fathom connection has expired. Please reconnect.")
     data = resp.json()
     updated = {
         **connection,

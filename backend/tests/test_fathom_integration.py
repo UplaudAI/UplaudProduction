@@ -210,3 +210,12 @@ async def test_fathom_auto_sync_preference_updates_connection(monkeypatch):
 
     assert updated["auto_sync_enabled"] is True
     assert updated["auto_sync_interval_hours"] == 2
+
+
+@pytest.mark.asyncio
+async def test_fathom_expired_connection_does_not_use_auth_401():
+    with pytest.raises(server.HTTPException) as exc:
+        await server.refresh_fathom_connection({"owner": "user_123", "expires_at": 0})
+
+    assert exc.value.status_code == 409
+    assert "Fathom connection has expired" in exc.value.detail

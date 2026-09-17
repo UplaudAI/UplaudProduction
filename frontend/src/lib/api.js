@@ -27,7 +27,8 @@ api.interceptors.response.use(
   (res) => res,
   (error) => {
     const isLoginCall = error.config?.url?.includes("/auth/login");
-    if (error.response?.status === 401 && typeof window !== "undefined" && !isLoginCall) {
+    const isIntegrationCall = error.config?.url?.includes("/integrations/");
+    if (error.response?.status === 401 && typeof window !== "undefined" && !isLoginCall && !isIntegrationCall) {
       clearAuth();
       if (window.location.pathname !== "/business") {
         toast.error("Your session expired — please sign in again.");
