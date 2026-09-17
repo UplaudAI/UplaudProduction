@@ -187,20 +187,37 @@ export default function ImportReviewsPage() {
 
   const syncFathom = async () => {
     setSyncingFathom(true);
+    setFileName("Fathom meetings");
+    setImporting(true);
+    setDone(false);
+    setProgress(12);
     try {
       const { data } = await api.post("/integrations/fathom/sync?limit=10");
       const importedSources = Array.isArray(data.sources) ? data.sources : [];
-      for (const source of importedSources) {
+      setProgress(importedSources.length ? 55 : 100);
+      for (const [index, source] of importedSources.entries()) {
         if (source?.id) {
           await api.post(`/sources/${source.id}/analyze`);
+          const analyzedCount = index + 1;
+          setProgress(Math.min(95, 55 + Math.round((analyzedCount / importedSources.length) * 40)));
         }
       }
+      setProgress(100);
       fetchSources();
       fetchFathomStatus();
-      toast.success(`Imported and analyzed ${data.imported || 0} Fathom meetings.`, {
-        description: data.skipped ? `${data.skipped} meetings skipped because they had no transcript or were already synced.` : undefined,
-      });
+      if (importedSources.length) {
+        setDone(true);
+        setImported(true);
+        toast.success("Transcript analyzed — Growth Signals ready.");
+      } else {
+        setImporting(false);
+        toast.info("Fathom sync complete.", {
+          description: data.skipped ? `${data.skipped} meetings skipped because they had no transcript or were already synced.` : "No new Fathom meetings found.",
+        });
+      }
     } catch (err) {
+      setImporting(false);
+      setProgress(0);
       toast.error(formatApiError(err.response?.data?.detail) || "Fathom sync failed.");
     } finally {
       setSyncingFathom(false);
