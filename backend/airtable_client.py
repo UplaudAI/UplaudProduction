@@ -520,7 +520,16 @@ async def list_uplaud_by_business(business_name: str) -> list:
 TABLE_GROWTH_SIGNALS = "Growth_Signals"
 
 
-async def upsert_growth_signal(source_id: str, business_name: str, insights: dict, testimonial_status: str, testimonial_draft: str = "", share_id: str = "") -> None:
+async def upsert_growth_signal(
+    source_id: str,
+    business_name: str,
+    insights: dict,
+    testimonial_status: str,
+    testimonial_draft: str = "",
+    share_id: str = "",
+    transcript_text: str = "",
+    external_url: str = "",
+) -> None:
     """Persist AI-extracted growth signals for a conversation to Airtable (create or update by Source_Id)."""
     if not _enabled():
         raise RuntimeError("Airtable is not configured")
@@ -546,14 +555,32 @@ async def upsert_growth_signal(source_id: str, business_name: str, insights: dic
         "Testimonial_Status": testimonial_status,
         "Created_At": datetime.now(timezone.utc).isoformat(),
     }
+    optional_fields = {}
+    if transcript_text:
+        optional_fields["Transcript_Text"] = transcript_text
+    if external_url:
+        optional_fields["External_URL"] = external_url
+    fields_with_optional = {**fields, **optional_fields}
     try:
         formula = f'{{Source_Id}}="{_escape(source_id)}"'
         existing = await _get(TABLE_GROWTH_SIGNALS, {"filterByFormula": formula, "pageSize": 1})
         records = existing.get("records", [])
         if records:
-            await _update(TABLE_GROWTH_SIGNALS, records[0]["id"], fields)
+            try:
+                await _update(TABLE_GROWTH_SIGNALS, records[0]["id"], fields_with_optional)
+            except Exception:
+                if not optional_fields:
+                    raise
+                logger.warning("Airtable growth-signal optional transcript fields failed; retrying without them")
+                await _update(TABLE_GROWTH_SIGNALS, records[0]["id"], fields)
         else:
-            await _create(TABLE_GROWTH_SIGNALS, fields)
+            try:
+                await _create(TABLE_GROWTH_SIGNALS, fields_with_optional)
+            except Exception:
+                if not optional_fields:
+                    raise
+                logger.warning("Airtable growth-signal optional transcript fields failed; retrying without them")
+                await _create(TABLE_GROWTH_SIGNALS, fields)
     except Exception as e:
         logger.warning("Airtable growth-signal upsert failed: %s", e)
         raise

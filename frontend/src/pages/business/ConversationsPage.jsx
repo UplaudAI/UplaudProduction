@@ -56,6 +56,9 @@ function toConversation(s, loggedInBusinessName = "") {
     duration: `${s.duration_min || 0} min`,
     date: (s.created_at || "").slice(0, 10),
     status: cardStatus,
+    transcriptAvailable: Boolean(s.transcript_available),
+    transcriptUrl: s.transcript_url || `/api/sources/${s.id}/transcript`,
+    externalUrl: s.external_url || "",
     sentiment: ins.sentiment_label || "Positive",
     signalScore: (ins.signal_score || 0) / 100,
     type: ins.call_type || "Demo",
@@ -462,6 +465,23 @@ function ConversationDetail({ conversation: c, onChanged }) {
     }
   };
 
+  const openTranscript = async (c) => {
+    try {
+      const { data } = await api.get(`/sources/${c._sourceId}/transcript`);
+      const transcript = data.transcript || "";
+      if (!transcript.trim()) {
+        toast.error("Transcript is not available for this conversation yet");
+        return;
+      }
+      const blob = new Blob([transcript], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail) || "Transcript is not available");
+    }
+  };
+
   const saveEdit = async () => {
     setBusy(true);
     try {
@@ -584,6 +604,29 @@ function ConversationDetail({ conversation: c, onChanged }) {
           <StatCell label="Sentiment" value={c.sentiment} small />
           <StatCell label="Signal score" value={`${Math.round(c.signalScore * 100)}`} />
           <StatCell label="Type" value={c.type} small />
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <button
+            data-testid="open-transcript-btn"
+            onClick={() => openTranscript(c)}
+            disabled={!c.transcriptAvailable}
+            className="btn-secondary h-10 !py-0 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Paperclip className="w-4 h-4" strokeWidth={1.75} />
+            Open transcript
+          </button>
+          {c.externalUrl && (
+            <a
+              data-testid="open-source-recording-link"
+              href={c.externalUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="btn-secondary h-10 !py-0"
+            >
+              <ArrowUpRight className="w-4 h-4" strokeWidth={1.75} />
+              Source recording
+            </a>
+          )}
         </div>
       </div>
 

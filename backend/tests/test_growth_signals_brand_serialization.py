@@ -79,3 +79,39 @@ def test_source_to_out_exposes_temp_source_brand():
 
     assert source.brand == "Kintsugi"
     assert source.model_dump()["brand"] == "Kintsugi"
+
+
+def test_source_to_out_exposes_transcript_link_when_present():
+    source = source_to_out(
+        {
+            "id": "src_temp",
+            "filename": "demo.txt",
+            "file_type": "txt",
+            "client_name": "Atrios",
+            "brand": "Kintsugi",
+            "word_count": 100,
+            "status": "uploaded",
+            "created_at": "2026-08-07T12:00:00Z",
+            "transcript": "Customer: This is the original transcript.",
+        }
+    )
+
+    assert source.transcript_available is True
+    assert source.transcript_url == "/api/sources/src_temp/transcript"
+
+
+def test_record_to_source_out_exposes_durable_transcript_link():
+    source = record_to_source_out(
+        {
+            "id": "rec_789",
+            "createdTime": "2026-08-07T12:00:00Z",
+            "fields": {
+                "Source_Id": "src_789",
+                "Business_Name": "Kintsugi",
+                "Transcript_Text": "Customer: Durable transcript.",
+            },
+        }
+    )
+
+    assert source.transcript_available is True
+    assert source.transcript_url == "/api/sources/src_789/transcript"

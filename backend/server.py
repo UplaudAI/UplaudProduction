@@ -122,6 +122,16 @@ class SourceOut(BaseModel):
     testimonial_status: str = "draft"
     approved_at: Optional[str] = None
     approval_requested_at: Optional[str] = None
+    transcript_available: bool = False
+    transcript_url: str = ""
+    external_url: str = ""
+
+
+class SourceTranscriptOut(BaseModel):
+    source_id: str
+    filename: str
+    transcript: str
+    external_url: str = ""
 
 
 class PublicTestimonial(BaseModel):
@@ -2992,6 +3002,9 @@ def record_to_source_out(rec: dict, business_name: str = "") -> SourceOut:
         testimonial_status=f.get("Testimonial_Status") or "draft",
         approved_at=f.get("Approved_At") or None,
         approval_requested_at=f.get("Approval_Requested_At") or None,
+        transcript_available=bool(f.get("Transcript_Text")),
+        transcript_url=f"/api/sources/{f.get('Source_Id') or rec.get('id')}/transcript",
+        external_url=f.get("External_URL") or "",
     )
 
 
@@ -3030,6 +3043,8 @@ def _growth_signal_record_to_regen_doc(rec: dict, source_id: str, owner_id: str,
         "testimonial_status": f.get("Testimonial_Status") or "draft",
         "approved_at": f.get("Approved_At") or None,
         "approval_requested_at": f.get("Approval_Requested_At") or None,
+        "transcript": f.get("Transcript_Text") or "",
+        "external_url": f.get("External_URL") or "",
     }
 
 
@@ -3053,6 +3068,9 @@ def source_to_out(doc: dict) -> SourceOut:
         testimonial_status=doc.get("testimonial_status", "draft"),
         approved_at=doc.get("approved_at"),
         approval_requested_at=doc.get("approval_requested_at"),
+        transcript_available=bool(doc.get("transcript")),
+        transcript_url=f"/api/sources/{doc['id']}/transcript",
+        external_url=doc.get("external_url") or "",
     )
 
 
@@ -3277,7 +3295,10 @@ async def analyze_source(source_id: str, request: Request, regenerate: bool = Fa
     # Upsert directly to Airtable (No MongoDB!)
     await airtable_client.upsert_growth_signal(
         source_id, business_name, insights.model_dump(), doc.get("testimonial_status", "draft"),
-        testimonial_draft=testimonial, share_id=doc["share_id"]
+        testimonial_draft=testimonial,
+        share_id=doc["share_id"],
+        transcript_text=transcript_text,
+        external_url=doc.get("external_url") or "",
     )
 
     company_name = (insights.company_name or "").strip()
@@ -3293,6 +3314,38 @@ async def analyze_source(source_id: str, request: Request, regenerate: bool = Fa
             logger.warning("Failed to sync analyzed speaker company to Airtable User table: %s", ae)
     
     return source_to_out(doc)
+
+
+@api_router.get("/sources/{source_id}/transcript", response_model=SourceTranscriptOut)
+async def get_source_transcript(source_id: str, request: Request, current=Depends(get_current_user)):
+    doc = TEMP_SOURCES.get(source_id)
+    if doc and doc.get("owner") == current["id"]:
+        transcript = doc.get("transcript") or ""
+        if not transcript:
+            raise HTTPException(status_code=404, detail="Transcript not found")
+        return SourceTranscriptOut(
+            source_id=source_id,
+            filename=doc.get("filename") or "transcript.txt",
+            transcript=transcript,
+            external_url=doc.get("external_url") or "",
+        )
+
+    business_name = await resolve_current_business_name(current, request)
+    records = await airtable_client.list_growth_signals_by_business(business_name)
+    for rec in records:
+        f = rec.get("fields", {})
+        if f.get("Source_Id") == source_id:
+            transcript = f.get("Transcript_Text") or ""
+            if not transcript:
+                raise HTTPException(status_code=404, detail="Transcript not found")
+            return SourceTranscriptOut(
+                source_id=source_id,
+                filename=f.get("Name") or "transcript.txt",
+                transcript=transcript,
+                external_url=f.get("External_URL") or "",
+            )
+
+    raise HTTPException(status_code=404, detail="Source not found")
 
 
 @api_router.put("/sources/{source_id}/testimonial", response_model=SourceOut)
