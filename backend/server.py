@@ -4271,7 +4271,7 @@ async def get_public_business_content_html(business_slug: str, content_slug: str
 # ---------------------------------------------------------------------------
 def check_admin_token(request: Request):
     token = request.headers.get("X-Admin-Token", "").strip()
-    expected = os.environ.get("ADMIN_PASSWORD", "P@yRew@rds123").strip()
+    expected = os.environ.get("ADMIN_PASSWORD", "").strip()
     if not token or token != expected:
         raise HTTPException(status_code=401, detail="Unauthorized admin token")
     return token

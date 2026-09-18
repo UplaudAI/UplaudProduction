@@ -26,8 +26,8 @@ async function resolvePostLoginDestination() {
 
 export default function BusinessLoginPage() {
   const nav = useNavigate();
-  const [email, setEmail] = useState("dcameron@payrewards.com");
-  const [password, setPassword] = useState("P@yRew@rds123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
@@ -252,6 +252,7 @@ export default function BusinessLoginPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="username"
                   className="w-full h-12 pl-11 pr-4 rounded-full border border-[#d9d1ee] bg-white text-[14px] text-[#111827] focus:outline-none focus:border-[#6d46c6] focus:ring-2 focus:ring-[#ece5f4] transition-all"
                   placeholder="you@company.com"
                 />
@@ -282,6 +283,7 @@ export default function BusinessLoginPage() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  autoComplete={isSignUp ? "new-password" : "current-password"}
                   className="w-full h-12 pl-11 pr-4 rounded-full border border-[#d9d1ee] bg-white text-[14px] text-[#111827] focus:outline-none focus:border-[#6d46c6] focus:ring-2 focus:ring-[#ece5f4] transition-all"
                   placeholder="••••••••"
                 />
