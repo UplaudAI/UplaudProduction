@@ -529,6 +529,8 @@ async def upsert_growth_signal(
     share_id: str = "",
     transcript_text: str = "",
     external_url: str = "",
+    owner_id: str = "",
+    owner_email: str = "",
 ) -> None:
     """Persist AI-extracted growth signals for a conversation to Airtable (create or update by Source_Id)."""
     if not _enabled():
@@ -555,6 +557,10 @@ async def upsert_growth_signal(
         "Testimonial_Status": testimonial_status,
         "Created_At": datetime.now(timezone.utc).isoformat(),
     }
+    if owner_id:
+        fields["Owner_Id"] = owner_id
+    if owner_email:
+        fields["User"] = owner_email
     optional_fields = {}
     if transcript_text:
         optional_fields["Transcript_Text"] = transcript_text
@@ -615,6 +621,23 @@ async def update_growth_signal_by_source_id(source_id: str, fields: dict) -> boo
     return False
 
 
+async def update_growth_signal_by_source_id_for_owner(source_id: str, owner_id: str, fields: dict) -> bool:
+    """Partial update of a Growth_Signals record scoped to a specific authenticated owner."""
+    try:
+        formula = (
+            f'AND({{Source_Id}}="{_escape(source_id)}",'
+            f'{{Owner_Id}}="{_escape(owner_id)}")'
+        )
+        existing = await _get(TABLE_GROWTH_SIGNALS, {"filterByFormula": formula, "pageSize": 1})
+        recs = existing.get("records", [])
+        if recs:
+            await _update(TABLE_GROWTH_SIGNALS, recs[0]["id"], fields)
+            return True
+    except Exception as e:
+        logger.warning("Airtable owner-scoped growth-signal partial update failed: %s", e)
+    return False
+
+
 async def list_growth_signals_by_business(business_name: str) -> list:
     """Return Growth_Signals records for the given business from Airtable."""
     if not business_name:
@@ -625,6 +648,22 @@ async def list_growth_signals_by_business(business_name: str) -> list:
         return data.get("records", [])
     except Exception as e:
         logger.warning("Airtable growth signals list failed: %s", e)
+        return []
+
+
+async def list_growth_signals_by_business_owner(business_name: str, owner_id: str) -> list:
+    """Return Growth_Signals records for one business and authenticated owner."""
+    if not business_name or not owner_id:
+        return []
+    try:
+        formula = (
+            f'AND({{Business_Name}}="{_escape(business_name)}",'
+            f'{{Owner_Id}}="{_escape(owner_id)}")'
+        )
+        data = await _get(TABLE_GROWTH_SIGNALS, {"filterByFormula": formula, "pageSize": 100})
+        return data.get("records", [])
+    except Exception as e:
+        logger.warning("Airtable owner-scoped growth signals list failed: %s", e)
         return []
 
 

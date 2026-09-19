@@ -3074,6 +3074,13 @@ def source_to_out(doc: dict) -> SourceOut:
     )
 
 
+async def list_current_user_growth_signals(current: dict, business_name: str) -> List[dict]:
+    return await airtable_client.list_growth_signals_by_business_owner(
+        business_name,
+        current.get("id", ""),
+    )
+
+
 @api_router.post("/sources", response_model=SourceOut)
 async def upload_source(request: Request, file: UploadFile = File(...), current=Depends(get_current_user)):
     content = await file.read()
@@ -3115,8 +3122,8 @@ async def upload_source(request: Request, file: UploadFile = File(...), current=
 async def list_sources(request: Request, current=Depends(get_current_user)):
     business_name = await resolve_current_business_name(current, request)
     
-    # 1. Fetch analyzed records directly from Airtable (No MongoDB!)
-    records = await airtable_client.list_growth_signals_by_business(business_name)
+    # 1. Fetch analyzed records directly from Airtable, scoped to this authenticated user.
+    records = await list_current_user_growth_signals(current, business_name)
     list_out = []
     for rec in records:
         list_out.append(record_to_source_out(rec, business_name))
@@ -3221,11 +3228,14 @@ async def fathom_disconnect(response: Response, current=Depends(get_current_user
 async def get_source(source_id: str, request: Request, current=Depends(get_current_user)):
     # Check cache first
     if source_id in TEMP_SOURCES:
-        return source_to_out(TEMP_SOURCES[source_id])
+        doc = TEMP_SOURCES[source_id]
+        if doc.get("owner") != current["id"]:
+            raise HTTPException(status_code=404, detail="Source not found")
+        return source_to_out(doc)
         
     # Fetch from Airtable Growth_Signals
     business_name = await resolve_current_business_name(current, request)
-    records = await airtable_client.list_growth_signals_by_business(business_name)
+    records = await list_current_user_growth_signals(current, business_name)
     for rec in records:
         f = rec.get("fields", {})
         if f.get("Source_Id") == source_id:
@@ -3238,9 +3248,11 @@ async def get_source(source_id: str, request: Request, current=Depends(get_curre
 async def analyze_source(source_id: str, request: Request, regenerate: bool = False, current=Depends(get_current_user)):
     doc = TEMP_SOURCES.get(source_id)
     business_name = await resolve_current_business_name(current, request)
+    if doc and doc.get("owner") != current["id"]:
+        raise HTTPException(status_code=404, detail="Source not found")
     if not doc:
         # Fallback query from Airtable if they want to regenerate
-        records = await airtable_client.list_growth_signals_by_business(business_name)
+        records = await list_current_user_growth_signals(current, business_name)
         for rec in records:
             f = rec.get("fields", {})
             if f.get("Source_Id") == source_id:
@@ -3299,6 +3311,8 @@ async def analyze_source(source_id: str, request: Request, regenerate: bool = Fa
         share_id=doc["share_id"],
         transcript_text=transcript_text,
         external_url=doc.get("external_url") or "",
+        owner_id=current.get("id", ""),
+        owner_email=current.get("email", ""),
     )
 
     company_name = (insights.company_name or "").strip()
@@ -3331,7 +3345,7 @@ async def get_source_transcript(source_id: str, request: Request, current=Depend
         )
 
     business_name = await resolve_current_business_name(current, request)
-    records = await airtable_client.list_growth_signals_by_business(business_name)
+    records = await list_current_user_growth_signals(current, business_name)
     for rec in records:
         f = rec.get("fields", {})
         if f.get("Source_Id") == source_id:
@@ -3353,6 +3367,8 @@ async def update_testimonial(source_id: str, body: TestimonialUpdate, request: R
     # 1. Update memory cache
     doc = TEMP_SOURCES.get(source_id)
     if doc:
+        if doc.get("owner") != current["id"]:
+            raise HTTPException(status_code=404, detail="Source not found")
         doc["testimonial_draft"] = body.testimonial_draft
         TEMP_SOURCES[source_id] = doc
         
@@ -3360,7 +3376,10 @@ async def update_testimonial(source_id: str, body: TestimonialUpdate, request: R
     business_name = await resolve_current_business_name(current, request)
     recs = []
     try:
-        formula = f'LOWER({{Source_Id}})="{airtable_client._escape(source_id)}"'
+        formula = (
+            f'AND(LOWER({{Source_Id}})="{airtable_client._escape(source_id)}",'
+            f'{{Owner_Id}}="{airtable_client._escape(current["id"])}")'
+        )
         existing = await airtable_client._get(airtable_client.TABLE_GROWTH_SIGNALS, {"filterByFormula": formula, "pageSize": 1})
         recs = existing.get("records", [])
         if recs:
@@ -3378,8 +3397,10 @@ async def update_testimonial(source_id: str, body: TestimonialUpdate, request: R
 async def email_draft(source_id: str, request: Request, current=Depends(get_current_user)):
     doc = TEMP_SOURCES.get(source_id)
     business_name = await resolve_current_business_name(current, request)
+    if doc and doc.get("owner") != current["id"]:
+        raise HTTPException(status_code=404, detail="Source not found")
     if not doc:
-        records = await airtable_client.list_growth_signals_by_business(business_name)
+        records = await list_current_user_growth_signals(current, business_name)
         for rec in records:
             f = rec.get("fields", {})
             if f.get("Source_Id") == source_id:
@@ -3559,11 +3580,13 @@ def _approval_status_after_send(doc: Optional[dict], rec: Optional[dict]) -> str
 @api_router.post("/sources/{source_id}/send-approval")
 async def send_approval(source_id: str, request: Request, current=Depends(get_current_user)):
     doc = TEMP_SOURCES.get(source_id)
+    if doc and doc.get("owner") != current["id"]:
+        raise HTTPException(status_code=404, detail="Source not found")
     share_id = doc.get("share_id") if doc else None
     rec = None
     if not share_id:
         business_name = await resolve_current_business_name(current, request)
-        records = await airtable_client.list_growth_signals_by_business(business_name)
+        records = await list_current_user_growth_signals(current, business_name)
         rec = next((r for r in records if r.get("fields", {}).get("Source_Id") == source_id), None)
         if not doc and not rec:
             raise HTTPException(status_code=404, detail="Source not found")
@@ -3575,8 +3598,10 @@ async def send_approval(source_id: str, request: Request, current=Depends(get_cu
     if doc:
         doc.update({"testimonial_status": new_status, "approval_requested_at": now, "share_id": share_id})
         TEMP_SOURCES[source_id] = doc
-    await airtable_client.update_growth_signal_by_source_id(
-        source_id, {"Testimonial_Status": new_status, "Approval_Requested_At": now, "Share_Id": share_id}
+    await airtable_client.update_growth_signal_by_source_id_for_owner(
+        source_id,
+        current["id"],
+        {"Testimonial_Status": new_status, "Approval_Requested_At": now, "Share_Id": share_id}
     )
     return {"share_id": share_id, "public_path": f"/t/{share_id}"}
 

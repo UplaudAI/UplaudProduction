@@ -223,6 +223,7 @@ async def test_analyze_source_passes_authenticated_business_to_insights_generato
         "approval_requested_at": None,
     }
     calls = []
+    upsert_calls = []
 
     async def fake_resolve_current_business_name(*_args, **_kwargs):
         return "Iru"
@@ -248,7 +249,8 @@ async def test_analyze_source_passes_authenticated_business_to_insights_generato
             "testimonial": "Iru's MDM workflows looked promising for our compliance needs.",
         }
 
-    async def fake_upsert_growth_signal(*_args, **_kwargs):
+    async def fake_upsert_growth_signal(*args, **kwargs):
+        upsert_calls.append((args, kwargs))
         return None
 
     async def fake_find_or_create_user(*_args, **_kwargs):
@@ -267,6 +269,49 @@ async def test_analyze_source_passes_authenticated_business_to_insights_generato
 
     assert calls
     assert calls[0][1]["business_name"] == "Iru"
+    assert upsert_calls
+    assert upsert_calls[0][1]["owner_id"] == "user_123"
+    assert upsert_calls[0][1]["owner_email"] == "sydney@iru.com"
+
+
+@pytest.mark.asyncio
+async def test_list_sources_queries_growth_signals_by_business_and_owner(monkeypatch):
+    server.TEMP_SOURCES.clear()
+    queried = []
+
+    async def fake_resolve_current_business_name(*_args, **_kwargs):
+        return "Shared Business"
+
+    async def fake_list_growth_signals_by_business_owner(business_name, owner_id):
+        queried.append((business_name, owner_id))
+        return [
+            {
+                "id": "rec_user_owned",
+                "createdTime": "2026-09-18T00:00:00Z",
+                "fields": {
+                    "Source_Id": "src_user_owned",
+                    "Business_Name": business_name,
+                    "Owner_Id": owner_id,
+                    "Company": "Buyer Co",
+                    "Person": "Buyer",
+                },
+            }
+        ]
+
+    monkeypatch.setattr(server, "resolve_current_business_name", fake_resolve_current_business_name)
+    monkeypatch.setattr(
+        server.airtable_client,
+        "list_growth_signals_by_business_owner",
+        fake_list_growth_signals_by_business_owner,
+    )
+
+    out = await server.list_sources(
+        _FakeRequest(),
+        current={"id": "user_abc", "email": "owner@example.com", "name": "Owner"},
+    )
+
+    assert queried == [("Shared Business", "user_abc")]
+    assert [source.id for source in out] == ["src_user_owned"]
 
 
 @pytest.mark.asyncio
