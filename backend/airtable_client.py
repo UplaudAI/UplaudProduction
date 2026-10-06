@@ -682,6 +682,29 @@ async def update_growth_signal_by_source_id_for_owner(source_id: str, owner_id: 
     return False
 
 
+async def delete_growth_signal_by_source_id_for_owner(source_id: str, owner_id: str) -> bool:
+    """Delete a Growth_Signals record scoped to a specific authenticated owner."""
+    try:
+        formula = (
+            f'AND({{Source_Id}}="{_escape(source_id)}",'
+            f'{{Owner_Id}}="{_escape(owner_id)}")'
+        )
+        existing = await _get(TABLE_GROWTH_SIGNALS, {"filterByFormula": formula, "pageSize": 1})
+        recs = existing.get("records", [])
+        if not recs:
+            return False
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.delete(
+                f"{AIRTABLE_API_URL}/{TABLE_GROWTH_SIGNALS}/{recs[0]['id']}",
+                headers=_headers(),
+            )
+            r.raise_for_status()
+        return True
+    except Exception as e:
+        logger.warning("Airtable owner-scoped growth-signal delete failed: %s", e)
+    return False
+
+
 async def list_growth_signals_by_business(business_name: str) -> list:
     """Return Growth_Signals records for the given business from Airtable."""
     if not business_name:

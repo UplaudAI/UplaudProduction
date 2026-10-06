@@ -27,10 +27,18 @@ import {
   Gift,
   Linkedin,
   Award,
+  Trash2,
 } from "lucide-react";
 import PageHero from "@/components/business/PageHero";
 import { toast } from "sonner";
 import api, { formatApiError } from "@/lib/api";
+
+const PUBLIC_SITE_ORIGIN = "https://www.uplaud.ai";
+
+function conversationTimestamp(conversation) {
+  const timestamp = Date.parse(conversation.createdAt || conversation.date || "");
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
 
 function toConversation(s, loggedInBusinessName = "") {
   const ins = s.insights || {};
@@ -65,6 +73,7 @@ function toConversation(s, loggedInBusinessName = "") {
     aeName: ins.ae_name || "—",
     source: s.source_name || "Upload",
     duration: `${s.duration_min || 0} min`,
+    createdAt: s.created_at || "",
     date: (s.created_at || "").slice(0, 10),
     status: cardStatus,
     transcriptAvailable: Boolean(s.transcript_available),
@@ -135,6 +144,7 @@ export default function ConversationsPage() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [loading, setLoading] = useState(true);
+  const [publicPageUrl, setPublicPageUrl] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -143,7 +153,11 @@ export default function ConversationsPage() {
         api.get("/business/profile").catch(() => ({ data: null })),
       ]);
       const profileBusinessName = (profileResult.data?.company_name || "").trim();
-      const list = data.map((source) => toConversation(source, profileBusinessName));
+      const profileSlug = (profileResult.data?.public_slug || "").trim();
+      setPublicPageUrl(profileSlug ? `${PUBLIC_SITE_ORIGIN}/business/public/${profileSlug}` : "");
+      const list = data
+        .map((source) => toConversation(source, profileBusinessName))
+        .sort((a, b) => conversationTimestamp(b) - conversationTimestamp(a));
       setConversations(list);
       setSelectedId((prev) =>
         prev && list.some((c) => c.id === prev) ? prev : list[0]?.id ?? null
@@ -292,6 +306,18 @@ export default function ConversationsPage() {
               {filtered.length} of {conversations.length}
             </span>
           </div>
+          {publicPageUrl && (
+            <a
+              data-testid="business-public-page-link"
+              href={publicPageUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="btn-secondary h-9 !py-0 text-[12.5px]"
+            >
+              <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={1.75} />
+              Public testimonials page
+            </a>
+          )}
         </div>
 
         {/* Split layout */}
@@ -537,6 +563,24 @@ function ConversationDetail({ conversation: c, onChanged }) {
     }
   };
 
+  const deleteConversation = async () => {
+    const ok = window.confirm(
+      `Delete "${c.title}" from Growth Signals? This removes the conversation and its generated testimonial data.`
+    );
+    if (!ok) return;
+
+    setBusy(true);
+    try {
+      await api.delete(`/sources/${c._sourceId}`);
+      toast.success("Conversation deleted");
+      if (onChanged) await onChanged();
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail) || "Could not delete conversation");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const openPublicTestimonialPage = async () => {
     if (c.shareId) {
       window.open(`/t/${c.shareId}`, "_blank", "noreferrer");
@@ -659,6 +703,15 @@ function ConversationDetail({ conversation: c, onChanged }) {
               Source recording
             </a>
           )}
+          <button
+            data-testid="delete-conversation-btn"
+            onClick={deleteConversation}
+            disabled={busy}
+            className="btn-secondary h-10 !py-0 text-[#b42318] hover:border-[#fecaca] hover:bg-[#fff5f5] disabled:opacity-60"
+          >
+            <Trash2 className="w-4 h-4" strokeWidth={1.75} />
+            {busy ? "Working..." : "Delete"}
+          </button>
         </div>
       </div>
 

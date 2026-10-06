@@ -88,6 +88,7 @@ def test_get_business_profile_uses_selected_brand_domain_over_email_domain(monke
     assert profile["brand_color"] == "#123456"
     assert profile["selected_domain"] == "websitebrand.com"
     assert profile["email_domain"] == "emailbrand.com"
+    assert profile["public_slug"] == "websitebrand"
 
 
 def test_auth_me_uses_selected_brand_domain_over_email_domain(monkeypatch):

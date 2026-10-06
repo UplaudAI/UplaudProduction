@@ -2655,6 +2655,7 @@ async def get_business_profile(request: Request, current=Depends(get_current_use
         "selected_domain": selected_domain,
         "email_domain": login_email_domain,
         "company_name": company_name,
+        "public_slug": await resolve_current_business_slug(current, request),
         "brand_color": brand_color,
         "logo_url": logo_url,
         "brand_voice": brand_voice,
@@ -3284,6 +3285,14 @@ async def list_current_user_growth_signals(current: dict, business_name: str) ->
     )
 
 
+def source_created_at_sort_key(source: SourceOut) -> float:
+    raw = source.created_at or ""
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).timestamp()
+    except Exception:
+        return 0.0
+
+
 @api_router.post("/sources", response_model=SourceOut)
 async def upload_source(request: Request, file: UploadFile = File(...), current=Depends(get_current_user)):
     content = await file.read()
@@ -3335,8 +3344,31 @@ async def list_sources(request: Request, current=Depends(get_current_user)):
     for tid, tdoc in TEMP_SOURCES.items():
         if tdoc.get("owner") == current["id"] and tdoc.get("status") == "uploaded":
             list_out.append(source_to_out(tdoc))
-            
+
+    list_out.sort(key=source_created_at_sort_key, reverse=True)
     return list_out
+
+
+@api_router.delete("/sources/{source_id}")
+async def delete_source(source_id: str, request: Request, current=Depends(get_current_user)):
+    deleted = False
+
+    doc = TEMP_SOURCES.get(source_id)
+    if doc:
+        if doc.get("owner") != current["id"]:
+            raise HTTPException(status_code=404, detail="Source not found")
+        TEMP_SOURCES.pop(source_id, None)
+        deleted = True
+
+    airtable_deleted = await airtable_client.delete_growth_signal_by_source_id_for_owner(
+        source_id,
+        current.get("id", ""),
+    )
+
+    if not deleted and not airtable_deleted:
+        raise HTTPException(status_code=404, detail="Source not found")
+
+    return {"deleted": True}
 
 
 @api_router.get("/integrations/fathom/status", response_model=FathomStatus)
