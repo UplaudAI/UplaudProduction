@@ -13,6 +13,7 @@ import {
   MessagesSquare,
   Quote,
   Share2,
+  X,
 } from "lucide-react";
 import { setImported, getAuth, updateAuth } from "@/lib/business-storage";
 import api, { formatApiError } from "@/lib/api";
@@ -59,6 +60,13 @@ function emailDomain(email = "") {
   return parts.length > 1 ? normalizeDomain(parts[1]) : "";
 }
 
+function formatSyncDate(value = "") {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
 export default function ImportReviewsPage() {
   const nav = useNavigate();
   const user = getAuth();
@@ -79,6 +87,11 @@ export default function ImportReviewsPage() {
   const [syncingFathom, setSyncingFathom] = useState(false);
   const [disconnectingFathom, setDisconnectingFathom] = useState(false);
   const [updatingFathomAutoSync, setUpdatingFathomAutoSync] = useState(false);
+  const [fathomPreview, setFathomPreview] = useState(null);
+  const [selectedFathomIds, setSelectedFathomIds] = useState([]);
+  const [fathomMeetingFilter, setFathomMeetingFilter] = useState("all");
+  const [fathomPreSyncFilter, setFathomPreSyncFilter] = useState("external");
+  const [loadingFathomSelection, setLoadingFathomSelection] = useState(false);
   const fileRef = useRef(null);
 
   const fetchSources = () => {
@@ -187,12 +200,71 @@ export default function ImportReviewsPage() {
 
   const syncFathom = async () => {
     setSyncingFathom(true);
-    setFileName("Fathom meetings");
+    try {
+      const { data } = await api.get("/integrations/fathom/preview?limit=50");
+      const meetings = Array.isArray(data.meetings) ? data.meetings : [];
+      const matchesPreSyncFilter = (meeting) =>
+        fathomPreSyncFilter === "all" ||
+        (meeting.meeting_type || "unknown") === fathomPreSyncFilter;
+      const defaultSelected = meetings
+        .filter((meeting) =>
+          meeting?.external_id &&
+          meeting.has_transcript &&
+          !meeting.already_synced &&
+          matchesPreSyncFilter(meeting)
+        )
+        .map((meeting) => meeting.external_id);
+      setFathomPreview({ meetings, skipped: data.skipped || 0 });
+      setSelectedFathomIds(defaultSelected);
+      setFathomMeetingFilter(fathomPreSyncFilter);
+      if (meetings.length) {
+        toast.success("Fathom sync results ready.", {
+          description: defaultSelected.length
+            ? `${defaultSelected.length} ${fathomPreSyncFilter === "all" ? "" : `${fathomPreSyncFilter} `}meeting${defaultSelected.length === 1 ? "" : "s"} ready to load into Uplaud.`
+            : "No new meetings are ready to load.",
+        });
+      } else {
+        toast.info("No Fathom meetings found.");
+      }
+    } catch (err) {
+      if (err.response?.status === 409) {
+        setFathomStatus({ connected: false, synced_count: 0 });
+      }
+      toast.error(formatApiError(err.response?.data?.detail) || "Fathom sync failed.");
+    } finally {
+      setSyncingFathom(false);
+    }
+  };
+
+  const toggleFathomMeeting = (externalId) => {
+    setSelectedFathomIds((prev) =>
+      prev.includes(externalId)
+        ? prev.filter((id) => id !== externalId)
+        : [...prev, externalId]
+    );
+  };
+
+  const selectAllFathomMeetings = () => {
+    const selectable = filteredFathomMeetings
+      .filter((meeting) => meeting?.external_id && meeting.has_transcript && !meeting.already_synced)
+      .map((meeting) => meeting.external_id);
+    setSelectedFathomIds(selectable);
+  };
+
+  const loadSelectedFathomMeetings = async () => {
+    if (!selectedFathomIds.length) {
+      toast.info("Select at least one meeting to load into Uplaud.");
+      return;
+    }
+    setLoadingFathomSelection(true);
+    setFileName("Selected Fathom meetings");
     setImporting(true);
     setDone(false);
     setProgress(12);
     try {
-      const { data } = await api.post("/integrations/fathom/sync?limit=10");
+      const { data } = await api.post("/integrations/fathom/sync?limit=100", {
+        external_ids: selectedFathomIds,
+      });
       const importedSources = Array.isArray(data.sources) ? data.sources : [];
       setProgress(importedSources.length ? 55 : 100);
       for (const [index, source] of importedSources.entries()) {
@@ -206,13 +278,17 @@ export default function ImportReviewsPage() {
       fetchSources();
       fetchFathomStatus();
       if (importedSources.length) {
+        setFathomPreview(null);
+        setSelectedFathomIds([]);
         setDone(true);
         setImported(true);
-        toast.success("Transcript analyzed — Growth Signals ready.");
+        toast.success("Transcript analyzed — Growth Signals ready.", {
+          description: `${importedSources.length} Fathom meeting${importedSources.length === 1 ? "" : "s"} loaded into Uplaud.`,
+        });
       } else {
         setImporting(false);
-        toast.info("Fathom sync complete.", {
-          description: data.skipped ? `${data.skipped} meetings skipped because they had no transcript or were already synced.` : "No new Fathom meetings found.",
+        toast.info("No selected meetings were loaded.", {
+          description: data.skipped ? `${data.skipped} selected meetings were skipped because they had no transcript or were already synced.` : undefined,
         });
       }
     } catch (err) {
@@ -223,7 +299,7 @@ export default function ImportReviewsPage() {
       }
       toast.error(formatApiError(err.response?.data?.detail) || "Fathom sync failed.");
     } finally {
-      setSyncingFathom(false);
+      setLoadingFathomSelection(false);
     }
   };
 
@@ -291,6 +367,22 @@ export default function ImportReviewsPage() {
 
   const sourceList = Array.isArray(sources) ? sources : [];
   const hasData = sourceList.length > 0;
+  const fathomMeetings = Array.isArray(fathomPreview?.meetings) ? fathomPreview.meetings : [];
+  const fathomMeetingCounts = fathomMeetings.reduce(
+    (acc, meeting) => {
+      const type = meeting.meeting_type || "unknown";
+      acc.all += 1;
+      acc[type] = (acc[type] || 0) + 1;
+      return acc;
+    },
+    { all: 0, external: 0, internal: 0, unknown: 0 }
+  );
+  const filteredFathomMeetings =
+    fathomMeetingFilter === "all"
+      ? fathomMeetings
+      : fathomMeetings.filter((meeting) => (meeting.meeting_type || "unknown") === fathomMeetingFilter);
+  const selectableFathomCount = filteredFathomMeetings.filter((meeting) => meeting.has_transcript && !meeting.already_synced).length;
+  const selectedFathomCount = selectedFathomIds.length;
   
   // Calculate exact actual metrics
   const totalSources = sourceList.length;
@@ -641,6 +733,21 @@ export default function ImportReviewsPage() {
                       {isFathom ? (
                         connected ? (
                           <div className="flex flex-wrap items-center justify-end gap-2">
+                            <label className="flex items-center gap-1 text-[11px] font-medium text-[#6b7280]">
+                              <span className="sr-only">Fathom meeting type</span>
+                              <select
+                                data-testid="source-fathom-meeting-type-filter"
+                                value={fathomPreSyncFilter}
+                                onChange={(event) => setFathomPreSyncFilter(event.target.value)}
+                                disabled={syncingFathom || disconnectingFathom || loadingFathomSelection}
+                                className="h-7 rounded-full border border-[#e5e7eb] bg-white px-2 text-[11px] font-medium text-[#4b5563] focus:outline-none focus:border-[#cdbdf0] disabled:opacity-60"
+                              >
+                                <option value="external">External</option>
+                                <option value="internal">Internal</option>
+                                <option value="unknown">Unknown</option>
+                                <option value="all">All</option>
+                              </select>
+                            </label>
                             <button
                               data-testid="source-auto-sync-fathom"
                               onClick={toggleFathomAutoSync}
@@ -656,7 +763,7 @@ export default function ImportReviewsPage() {
                             <button
                               data-testid="source-disconnect-fathom"
                               onClick={disconnectFathom}
-                              disabled={disconnectingFathom || syncingFathom}
+                              disabled={disconnectingFathom || syncingFathom || loadingFathomSelection}
                               className="text-[11px] font-medium text-[#6b7280] bg-white border border-[#e5e7eb] rounded-full px-2 py-0.5 disabled:opacity-60"
                             >
                               {disconnectingFathom ? "Disconnecting" : "Disconnect"}
@@ -664,7 +771,7 @@ export default function ImportReviewsPage() {
                             <button
                               data-testid="source-sync-fathom"
                               onClick={syncFathom}
-                              disabled={syncingFathom || disconnectingFathom}
+                              disabled={syncingFathom || disconnectingFathom || loadingFathomSelection}
                               className="text-[11px] font-medium text-[#0f9b7c] bg-[#ecfdf7] border border-[#c8f0e4] rounded-full px-2 py-0.5 disabled:opacity-60"
                             >
                               {syncingFathom ? "Syncing" : "Sync"}
@@ -735,6 +842,207 @@ export default function ImportReviewsPage() {
             </div>
           </div>
         </div>
+
+      {fathomPreview && (
+        <div className="fixed inset-0 z-50">
+          <button
+            type="button"
+            aria-label="Close Fathom sync results"
+            className="absolute inset-0 bg-[#111827]/30"
+            onClick={() => {
+              if (!loadingFathomSelection) {
+                setFathomPreview(null);
+                setSelectedFathomIds([]);
+              }
+            }}
+          />
+          <aside
+            data-testid="fathom-sync-results"
+            className="absolute right-0 top-0 h-full w-full max-w-[520px] bg-white shadow-2xl border-l border-[#ded4f4] flex flex-col"
+          >
+            <div className="border-b border-[#eeeaf6] px-5 py-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#6d46c6]">
+                    Fathom sync results
+                  </div>
+                  <h2 className="mt-1 font-display text-[22px] font-semibold text-[#111827]">
+                    Choose meetings to load
+                  </h2>
+                  <p className="mt-1 text-[13px] leading-relaxed text-[#6b7280]">
+                    Selected transcripts will be loaded into Uplaud and Growth Signals will run automatically.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  aria-label="Close"
+                  onClick={() => {
+                    setFathomPreview(null);
+                    setSelectedFathomIds([]);
+                  }}
+                  disabled={loadingFathomSelection}
+                  className="rounded-full border border-[#e5e7eb] p-2 text-[#6b7280] hover:text-[#111827] disabled:opacity-50"
+                >
+                  <X className="h-4 w-4" strokeWidth={1.8} />
+                </button>
+              </div>
+              <div className="mt-4 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={selectAllFathomMeetings}
+                  disabled={!selectableFathomCount || loadingFathomSelection}
+                  className="text-[12px] font-semibold text-[#6d46c6] bg-white border border-[#ded4f4] rounded-full px-3 py-1.5 disabled:opacity-50"
+                >
+                  Select all new
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedFathomIds([])}
+                  disabled={!selectedFathomCount || loadingFathomSelection}
+                  className="text-[12px] font-semibold text-[#6b7280] bg-white border border-[#e5e7eb] rounded-full px-3 py-1.5 disabled:opacity-50"
+                >
+                  Clear
+                </button>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {[
+                  ["all", "All"],
+                  ["external", "External"],
+                  ["internal", "Internal"],
+                  ["unknown", "Unknown"],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setFathomMeetingFilter(value)}
+                    disabled={loadingFathomSelection}
+                    className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors disabled:opacity-50 ${
+                      fathomMeetingFilter === value
+                        ? "border-[#6d46c6] bg-[#f5f3ff] text-[#6d46c6]"
+                        : "border-[#e5e7eb] bg-white text-[#6b7280] hover:border-[#cdbdf0]"
+                    }`}
+                  >
+                    {label} {fathomMeetingCounts[value] || 0}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#fbfaff]">
+              {filteredFathomMeetings.length ? filteredFathomMeetings.map((meeting) => {
+                const disabled = !meeting.has_transcript || meeting.already_synced || loadingFathomSelection;
+                const checked = selectedFathomIds.includes(meeting.external_id);
+                const statusLabel = meeting.already_synced
+                  ? "Already loaded"
+                  : !meeting.has_transcript
+                    ? "No transcript"
+                    : "Ready";
+                const typeLabel = {
+                  external: "External",
+                  internal: "Internal",
+                  unknown: "Unknown",
+                }[meeting.meeting_type || "unknown"] || "Unknown";
+                const typeClass = {
+                  external: "text-[#0f9b7c] bg-[#ecfdf7] border-[#c8f0e4]",
+                  internal: "text-[#6d46c6] bg-[#f5f3ff] border-[#ded4f4]",
+                  unknown: "text-[#6b7280] bg-[#f3f4f6] border-[#e5e7eb]",
+                }[meeting.meeting_type || "unknown"];
+                const participantLine = [meeting.client_name, meeting.client_email || meeting.client_domain]
+                  .filter(Boolean)
+                  .join(" · ");
+                return (
+                  <label
+                    key={meeting.external_id || meeting.title}
+                    className={`block rounded-xl border p-3 transition-colors ${
+                      disabled
+                        ? "border-[#e5e7eb] bg-[#f7f7f8] text-[#9ca3af]"
+                        : "border-[#e8def8] bg-white hover:border-[#cdbdf0] cursor-pointer"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={disabled}
+                        onChange={() => toggleFathomMeeting(meeting.external_id)}
+                        className="mt-1 h-4 w-4 accent-[#6d46c6]"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[13px] font-semibold text-[#111827]">
+                            {meeting.title || "Fathom meeting"}
+                          </span>
+                          <span className={`text-[10px] font-mono rounded-full px-2 py-0.5 border ${typeClass}`}>
+                            {typeLabel}
+                          </span>
+                          <span className={`text-[10px] font-mono rounded-full px-2 py-0.5 border ${
+                            statusLabel === "Ready"
+                              ? "text-[#0f9b7c] bg-[#ecfdf7] border-[#c8f0e4]"
+                              : "text-[#6b7280] bg-[#f3f4f6] border-[#e5e7eb]"
+                          }`}>
+                            {statusLabel}
+                          </span>
+                        </div>
+                        {participantLine && (
+                          <div className="mt-1 text-[12px] text-[#4b5563] break-words">
+                            {participantLine}
+                          </div>
+                        )}
+                        {Array.isArray(meeting.participant_domains) && meeting.participant_domains.length > 0 && (
+                          <div className="mt-1 text-[11px] font-mono text-[#9ca3af] break-words">
+                            domains: {meeting.participant_domains.join(", ")}
+                          </div>
+                        )}
+                        <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-[#6b7280]">
+                          <div className="rounded-lg bg-[#f8f6fd] px-2 py-1.5">
+                            <div className="font-mono uppercase tracking-[0.12em] text-[9px] text-[#9ca3af]">When</div>
+                            <div>{formatSyncDate(meeting.created_at) || "Unknown"}</div>
+                          </div>
+                          <div className="rounded-lg bg-[#f8f6fd] px-2 py-1.5">
+                            <div className="font-mono uppercase tracking-[0.12em] text-[9px] text-[#9ca3af]">Length</div>
+                            <div>{meeting.duration_min || 0} min · {meeting.word_count || 0} words</div>
+                          </div>
+                        </div>
+                        {meeting.external_url && (
+                          <a
+                            href={meeting.external_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-[#6d46c6] hover:underline"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            Open in Fathom
+                            <ArrowUpRight className="h-3 w-3" strokeWidth={1.8} />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </label>
+                );
+              }) : (
+                <div className="rounded-xl border border-[#eeeaf6] bg-white p-4 text-[13px] text-[#6b7280]">
+                  No meetings match this filter.
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-[#eeeaf6] bg-white px-5 py-4">
+              <div className="mb-3 text-[12px] text-[#6b7280]">
+                {selectedFathomCount} selected · {selectableFathomCount} ready to load
+              </div>
+              <button
+                type="button"
+                data-testid="fathom-load-selected"
+                onClick={loadSelectedFathomMeetings}
+                disabled={!selectedFathomCount || loadingFathomSelection}
+                className="w-full inline-flex items-center justify-center rounded-full bg-[#6d46c6] px-4 py-3 text-[14px] font-semibold text-white disabled:opacity-50"
+              >
+                {loadingFathomSelection ? "Loading selected" : "Load selected"}
+              </button>
+            </div>
+          </aside>
+        </div>
+      )}
 
       {/* What happens next */}
       <div className="rounded-2xl bg-[#261c4d] text-white p-6 relative overflow-hidden noise">

@@ -350,6 +350,50 @@ async def create_uplaud_record(
         return None
 
 
+async def update_uplaud_record_by_share_link(
+    share_link: str,
+    business_name: str,
+    testimonial: str,
+    reviewer_record_id: Optional[str] = None,
+    date_added: Optional[str] = None,
+    review_source: str = "",
+    uplaud_score: Optional[int] = None,
+) -> Optional[str]:
+    """Update an existing Uplaud record by Share Link, or create it when missing."""
+    if not share_link:
+        return await create_uplaud_record(
+            business_name=business_name,
+            testimonial=testimonial,
+            reviewer_record_id=reviewer_record_id,
+            date_added=date_added,
+            review_source=review_source,
+            uplaud_score=uplaud_score,
+        )
+
+    fields = {"business_name": business_name or "", "Uplaud": testimonial or "", "Share Link": share_link}
+    if reviewer_record_id:
+        fields["Reviewer"] = [reviewer_record_id]
+    if date_added:
+        fields["Date_Added"] = date_added
+    if review_source:
+        fields["Review_Source"] = review_source
+    if uplaud_score is not None:
+        fields["Uplaud Score"] = max(1, min(5, int(uplaud_score)))
+
+    try:
+        formula = f'{{Share Link}}="{_escape(share_link)}"'
+        existing = await _get(TABLE_UPLAUD, {"filterByFormula": formula, "maxRecords": 1})
+        recs = existing.get("records", [])
+        if recs:
+            await _update(TABLE_UPLAUD, recs[0]["id"], fields)
+            return recs[0]["id"]
+        rec = await _create(TABLE_UPLAUD, fields)
+        return rec["id"] if rec else None
+    except Exception as e:
+        logger.warning("Airtable uplaud upsert by share link failed: %s", e)
+        return None
+
+
 async def create_circle_record(
     initiator: str,
     receiver: str,

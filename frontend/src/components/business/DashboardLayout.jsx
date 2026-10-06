@@ -86,7 +86,7 @@ export default function DashboardLayout() {
         const { data: sessionData } = await supabase.auth.getSession();
         const token = sessionData?.session?.access_token || user.token;
         const { data } = await api.get("/auth/me", {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: `Bearer ${token}`, "X-Uplaud-Skip-Brand-Domain": "1" },
         });
         if (cancelled) return;
         const nextUser = updateAuth({

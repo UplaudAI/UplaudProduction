@@ -18,12 +18,24 @@ function saveDomainPref(email, brandDomain) {
   localStorage.setItem(DOMAIN_PREFS_KEY, JSON.stringify(prefs));
 }
 
+function clearDomainPref(email) {
+  if (!email) return;
+  const prefs = getDomainPrefs();
+  delete prefs[email.toLowerCase().trim()];
+  localStorage.setItem(DOMAIN_PREFS_KEY, JSON.stringify(prefs));
+}
+
 function normalizeAuth(auth) {
   if (!auth || typeof auth !== "object") return null;
   const email = typeof auth.email === "string" ? auth.email : "";
   const fallbackName = email && email.includes("@") ? email.split("@")[0] : "User";
   const savedBrandDomain = email ? getDomainPrefs()[email.toLowerCase().trim()] : "";
-  const brandDomain = auth.brandDomain || auth.selected_brand_domain || savedBrandDomain || "";
+  const hasExplicitBrandDomain =
+    Object.prototype.hasOwnProperty.call(auth, "brandDomain") ||
+    Object.prototype.hasOwnProperty.call(auth, "selected_brand_domain");
+  const brandDomain = hasExplicitBrandDomain
+    ? (auth.brandDomain || auth.selected_brand_domain || "")
+    : (savedBrandDomain || "");
   return {
     ...auth,
     name: auth.name || fallbackName,
@@ -44,14 +56,22 @@ export function getAuth() {
 
 export function setAuth(user) {
   const next = normalizeAuth(user);
-  saveDomainPref(next?.email, next?.brandDomain);
+  if (next?.brandDomain) saveDomainPref(next.email, next.brandDomain);
+  else clearDomainPref(next?.email);
   localStorage.setItem(AUTH_KEY, JSON.stringify(next));
 }
 
 export function updateAuth(updates) {
   const current = getAuth() || {};
   const next = normalizeAuth({ ...current, ...(updates || {}) });
-  saveDomainPref(next?.email, next?.brandDomain);
+  if (next?.brandDomain) saveDomainPref(next.email, next.brandDomain);
+  else if (
+    updates &&
+    (Object.prototype.hasOwnProperty.call(updates, "brandDomain") ||
+      Object.prototype.hasOwnProperty.call(updates, "selected_brand_domain"))
+  ) {
+    clearDomainPref(next?.email);
+  }
   localStorage.setItem(AUTH_KEY, JSON.stringify(next));
   return next;
 }

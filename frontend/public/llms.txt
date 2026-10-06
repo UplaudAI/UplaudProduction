@@ -1,0 +1,23 @@
+# Uplaud
+
+> Uplaud is an AI-driven growth platform that converts customer voice into reviews, testimonials, referrals, social content, and buyer-ready proof for businesses where trust drives acquisition.
+
+## Core Pages
+
+- [Home](https://www.uplaud.ai/): Uplaud overview and primary product positioning.
+- [FinTech](https://www.uplaud.ai/finance): Vertical page for FinTech and financial services growth teams.
+- [Journal](https://www.uplaud.ai/blog): Uplaud articles about customer trust, advocacy, referrals, and growth.
+- [Business Login](https://www.uplaud.ai/business): Sign-in entry point for Uplaud business users.
+
+## Public Content
+
+- [Business proof pages](https://www.uplaud.ai/business/public/{business-slug}): Public review and customer-proof pages for individual businesses.
+- [Reviewer profiles](https://www.uplaud.ai/business/public/reviewer/{reviewer-slug}): Public reviewer pages with attributed reviews.
+- [Case studies](https://www.uplaud.ai/business/public/{business-slug}/blog/{case-study-slug}): Customer-story pages generated from approved reviews.
+- [Shared testimonial approvals](https://www.uplaud.ai/t/{share-id}): Public testimonial review and approval pages.
+
+## Optional
+
+- [Full LLM context](https://www.uplaud.ai/llms-full.txt): Expanded product, route, and integration context for AI systems.
+- [Sitemap](https://www.uplaud.ai/sitemap.xml): Discoverable public URLs.
+- [Robots](https://www.uplaud.ai/robots.txt): Crawler policy.

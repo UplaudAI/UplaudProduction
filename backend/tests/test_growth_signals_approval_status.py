@@ -25,6 +25,7 @@ sys.modules.setdefault("motor", motor_module)
 sys.modules.setdefault("motor.motor_asyncio", motor_asyncio_module)
 
 from server import _approval_status_after_send  # noqa: E402
+import server  # noqa: E402
 
 
 def test_send_approval_preserves_approved_status_from_airtable_record():
@@ -43,3 +44,36 @@ def test_send_approval_marks_non_approved_as_sent():
     rec = {"fields": {"Testimonial_Status": "draft"}}
 
     assert _approval_status_after_send(None, rec) == "sent"
+
+
+def test_anonymous_publish_uses_verified_prospect_placeholder_for_demo():
+    assert server.anonymous_reviewer_label("Pre-Sales Demo") == "Verified Prospect"
+    assert server.anonymous_reviewer_label("Discovery") == "Verified Prospect"
+
+
+def test_anonymous_publish_uses_verified_customer_placeholder_for_customer_feedback():
+    assert server.anonymous_reviewer_label("Post Sales Testimonial") == "Verified Customer"
+    assert server.anonymous_reviewer_label("Customer Feedback") == "Verified Customer"
+
+
+def test_growth_signal_public_doc_marks_anonymous_publish_without_losing_real_speaker():
+    doc = server._growth_signal_record_to_pub_doc(
+        {
+            "id": "rec_anon",
+            "fields": {
+                "Source_Id": "src_anon",
+                "Share_Id": "share_anon",
+                "Business_Name": "Uplaud",
+                "Company": "Prospect Co",
+                "Person": "Jane Buyer",
+                "Role": "Founder",
+                "Call_Type": "Pre-Sales Demo",
+                "Testimonial_Draft": "The ongoing compliance workflow makes sense.",
+                "Testimonial_Status": "anonymous_published",
+            },
+        }
+    )
+
+    assert doc["testimonial_status"] == "anonymous_published"
+    assert doc["anonymous_reviewer_name"] == "Verified Prospect"
+    assert doc["insights"]["speaker_name"] == "Jane Buyer"

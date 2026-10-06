@@ -11,12 +11,18 @@ api.interceptors.request.use((config) => {
   try {
     const raw = localStorage.getItem("uplaud_business_auth_v1");
     const auth = raw ? JSON.parse(raw) : null;
+    const skipBrandDomain =
+      config.headers?.["X-Uplaud-Skip-Brand-Domain"] ||
+      config.headers?.["x-uplaud-skip-brand-domain"] ||
+      config.url?.includes("/auth/me");
     const existingAuth =
       config.headers?.Authorization ||
       config.headers?.authorization ||
       (typeof config.headers?.get === "function" ? config.headers.get("Authorization") : null);
     if (auth?.token && !existingAuth) config.headers.Authorization = `Bearer ${auth.token}`;
-    if (auth?.brandDomain) config.headers["X-Uplaud-Brand-Domain"] = auth.brandDomain;
+    if (auth?.brandDomain && !skipBrandDomain) config.headers["X-Uplaud-Brand-Domain"] = auth.brandDomain;
+    delete config.headers["X-Uplaud-Skip-Brand-Domain"];
+    delete config.headers["x-uplaud-skip-brand-domain"];
   } catch {
     /* ignore */
   }

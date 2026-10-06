@@ -140,7 +140,7 @@ export default function BusinessLoginPage() {
         // Query `/auth/me` on FastAPI backend to fetch profile & verify approval status
         try {
           const userProfileRes = await api.get("/auth/me", {
-            headers: { Authorization: `Bearer ${token}` },
+            headers: { Authorization: `Bearer ${token}`, "X-Uplaud-Skip-Brand-Domain": "1" },
           });
           const profile = userProfileRes.data;
 

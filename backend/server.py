@@ -180,6 +180,31 @@ class FathomSyncResponse(BaseModel):
     sources: List[SourceOut] = Field(default_factory=list)
 
 
+class FathomPreviewItem(BaseModel):
+    external_id: str
+    title: str
+    client_name: str
+    client_email: str = ""
+    client_domain: str = ""
+    created_at: str = ""
+    duration_min: int = 0
+    word_count: int = 0
+    has_transcript: bool = False
+    already_synced: bool = False
+    external_url: str = ""
+    meeting_type: str = "unknown"
+    participant_domains: List[str] = Field(default_factory=list)
+
+
+class FathomPreviewResponse(BaseModel):
+    meetings: List[FathomPreviewItem] = Field(default_factory=list)
+    skipped: int = 0
+
+
+class FathomImportRequest(BaseModel):
+    external_ids: List[str] = Field(default_factory=list)
+
+
 class FathomAutoSyncRequest(BaseModel):
     enabled: bool
 
@@ -2848,6 +2873,52 @@ def fathom_external_client_name(meeting: Dict[str, Any]) -> str:
     return (named or {}).get("name") or meeting.get("title") or meeting.get("meeting_title") or "Fathom meeting"
 
 
+def fathom_external_invitee(meeting: Dict[str, Any]) -> Dict[str, Any]:
+    invitees = meeting.get("calendar_invitees") or []
+    return (
+        next((i for i in invitees if i.get("is_external") and (i.get("email") or i.get("name"))), None)
+        or next((i for i in invitees if i.get("email") or i.get("name")), None)
+        or {}
+    )
+
+
+def fathom_external_client_email(meeting: Dict[str, Any]) -> str:
+    invitee = fathom_external_invitee(meeting)
+    return (invitee.get("email") or "").strip().lower()
+
+
+def fathom_invitee_domain(invitee: Dict[str, Any]) -> str:
+    return normalize_business_domain(invitee.get("email_domain") or email_domain(invitee.get("email") or ""))
+
+
+def fathom_meeting_participant_domains(meeting: Dict[str, Any]) -> List[str]:
+    domains = []
+    for invitee in meeting.get("calendar_invitees") or []:
+        domain = fathom_invitee_domain(invitee)
+        if domain and domain not in domains:
+            domains.append(domain)
+    recorded_by = meeting.get("recorded_by") or {}
+    recorded_by_domain = fathom_invitee_domain(recorded_by)
+    if recorded_by_domain and recorded_by_domain not in domains:
+        domains.append(recorded_by_domain)
+    return domains
+
+
+def fathom_meeting_type(meeting: Dict[str, Any], internal_domain: str = "") -> str:
+    invitees = meeting.get("calendar_invitees") or []
+    if any(invitee.get("is_external") is True for invitee in invitees):
+        return "external"
+    domains = fathom_meeting_participant_domains(meeting)
+    if not domains:
+        return "unknown"
+    internal_domain = normalize_business_domain(internal_domain)
+    if not internal_domain:
+        return "unknown"
+    if any(domain != internal_domain for domain in domains):
+        return "external"
+    return "internal"
+
+
 def fathom_meeting_duration_min(meeting: Dict[str, Any]) -> int:
     try:
         start = meeting.get("recording_start_time") or meeting.get("scheduled_start_time")
@@ -2861,10 +2932,64 @@ def fathom_meeting_duration_min(meeting: Dict[str, Any]) -> int:
     return 30
 
 
+def fathom_meeting_external_id(meeting: Dict[str, Any]) -> str:
+    return str(meeting.get("recording_id") or meeting.get("id") or "")
+
+
+def fathom_meeting_title(meeting: Dict[str, Any]) -> str:
+    return meeting.get("meeting_title") or meeting.get("title") or f"Recording {fathom_meeting_external_id(meeting)}"
+
+
+def fathom_meeting_word_count(meeting: Dict[str, Any]) -> int:
+    return len(fathom_transcript_to_text(meeting.get("transcript") or []).split())
+
+
+async def existing_fathom_external_ids(current: dict, business_name: str) -> set:
+    existing = {
+        str(doc.get("external_id"))
+        for doc in TEMP_SOURCES.values()
+        if doc.get("owner") == current["id"] and doc.get("source_name") == "Fathom" and doc.get("external_id")
+    }
+    try:
+        records = await list_current_user_growth_signals(current, business_name)
+        for rec in records:
+            source_id = (rec.get("fields") or {}).get("Source_Id") or ""
+            if source_id.startswith("fathom_"):
+                existing.add(source_id.replace("fathom_", "", 1))
+    except Exception as exc:
+        logger.warning("Failed to check existing Fathom Growth_Signals: %s", exc)
+    return existing
+
+
+def fathom_meeting_to_preview_item(
+    meeting: Dict[str, Any],
+    already_synced: bool = False,
+    internal_domain: str = "",
+) -> FathomPreviewItem:
+    transcript = meeting.get("transcript") or []
+    client_email = fathom_external_client_email(meeting)
+    participant_domains = fathom_meeting_participant_domains(meeting)
+    return FathomPreviewItem(
+        external_id=fathom_meeting_external_id(meeting),
+        title=fathom_meeting_title(meeting),
+        client_name=fathom_external_client_name(meeting),
+        client_email=client_email,
+        client_domain=email_domain(client_email),
+        created_at=meeting.get("created_at") or meeting.get("recording_start_time") or "",
+        duration_min=fathom_meeting_duration_min(meeting),
+        word_count=fathom_meeting_word_count(meeting),
+        has_transcript=bool(transcript),
+        already_synced=already_synced,
+        external_url=meeting.get("share_url") or meeting.get("url") or "",
+        meeting_type=fathom_meeting_type(meeting, internal_domain),
+        participant_domains=participant_domains,
+    )
+
+
 def fathom_meeting_to_source_doc(meeting: Dict[str, Any], owner: str, business_name: str) -> Dict[str, Any]:
-    title = meeting.get("meeting_title") or meeting.get("title") or f"Recording {meeting.get('recording_id')}"
+    title = fathom_meeting_title(meeting)
     transcript_text = fathom_transcript_to_text(meeting.get("transcript") or [])
-    source_id = f"fathom_{meeting.get('recording_id') or uuid.uuid4().hex}"
+    source_id = f"fathom_{fathom_meeting_external_id(meeting) or uuid.uuid4().hex}"
     return {
         "id": source_id,
         "owner": owner,
@@ -2886,27 +3011,54 @@ def fathom_meeting_to_source_doc(meeting: Dict[str, Any], owner: str, business_n
         "testimonial_status": "draft",
         "approved_at": None,
         "approval_requested_at": None,
-        "external_id": str(meeting.get("recording_id") or ""),
+        "external_id": fathom_meeting_external_id(meeting),
         "external_url": meeting.get("share_url") or meeting.get("url") or "",
     }
 
 
-async def fetch_fathom_meetings(connection: Dict[str, Any], limit: int = 10) -> List[Dict[str, Any]]:
+def source_name_from_source_id(source_id: str, fallback: str = "Upload") -> str:
+    source_id = str(source_id or "")
+    prefix_map = {
+        "fathom_": "Fathom",
+        "zoom_": "Zoom",
+        "gong_": "Gong",
+        "fireflies_": "Fireflies.ai",
+        "hubspot_": "HubSpot",
+    }
+    for prefix, source_name in prefix_map.items():
+        if source_id.startswith(prefix):
+            return source_name
+    return fallback
+
+
+async def fetch_fathom_meetings(connection: Dict[str, Any], limit: int = 50) -> List[Dict[str, Any]]:
     connection = await refresh_fathom_connection(connection)
     headers = fathom_auth_headers(connection)
+    meetings = []
+    cursor = ""
     async with httpx.AsyncClient() as http:
-        meetings_resp = await http.get(
-            f"{FATHOM_API_BASE}/meetings",
-            headers=headers,
-            params={"limit": limit, "calendar_invitees_domains_type": "one_or_more_external"},
-            timeout=30.0,
-        )
-        try:
-            meetings_resp.raise_for_status()
-        except Exception:
-            logger.warning("Fathom meetings sync failed: %s", getattr(meetings_resp, "text", ""))
-            raise HTTPException(status_code=502, detail="Failed to fetch Fathom meetings.")
-        meetings = meetings_resp.json().get("items") or []
+        while len(meetings) < limit:
+            page_limit = max(1, min(50, limit - len(meetings)))
+            params = {"limit": page_limit}
+            if cursor:
+                params["cursor"] = cursor
+            meetings_resp = await http.get(
+                f"{FATHOM_API_BASE}/meetings",
+                headers=headers,
+                params=params,
+                timeout=30.0,
+            )
+            try:
+                meetings_resp.raise_for_status()
+            except Exception:
+                logger.warning("Fathom meetings sync failed: %s", getattr(meetings_resp, "text", ""))
+                raise HTTPException(status_code=502, detail="Failed to fetch Fathom meetings.")
+            payload = meetings_resp.json()
+            page_items = payload.get("items") or []
+            meetings.extend(page_items[: max(0, limit - len(meetings))])
+            cursor = payload.get("next_cursor") or payload.get("next") or ""
+            if not cursor or not page_items:
+                break
         for meeting in meetings:
             recording_id = meeting.get("recording_id")
             if not recording_id:
@@ -2921,7 +3073,54 @@ async def fetch_fathom_meetings(connection: Dict[str, Any], limit: int = 10) -> 
     return meetings
 
 
-async def import_fathom_meetings(current: dict, request: Request, limit: int = 10) -> FathomSyncResponse:
+async def fetch_fathom_recording_transcript(connection: Dict[str, Any], recording_id: str) -> List[Dict[str, Any]]:
+    connection = await refresh_fathom_connection(connection)
+    headers = fathom_auth_headers(connection)
+    async with httpx.AsyncClient() as http:
+        transcript_resp = await http.get(
+            f"{FATHOM_API_BASE}/recordings/{recording_id}/transcript",
+            headers=headers,
+            timeout=30.0,
+        )
+    try:
+        transcript_resp.raise_for_status()
+    except Exception:
+        logger.warning("Fathom recording transcript fetch failed: %s", getattr(transcript_resp, "text", ""))
+        raise HTTPException(status_code=502, detail="Failed to fetch Fathom transcript.")
+    return transcript_resp.json().get("transcript") or []
+
+
+async def preview_fathom_meetings(current: dict, request: Request, limit: int = 50) -> FathomPreviewResponse:
+    connection = await get_fathom_connection(current["id"], request)
+    if not connection:
+        raise HTTPException(status_code=404, detail="Fathom is not connected.")
+    business_name = await resolve_current_business_name(current, request)
+    meetings = await fetch_fathom_meetings(connection, limit=limit)
+    existing_ids = await existing_fathom_external_ids(current, business_name)
+    internal_domain = selected_brand_domain(request, current) or email_domain(current.get("email", ""))
+    preview_items = []
+    skipped = 0
+    for meeting in meetings:
+        external_id = fathom_meeting_external_id(meeting)
+        if not external_id:
+            skipped += 1
+            continue
+        preview_items.append(
+            fathom_meeting_to_preview_item(
+                meeting,
+                already_synced=external_id in existing_ids,
+                internal_domain=internal_domain,
+            )
+        )
+    return FathomPreviewResponse(meetings=preview_items, skipped=skipped)
+
+
+async def import_fathom_meetings(
+    current: dict,
+    request: Request,
+    limit: int = 10,
+    external_ids: Optional[List[str]] = None,
+) -> FathomSyncResponse:
     connection = await get_fathom_connection(current["id"], request)
     if not connection:
         raise HTTPException(status_code=404, detail="Fathom is not connected.")
@@ -2929,21 +3128,24 @@ async def import_fathom_meetings(current: dict, request: Request, limit: int = 1
     meetings = await fetch_fathom_meetings(connection, limit=limit)
     imported = []
     skipped = 0
-    existing_keys = {
-        (doc.get("owner"), doc.get("source_name"), doc.get("external_id"))
-        for doc in TEMP_SOURCES.values()
-    }
+    selected_ids = None if external_ids is None else {str(value) for value in external_ids if str(value).strip()}
+    existing_ids = await existing_fathom_external_ids(current, business_name)
     for meeting in meetings:
+        external_id = fathom_meeting_external_id(meeting)
+        if selected_ids is not None and external_id not in selected_ids:
+            continue
+        if not external_id:
+            skipped += 1
+            continue
         if not meeting.get("transcript"):
             skipped += 1
             continue
         doc = fathom_meeting_to_source_doc(meeting, owner=current["id"], business_name=business_name)
-        key = (doc["owner"], doc["source_name"], doc.get("external_id"))
-        if key in existing_keys:
+        if doc.get("external_id") in existing_ids:
             skipped += 1
             continue
         TEMP_SOURCES[doc["id"]] = doc
-        existing_keys.add(key)
+        existing_ids.add(doc.get("external_id"))
         imported.append(source_to_out(doc))
     connection["last_sync_at"] = datetime.now(timezone.utc).isoformat()
     connection["synced_count"] = int(connection.get("synced_count") or 0) + len(imported)
@@ -2953,6 +3155,7 @@ async def import_fathom_meetings(current: dict, request: Request, limit: int = 1
 
 def record_to_source_out(rec: dict, business_name: str = "") -> SourceOut:
     f = rec.get("fields", {})
+    source_id = f.get("Source_Id") or rec.get("id")
     motivations = f.get("Motivations", "").split("\n") if f.get("Motivations") else []
     pain_points = f.get("Pain_Points", "").split("\n") if f.get("Pain_Points") else []
     buying_signals = f.get("Buying_Signals", "").split("\n") if f.get("Buying_Signals") else []
@@ -2984,13 +3187,13 @@ def record_to_source_out(rec: dict, business_name: str = "") -> SourceOut:
         testimonial_draft = " ".join(customer_language[:3]).strip() if customer_language else f.get("Name", "Customer testimonial")
         
     return SourceOut(
-        id=f.get("Source_Id") or rec.get("id"),
+        id=source_id,
         filename=f.get("Name", "Transcript.txt"),
         file_type="txt",
         client_name=f.get("Company") or f.get("Person") or "Customer",
         brand=f.get("Business_Name") or business_name or "PayRewards",
         conversation_code="CV_001",
-        source_name="Upload",
+        source_name=source_name_from_source_id(source_id),
         duration_min=30,
         word_count=5000,
         status="analyzed",
@@ -3002,8 +3205,8 @@ def record_to_source_out(rec: dict, business_name: str = "") -> SourceOut:
         testimonial_status=f.get("Testimonial_Status") or "draft",
         approved_at=f.get("Approved_At") or None,
         approval_requested_at=f.get("Approval_Requested_At") or None,
-        transcript_available=bool(f.get("Transcript_Text")),
-        transcript_url=f"/api/sources/{f.get('Source_Id') or rec.get('id')}/transcript",
+        transcript_available=bool(f.get("Transcript_Text")) or str(source_id).startswith("fathom_"),
+        transcript_url=f"/api/sources/{source_id}/transcript",
         external_url=f.get("External_URL") or "",
     )
 
@@ -3177,9 +3380,25 @@ async def fathom_callback(request: Request, code: str = Query(""), state: str = 
     return response
 
 
+@api_router.get("/integrations/fathom/preview", response_model=FathomPreviewResponse)
+async def fathom_preview(request: Request, limit: int = Query(50, ge=1, le=100), current=Depends(get_current_user)):
+    return await preview_fathom_meetings(current, request, limit=limit)
+
+
 @api_router.post("/integrations/fathom/sync", response_model=FathomSyncResponse)
-async def fathom_sync(response: Response, request: Request, limit: int = Query(10, ge=1, le=25), current=Depends(get_current_user)):
-    result = await import_fathom_meetings(current, request, limit=limit)
+async def fathom_sync(
+    response: Response,
+    request: Request,
+    body: Optional[FathomImportRequest] = None,
+    limit: int = Query(50, ge=1, le=100),
+    current=Depends(get_current_user),
+):
+    result = await import_fathom_meetings(
+        current,
+        request,
+        limit=limit,
+        external_ids=body.external_ids if body is not None else None,
+    )
     connection = await get_fathom_connection(current["id"])
     if connection:
         response.set_cookie(
@@ -3350,6 +3569,21 @@ async def get_source_transcript(source_id: str, request: Request, current=Depend
         f = rec.get("fields", {})
         if f.get("Source_Id") == source_id:
             transcript = f.get("Transcript_Text") or ""
+            if not transcript and source_id.startswith("fathom_"):
+                connection = await get_fathom_connection(current["id"], request)
+                if connection:
+                    recording_id = source_id.replace("fathom_", "", 1)
+                    fathom_transcript = await fetch_fathom_recording_transcript(connection, recording_id)
+                    transcript = fathom_transcript_to_text(fathom_transcript)
+                    if transcript:
+                        try:
+                            await airtable_client.update_growth_signal_by_source_id_for_owner(
+                                source_id,
+                                current["id"],
+                                {"Transcript_Text": transcript},
+                            )
+                        except Exception as exc:
+                            logger.warning("Failed to backfill Fathom transcript text: %s", exc)
             if not transcript:
                 raise HTTPException(status_code=404, detail="Transcript not found")
             return SourceTranscriptOut(
@@ -3455,6 +3689,7 @@ def _growth_signal_record_to_pub_doc(rec: dict) -> dict:
         "insights": insights,
         "testimonial_draft": f.get("Testimonial_Draft") or "",
         "testimonial_status": f.get("Testimonial_Status") or "draft",
+        "anonymous_reviewer_name": anonymous_reviewer_label(f.get("Call_Type") or ""),
         "approved_at": f.get("Approved_At") or None,
     }
 
@@ -3495,6 +3730,13 @@ def review_source_for_call_type(call_type: str) -> str:
     if normalized in {"onboarding", "renewal", "support", "customer success", "qbr"}:
         return "Post Sales Testimonial"
     return ""
+
+
+def anonymous_reviewer_label(call_type: str) -> str:
+    source = review_source_for_call_type(call_type)
+    if source == "Pre-Sales Demo":
+        return "Verified Prospect"
+    return "Verified Customer"
 
 
 def review_rating_from_insights(insights: dict) -> int:
@@ -3557,7 +3799,7 @@ async def public_approve_testimonial(share_id: str, request: Request):
     speaker_name = ins.get("speaker_name") or doc.get("client_name", "")
     reviewer_id = await airtable_client.find_or_create_user(name=speaker_name, email=doc.get("client_email") or None)
     share_link = f"{str(request.base_url).rstrip('/')}/t/{share_id}"
-    await airtable_client.create_uplaud_record(
+    await airtable_client.update_uplaud_record_by_share_link(
         business_name=business_name,
         testimonial=doc.get("testimonial_draft") or "",
         reviewer_record_id=reviewer_id,
@@ -3569,12 +3811,73 @@ async def public_approve_testimonial(share_id: str, request: Request):
     return _public_payload(doc)
 
 
+async def publish_testimonial_to_uplaud(doc: dict, request: Request, reviewer_name: str, date_added: str) -> None:
+    business_name = doc.get("brand") or "PayRewards"
+    ins = doc.get("insights") or {}
+    reviewer_id = await airtable_client.find_or_create_user(name=reviewer_name)
+    share_link = f"{str(request.base_url).rstrip('/')}/t/{doc.get('share_id') or ''}"
+    await airtable_client.update_uplaud_record_by_share_link(
+        business_name=business_name,
+        testimonial=doc.get("testimonial_draft") or "",
+        reviewer_record_id=reviewer_id,
+        share_link=share_link,
+        date_added=date_added,
+        review_source=review_source_for_call_type(ins.get("call_type", "")),
+        uplaud_score=review_rating_from_insights(ins),
+    )
+
+
 def _approval_status_after_send(doc: Optional[dict], rec: Optional[dict]) -> str:
     if (doc or {}).get("testimonial_status") == "approved":
         return "approved"
     if ((rec or {}).get("fields") or {}).get("Testimonial_Status") == "approved":
         return "approved"
     return "sent"
+
+
+@api_router.post("/sources/{source_id}/publish-anonymous", response_model=SourceOut)
+async def publish_source_anonymously(source_id: str, request: Request, current=Depends(get_current_user)):
+    doc = TEMP_SOURCES.get(source_id)
+    business_name = await resolve_current_business_name(current, request)
+    rec = None
+    if doc and doc.get("owner") != current["id"]:
+        raise HTTPException(status_code=404, detail="Source not found")
+    if not doc:
+        records = await list_current_user_growth_signals(current, business_name)
+        rec = next((r for r in records if r.get("fields", {}).get("Source_Id") == source_id), None)
+        if not rec:
+            raise HTTPException(status_code=404, detail="Source not found")
+        doc = _growth_signal_record_to_pub_doc(rec)
+
+    if not (doc.get("testimonial_draft") or "").strip():
+        raise HTTPException(status_code=400, detail="No testimonial draft is available to publish.")
+    if doc.get("testimonial_status") == "approved":
+        raise HTTPException(status_code=400, detail="This testimonial is already approved.")
+
+    share_id = doc.get("share_id") or uuid.uuid4().hex[:12]
+    now = datetime.now(timezone.utc).isoformat()
+    doc.update({"share_id": share_id, "testimonial_status": "anonymous_published"})
+    anonymous_name = anonymous_reviewer_label((doc.get("insights") or {}).get("call_type", ""))
+    await publish_testimonial_to_uplaud(doc, request, reviewer_name=anonymous_name, date_added=now[:10])
+    await airtable_client.update_growth_signal_by_source_id_for_owner(
+        source_id,
+        current["id"],
+        {"Testimonial_Status": "anonymous_published", "Share_Id": share_id},
+    )
+
+    if source_id in TEMP_SOURCES:
+        TEMP_SOURCES[source_id].update({"share_id": share_id, "testimonial_status": "anonymous_published"})
+        return source_to_out(TEMP_SOURCES[source_id])
+
+    updated_rec = {
+        **(rec or {"fields": {}}),
+        "fields": {
+            **((rec or {}).get("fields") or {}),
+            "Testimonial_Status": "anonymous_published",
+            "Share_Id": share_id,
+        },
+    }
+    return record_to_source_out(updated_rec, business_name)
 
 
 @api_router.post("/sources/{source_id}/send-approval")

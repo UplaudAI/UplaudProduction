@@ -38,9 +38,20 @@ function toConversation(s, loggedInBusinessName = "") {
   const businessName = loggedInBusinessName || s.brand || "";
   const attribution = [ins.speaker_name, ins.speaker_role, company].filter(Boolean).join(", ");
   const tStatus = s.testimonial_status || "draft";
-  const storyStatusMap = { draft: "draft", sent: "awaiting_approval", approved: "approved" };
+  const storyStatusMap = {
+    draft: "draft",
+    sent: "awaiting_approval",
+    anonymous_published: "anonymous_published",
+    approved: "approved",
+  };
   const cardStatus =
-    tStatus === "approved" ? "approved" : tStatus === "sent" ? "awaiting_approval" : "signals_extracted";
+    tStatus === "approved"
+      ? "approved"
+      : tStatus === "sent"
+        ? "awaiting_approval"
+        : tStatus === "anonymous_published"
+          ? "anonymous_published"
+          : "signals_extracted";
   return {
     id: s.id,
     code: s.conversation_code || "CV_001",
@@ -101,6 +112,11 @@ const STATUS_META = {
     label: "Awaiting approval",
     icon: Clock,
     tone: "amber",
+  },
+  anonymous_published: {
+    label: "Published anonymously",
+    icon: ShieldCheck,
+    tone: "mint",
   },
   approved: { label: "Approved", icon: CheckCircle2, tone: "mint" },
   amplified: { label: "Amplified", icon: Zap, tone: "mint" },
@@ -505,6 +521,22 @@ function ConversationDetail({ conversation: c, onChanged }) {
     if (onChanged) onChanged();
   };
 
+  const publishAnonymously = async () => {
+    setBusy(true);
+    try {
+      await api.post(`/sources/${c._sourceId}/publish-anonymous`);
+      setLocalStoryStatus("anonymous_published");
+      toast.success("Published anonymously", {
+        description: "The public testimonial now uses a verified placeholder until the customer approves their name.",
+      });
+      if (onChanged) await onChanged();
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail) || "Could not publish anonymously");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const openPublicTestimonialPage = async () => {
     if (c.shareId) {
       window.open(`/t/${c.shareId}`, "_blank", "noreferrer");
@@ -650,10 +682,18 @@ function ConversationDetail({ conversation: c, onChanged }) {
               <div className="text-[13px] font-display font-semibold text-[#111827]">
                 Drafted customer testimonial
               </div>
-              <span className="ml-auto text-[10.5px] font-mono text-[#9ca3af] flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3 text-[#0f9b7c]" strokeWidth={1.75} />
-                Customer approves before publish
-              </span>
+              <div className="ml-auto flex flex-col items-end gap-1 text-right">
+                <span className="text-[10.5px] font-mono text-[#9ca3af] flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3 text-[#0f9b7c]" strokeWidth={1.75} />
+                  Customer approves before publish
+                </span>
+                {currentStoryStatus === "anonymous_published" && (
+                  <span className="text-[10.5px] font-mono text-[#0f9b7c] flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3" strokeWidth={1.75} />
+                    Published anonymously · reviewer name hidden until approval
+                  </span>
+                )}
+              </div>
             </div>
 
             <ApprovalTimeline
@@ -746,6 +786,17 @@ function ConversationDetail({ conversation: c, onChanged }) {
                   </button>
 
                   <div className="ml-auto flex items-center gap-2">
+                    {currentStoryStatus !== "approved" && currentStoryStatus !== "anonymous_published" && (
+                      <button
+                        data-testid="story-publish-anonymous-btn"
+                        onClick={publishAnonymously}
+                        disabled={busy}
+                        className="btn-secondary h-10 !py-0 disabled:opacity-60"
+                      >
+                        <ShieldCheck className="w-4 h-4" strokeWidth={1.75} />
+                        {busy ? "Publishing..." : "Publish anonymously"}
+                      </button>
+                    )}
                     {(c.shareId || currentStoryStatus === "approved") && (
                       <button
                         data-testid="story-view-approval-page"

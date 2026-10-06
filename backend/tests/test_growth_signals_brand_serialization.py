@@ -115,3 +115,20 @@ def test_record_to_source_out_exposes_durable_transcript_link():
 
     assert source.transcript_available is True
     assert source.transcript_url == "/api/sources/src_789/transcript"
+
+
+def test_record_to_source_out_marks_fathom_source_transcript_capable_without_stored_text():
+    source = record_to_source_out(
+        {
+            "id": "rec_fathom",
+            "createdTime": "2026-08-07T12:00:00Z",
+            "fields": {
+                "Source_Id": "fathom_987",
+                "Business_Name": "Ladera",
+            },
+        }
+    )
+
+    assert source.transcript_available is True
+    assert source.transcript_url == "/api/sources/fathom_987/transcript"
+    assert source.source_name == "Fathom"

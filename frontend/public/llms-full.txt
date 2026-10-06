@@ -1,0 +1,98 @@
+# Uplaud Full LLM Context
+
+## Summary
+
+Uplaud is an AI-driven growth platform for turning customer voice into a measurable acquisition channel. It helps companies collect high-signal customer proof from calls, reviews, testimonials, referrals, and public reviewer profiles, then convert that proof into growth assets such as branded proof pages, referral outreach, social content, case studies, and campaign-ready testimonials.
+
+The primary production domain is:
+
+- https://www.uplaud.ai
+
+## Audience
+
+Uplaud is built for companies whose buyers depend on trust, customer proof, and word of mouth before taking action. Current product language emphasizes B2B SaaS, FinTech, financial services, and other businesses where testimonials, referrals, and verified customer advocacy can directly influence pipeline.
+
+## Product Capabilities
+
+- Capture customer voice from reviews, uploaded sources, testimonials, conversations, and meeting transcripts.
+- Analyze customer conversations into structured growth signals.
+- Generate approved testimonials and public customer-proof assets.
+- Build branded business pages that aggregate verified reviews, reviewer profiles, referral activity, and case-study style content.
+- Turn reviewers and happy customers into referral paths and warm outbound opportunities.
+- Support business teams with dashboard workflows for imports, interactions, conversations, reviews, social content, content generation, referrals, Reddit research, ROI simulation, and settings.
+- Integrate with Fathom for meeting import and transcript-driven customer voice workflows.
+- Use Airtable as the operational data layer for public records and business growth data.
+
+## Public Site Routes
+
+These are public or discovery-oriented frontend routes:
+
+- `/` - Main Uplaud landing page.
+- `/finance` - FinTech and financial services landing page.
+- `/blog` - Uplaud journal index.
+- `/blog/:slug` - Individual Uplaud article.
+- `/business/public/:slug` - Public business proof page for a business.
+- `/business/public/reviewer/:reviewerSlug` - Public reviewer profile.
+- `/business/public/:slug/reviewer/:reviewerSlug` - Reviewer profile scoped to a business.
+- `/business/public/:slug/blog/:csSlug` - Public case study generated from business customer proof.
+- `/t/:shareId` - Public testimonial approval and sharing page.
+- `/business` - Business user sign-in.
+- `/business/reset-password` - Business password reset.
+
+## Authenticated Business Routes
+
+These routes require a business user session and should not be treated as public documentation:
+
+- `/business/import`
+- `/business/interactions`
+- `/business/conversations`
+- `/business/reviews`
+- `/business/social`
+- `/business/content`
+- `/business/referrals`
+- `/business/reddit`
+- `/business/roi-simulator`
+- `/business/settings`
+
+## Public API Route Families
+
+The backend exposes public data for business proof pages and reviewer profiles under `/api/business/public/...`, including:
+
+- `/api/business/public/:slug`
+- `/api/business/public/:slug/page`
+- `/api/business/public/:slug/reviews`
+- `/api/business/public/:slug/stats`
+- `/api/business/public/:slug/case-studies`
+- `/api/business/public/:slug/case-studies/:csSlug`
+- `/api/business/public/reviewer/:reviewerSlug`
+- `/api/business/public/:slug/reviewers/:reviewerSlug`
+
+Shared testimonial approval endpoints are under:
+
+- `/api/public/testimonial/:shareId`
+- `/api/public/testimonial/:shareId/approve`
+
+Authenticated operational APIs include auth, business profile, sources, Fathom integrations, growth signals, referrals, content generation, and dashboard workflows. These are for app operation and require appropriate authorization.
+
+## Crawler Guidance
+
+Preferred discovery paths:
+
+- Start with `/llms.txt`.
+- Use `/llms-full.txt` for expanded product and route context.
+- Use `/sitemap.xml` for public page discovery.
+- Respect `/robots.txt`.
+- Prefer public business proof pages, blog pages, reviewer pages, and case-study pages over authenticated dashboard routes.
+
+Do not infer private customer data from route names. Public pages only expose data intentionally published or approved for public use.
+
+## Brand Notes
+
+- Name: Uplaud
+- Domain: https://www.uplaud.ai
+- Category: Customer advocacy, review generation, referral growth, customer-proof marketing, AI growth CRM.
+- Core positioning: Convert customer trust into measurable growth through verified reviews, testimonials, referrals, and content.
+
+## Integration Notes
+
+Uplaud uses a React frontend and FastAPI backend. The deployed site serves static public assets from the frontend public directory, including this file. Backend public rendering also supports crawlable business proof pages, robots.txt, and sitemap.xml.

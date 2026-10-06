@@ -10,8 +10,8 @@ import {
 const FEATURES = [
   {
     icon: MessageCircle,
-    title: "WhatsApp reviews",
-    body: "Where your customers already are. 60% higher reply rates than email.",
+    title: "Trust signal capture",
+    body: "Collect reviews, testimonials, referrals, DMs, sales calls, and social proof from the channels your customers already use.",
   },
   {
     icon: Share2,

@@ -153,6 +153,30 @@ def test_fathom_meeting_to_source_doc_formats_transcript():
     assert doc["duration_min"] == 30
 
 
+def test_fathom_meeting_type_uses_external_flags_and_domains():
+    assert server.fathom_meeting_type(
+        {
+            "calendar_invitees": [
+                {"email": "teammate@uplaud.ai", "is_external": False},
+                {"email": "buyer@acme.com", "is_external": True},
+            ]
+        },
+        "uplaud.ai",
+    ) == "external"
+
+    assert server.fathom_meeting_type(
+        {
+            "calendar_invitees": [
+                {"email": "deepthi@uplaud.ai", "is_external": False},
+                {"email": "teammate@uplaud.ai", "is_external": False},
+            ]
+        },
+        "uplaud.ai",
+    ) == "internal"
+
+    assert server.fathom_meeting_type({"calendar_invitees": [{"name": "No Email"}]}, "uplaud.ai") == "unknown"
+
+
 @pytest.mark.asyncio
 async def test_fathom_connection_survives_without_mongo_via_cookie(monkeypatch):
     monkeypatch.setattr(server, "db", None)
@@ -213,9 +237,248 @@ async def test_fathom_auto_sync_preference_updates_connection(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_fetch_fathom_meetings_paginates_until_limit(monkeypatch):
+    calls = []
+
+    class FakeResponse:
+        def __init__(self, payload, status_code=200):
+            self._payload = payload
+            self.status_code = status_code
+            self.text = str(payload)
+
+        def json(self):
+            return self._payload
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise RuntimeError(self.text)
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return False
+
+        async def get(self, url, headers=None, params=None, timeout=None):
+            calls.append((url, params or {}))
+            if url.endswith("/meetings"):
+                if not (params or {}).get("cursor"):
+                    return FakeResponse(
+                        {
+                            "items": [
+                                {"recording_id": "1", "meeting_title": "First"},
+                                {"recording_id": "2", "meeting_title": "Second"},
+                            ],
+                            "next_cursor": "cursor_2",
+                        }
+                    )
+                return FakeResponse(
+                    {
+                        "items": [{"recording_id": "3", "meeting_title": "Third"}],
+                    }
+                )
+            return FakeResponse({"transcript": [{"speaker": {"display_name": "A"}, "text": "Hello."}]})
+
+    async def fake_refresh(connection):
+        return {"access_token": "token", "expires_at": int(server.time.time()) + 3600}
+
+    monkeypatch.setattr(server, "refresh_fathom_connection", fake_refresh)
+    monkeypatch.setattr(server.httpx, "AsyncClient", FakeClient)
+
+    meetings = await server.fetch_fathom_meetings({"owner": "user_123"}, limit=3)
+
+    assert [meeting["recording_id"] for meeting in meetings] == ["1", "2", "3"]
+    meeting_calls = [params for url, params in calls if url.endswith("/meetings")]
+    assert meeting_calls == [{"limit": 3}, {"limit": 1, "cursor": "cursor_2"}]
+
+
+@pytest.mark.asyncio
 async def test_fathom_expired_connection_does_not_use_auth_401():
     with pytest.raises(server.HTTPException) as exc:
         await server.refresh_fathom_connection({"owner": "user_123", "expires_at": 0})
 
     assert exc.value.status_code == 409
     assert "Fathom connection has expired" in exc.value.detail
+
+
+@pytest.mark.asyncio
+async def test_fathom_preview_marks_selectable_meetings(monkeypatch):
+    server.TEMP_SOURCES.clear()
+    server.TEMP_SOURCES["fathom_42"] = {
+        "id": "fathom_42",
+        "owner": "user_123",
+        "source_name": "Fathom",
+        "external_id": "42",
+        "status": "uploaded",
+    }
+
+    async def fake_get_connection(owner, request=None):
+        return {"owner": owner, "access_token": "access_123", "expires_at": int(server.time.time()) + 3600}
+
+    async def fake_fetch_meetings(connection, limit=10):
+        return [
+            {
+                "recording_id": 42,
+                "meeting_title": "Already synced",
+                "calendar_invitees": [{"name": "Jane Buyer", "is_external": True}],
+                "transcript": [{"speaker": {"display_name": "Jane"}, "text": "Already here."}],
+            },
+            {
+                "recording_id": 99,
+                "meeting_title": "New demo",
+                "calendar_invitees": [{"name": "Ravi Buyer", "email": "ravi@acme.com", "is_external": True}],
+                "transcript": [{"speaker": {"display_name": "Ravi"}, "text": "This is promising."}],
+            },
+            {
+                "recording_id": 100,
+                "meeting_title": "No transcript",
+                "calendar_invitees": [{"name": "No Transcript", "is_external": True}],
+                "transcript": [],
+            },
+        ]
+
+    async def fake_growth_signals(current, business_name):
+        return []
+
+    monkeypatch.setattr(server, "get_fathom_connection", fake_get_connection)
+    monkeypatch.setattr(server, "fetch_fathom_meetings", fake_fetch_meetings)
+    monkeypatch.setattr(server, "list_current_user_growth_signals", fake_growth_signals)
+
+    result = await server.preview_fathom_meetings(
+        {"id": "user_123", "email": "buyer@example.com"},
+        _FakeRequest(),
+        limit=10,
+    )
+
+    by_id = {item.external_id: item for item in result.meetings}
+    assert by_id["42"].already_synced is True
+    assert by_id["99"].already_synced is False
+    assert by_id["99"].has_transcript is True
+    assert by_id["99"].client_email == "ravi@acme.com"
+    assert by_id["99"].client_domain == "acme.com"
+    assert by_id["99"].word_count == 4
+    assert by_id["100"].has_transcript is False
+
+
+@pytest.mark.asyncio
+async def test_import_fathom_meetings_only_imports_selected_ids(monkeypatch):
+    server.TEMP_SOURCES.clear()
+
+    async def fake_get_connection(owner, request=None):
+        return {
+            "owner": owner,
+            "access_token": "access_123",
+            "expires_at": int(server.time.time()) + 3600,
+            "synced_count": 0,
+        }
+
+    async def fake_fetch_meetings(connection, limit=10):
+        return [
+            {
+                "recording_id": 101,
+                "meeting_title": "Chosen demo",
+                "calendar_invitees": [{"name": "Chosen Buyer", "is_external": True}],
+                "transcript": [{"speaker": {"display_name": "Chosen"}, "text": "Load this one."}],
+            },
+            {
+                "recording_id": 102,
+                "meeting_title": "Skipped demo",
+                "calendar_invitees": [{"name": "Skipped Buyer", "is_external": True}],
+                "transcript": [{"speaker": {"display_name": "Skipped"}, "text": "Do not load."}],
+            },
+        ]
+
+    async def fake_business_name(current, request):
+        return "Uplaud"
+
+    async def fake_store(connection):
+        return None
+
+    async def fake_growth_signals(current, business_name):
+        return []
+
+    monkeypatch.setattr(server, "get_fathom_connection", fake_get_connection)
+    monkeypatch.setattr(server, "fetch_fathom_meetings", fake_fetch_meetings)
+    monkeypatch.setattr(server, "resolve_current_business_name", fake_business_name)
+    monkeypatch.setattr(server, "store_fathom_connection", fake_store)
+    monkeypatch.setattr(server, "list_current_user_growth_signals", fake_growth_signals)
+
+    result = await server.import_fathom_meetings(
+        {"id": "user_123", "email": "buyer@example.com"},
+        _FakeRequest(),
+        limit=10,
+        external_ids=["101"],
+    )
+
+    assert result.imported == 1
+    assert [source.id for source in result.sources] == ["fathom_101"]
+    assert "fathom_101" in server.TEMP_SOURCES
+    assert "fathom_102" not in server.TEMP_SOURCES
+
+    server.TEMP_SOURCES.clear()
+    empty_result = await server.import_fathom_meetings(
+        {"id": "user_123", "email": "buyer@example.com"},
+        _FakeRequest(),
+        limit=10,
+        external_ids=[],
+    )
+    assert empty_result.imported == 0
+    assert server.TEMP_SOURCES == {}
+
+
+@pytest.mark.asyncio
+async def test_fathom_transcript_endpoint_falls_back_to_recording_transcript(monkeypatch):
+    server.TEMP_SOURCES.clear()
+    updates = []
+
+    async def fake_business_name(current, request):
+        return "Ladera"
+
+    async def fake_growth_signals(current, business_name):
+        return [
+            {
+                "id": "rec_123",
+                "fields": {
+                    "Source_Id": "fathom_987",
+                    "Name": "Fathom - Ladera demo.txt",
+                    "Business_Name": "Ladera",
+                    "Owner_Id": "user_dave",
+                    "User": "dave@ladera.ai",
+                },
+            }
+        ]
+
+    async def fake_get_connection(owner, request=None):
+        return {
+            "owner": owner,
+            "access_token": "access_123",
+            "expires_at": int(server.time.time()) + 3600,
+        }
+
+    async def fake_fetch_recording_transcript(connection, recording_id):
+        assert recording_id == "987"
+        return [
+            {"timestamp": "00:00:01", "speaker": {"display_name": "Dave"}, "text": "This is the missing transcript."}
+        ]
+
+    async def fake_update(source_id, owner_id, fields):
+        updates.append((source_id, owner_id, fields))
+        return True
+
+    monkeypatch.setattr(server, "resolve_current_business_name", fake_business_name)
+    monkeypatch.setattr(server, "list_current_user_growth_signals", fake_growth_signals)
+    monkeypatch.setattr(server, "get_fathom_connection", fake_get_connection)
+    monkeypatch.setattr(server, "fetch_fathom_recording_transcript", fake_fetch_recording_transcript)
+    monkeypatch.setattr(server.airtable_client, "update_growth_signal_by_source_id_for_owner", fake_update)
+
+    result = await server.get_source_transcript(
+        "fathom_987",
+        _FakeRequest(),
+        current={"id": "user_dave", "email": "dave@ladera.ai"},
+    )
+
+    assert "Dave: This is the missing transcript." in result.transcript
+    assert updates == [
+        ("fathom_987", "user_dave", {"Transcript_Text": result.transcript})
+    ]
