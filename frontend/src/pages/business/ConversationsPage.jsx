@@ -145,6 +145,8 @@ export default function ConversationsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [publicPageUrl, setPublicPageUrl] = useState("");
+  const [selectedConversationIds, setSelectedConversationIds] = useState([]);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -173,6 +175,12 @@ export default function ConversationsPage() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    setSelectedConversationIds((prev) =>
+      prev.filter((id) => conversations.some((conversation) => conversation.id === id))
+    );
+  }, [conversations]);
+
   const filtered = conversations.filter((c) => {
     if (
       query &&
@@ -186,6 +194,13 @@ export default function ConversationsPage() {
   });
 
   const selected = conversations.find((c) => c.id === selectedId) || filtered[0];
+  const selectedIdSet = useMemo(
+    () => new Set(selectedConversationIds),
+    [selectedConversationIds]
+  );
+  const selectedBulkCount = selectedConversationIds.length;
+  const allFilteredSelected =
+    filtered.length > 0 && filtered.every((conversation) => selectedIdSet.has(conversation.id));
 
   const signalsStats = useMemo(() => {
     const totalBuying = conversations.reduce((s, c) => s + (c.signals.buyingSignals?.length || 0), 0);
@@ -285,6 +300,59 @@ export default function ConversationsPage() {
     });
   };
 
+  const toggleConversationSelection = (conversationId) => {
+    setSelectedConversationIds((prev) =>
+      prev.includes(conversationId)
+        ? prev.filter((id) => id !== conversationId)
+        : [...prev, conversationId]
+    );
+  };
+
+  const toggleFilteredSelection = () => {
+    if (allFilteredSelected) {
+      const filteredIds = new Set(filtered.map((conversation) => conversation.id));
+      setSelectedConversationIds((prev) => prev.filter((id) => !filteredIds.has(id)));
+      return;
+    }
+    setSelectedConversationIds((prev) => {
+      const next = new Set(prev);
+      filtered.forEach((conversation) => next.add(conversation.id));
+      return [...next];
+    });
+  };
+
+  const deleteSelectedConversations = async () => {
+    const selectedConversations = conversations.filter((conversation) =>
+      selectedIdSet.has(conversation.id)
+    );
+    if (selectedConversations.length === 0) return;
+
+    const ok = window.confirm(
+      `Delete ${selectedConversations.length} selected conversation${
+        selectedConversations.length === 1 ? "" : "s"
+      } from Growth Signals? This removes generated testimonial data for the selected conversations.`
+    );
+    if (!ok) return;
+
+    setBulkDeleting(true);
+    try {
+      await Promise.all(
+        selectedConversations.map((conversation) => api.delete(`/sources/${conversation._sourceId}`))
+      );
+      toast.success(
+        `Deleted ${selectedConversations.length} conversation${
+          selectedConversations.length === 1 ? "" : "s"
+        }`
+      );
+      setSelectedConversationIds([]);
+      await load();
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail) || "Could not delete selected conversations");
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
   return (
     <div data-testid="conversations-page" className="space-y-8">
       <PageHero
@@ -355,50 +423,89 @@ export default function ConversationsPage() {
             {filtered.length} conversations
           </div>
 
+          <div className="flex items-center justify-between gap-2 px-2">
+            <label className="inline-flex items-center gap-2 text-[11.5px] text-[#4b5563]">
+              <input
+                data-testid="select-all-conversations-checkbox"
+                type="checkbox"
+                checked={allFilteredSelected}
+                onChange={toggleFilteredSelection}
+                disabled={filtered.length === 0 || bulkDeleting}
+                className="h-4 w-4 rounded border-[#d9d1ee] text-[#6d46c6] focus:ring-[#6d46c6]"
+              />
+              Select visible
+            </label>
+            {selectedBulkCount > 0 && (
+              <button
+                data-testid="delete-selected-conversations-btn"
+                onClick={deleteSelectedConversations}
+                disabled={bulkDeleting}
+                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[#fecaca] bg-[#fff5f5] px-3 text-[11.5px] font-medium text-[#b42318] transition-colors hover:bg-[#fee2e2] disabled:opacity-60"
+              >
+                <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+                {bulkDeleting ? "Deleting..." : `Delete ${selectedBulkCount}`}
+              </button>
+            )}
+          </div>
+
           <div className="space-y-2">
             {filtered.map((c) => {
               const status = STATUS_META[c.status];
               const StatusIcon = status.icon;
               const isActive = selectedId === c.id;
+              const isChecked = selectedIdSet.has(c.id);
               return (
-                <button
+                <div
                   key={c.id}
-                  data-testid={`conv-card-${c.id}`}
-                  onClick={() => setSelectedId(c.id)}
-                  className={`w-full text-left rounded-2xl border p-4 transition-all relative overflow-hidden ${
+                  className={`relative flex items-start gap-3 rounded-2xl border p-3 transition-all ${
                     isActive
                       ? "border-[#6d46c6] bg-[#f5f3ff] shadow-sm ring-1 ring-[#6d46c6]/20 font-medium"
                       : "border-[#eeeaf6] bg-white hover:border-[#d9d1ee] hover:bg-slate-50/50"
                   }`}
                 >
-                  <div className="flex items-center gap-2">
-                    <div className="text-[12.5px] font-medium text-[#111827] leading-tight truncate">
-                      {c.title}
+                  <input
+                    data-testid={`conv-select-${c.id}`}
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => toggleConversationSelection(c.id)}
+                    disabled={bulkDeleting}
+                    aria-label={`Select ${c.title}`}
+                    className="mt-1 h-4 w-4 rounded border-[#d9d1ee] text-[#6d46c6] focus:ring-[#6d46c6]"
+                  />
+                  <button
+                    data-testid={`conv-card-${c.id}`}
+                    onClick={() => setSelectedId(c.id)}
+                    className="min-w-0 flex-1 text-left"
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="text-[12.5px] font-medium text-[#111827] leading-tight truncate">
+                        {c.title}
+                      </div>
+                      <span
+                        className={`ml-auto shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono border ${TONE_STYLES[status.tone]}`}
+                      >
+                        <StatusIcon className="w-2.5 h-2.5" strokeWidth={2} />
+                        {status.label}
+                      </span>
                     </div>
-                    <span
-                      className={`ml-auto shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono border ${TONE_STYLES[status.tone]}`}
-                    >
-                      <StatusIcon className="w-2.5 h-2.5" strokeWidth={2} />
-                      {status.label}
-                    </span>
-                  </div>
-                  <div className="mt-1.5 text-[11px] text-[#4b5563]">
-                    {c.person} · {c.role}
-                  </div>
-                  <div className="mt-2 flex items-center gap-3 text-[10.5px] font-mono text-[#9ca3af]">
-                    <span
-                      className="px-1.5 py-0.5 rounded-full"
-                      style={{
-                        color: SOURCE_META[c.source]?.color || "#6d46c6",
-                        backgroundColor: `${SOURCE_META[c.source]?.color || "#6d46c6"}12`,
-                      }}
-                    >
-                      {c.source}
-                    </span>
-                    <span>{c.duration}</span>
-                    <span className="ml-auto">{c.date}</span>
-                  </div>
-                </button>
+                    <div className="mt-1.5 text-[11px] text-[#4b5563]">
+                      {c.person} · {c.role}
+                    </div>
+                    <div className="mt-2 flex items-center gap-3 text-[10.5px] font-mono text-[#9ca3af]">
+                      <span
+                        className="px-1.5 py-0.5 rounded-full"
+                        style={{
+                          color: SOURCE_META[c.source]?.color || "#6d46c6",
+                          backgroundColor: `${SOURCE_META[c.source]?.color || "#6d46c6"}12`,
+                        }}
+                      >
+                        {c.source}
+                      </span>
+                      <span>{c.duration}</span>
+                      <span className="ml-auto">{c.date}</span>
+                    </div>
+                  </button>
+                </div>
               );
             })}
           </div>
@@ -563,24 +670,6 @@ function ConversationDetail({ conversation: c, onChanged }) {
     }
   };
 
-  const deleteConversation = async () => {
-    const ok = window.confirm(
-      `Delete "${c.title}" from Growth Signals? This removes the conversation and its generated testimonial data.`
-    );
-    if (!ok) return;
-
-    setBusy(true);
-    try {
-      await api.delete(`/sources/${c._sourceId}`);
-      toast.success("Conversation deleted");
-      if (onChanged) await onChanged();
-    } catch (err) {
-      toast.error(formatApiError(err.response?.data?.detail) || "Could not delete conversation");
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const openPublicTestimonialPage = async () => {
     if (c.shareId) {
       window.open(`/t/${c.shareId}`, "_blank", "noreferrer");
@@ -703,15 +792,6 @@ function ConversationDetail({ conversation: c, onChanged }) {
               Source recording
             </a>
           )}
-          <button
-            data-testid="delete-conversation-btn"
-            onClick={deleteConversation}
-            disabled={busy}
-            className="btn-secondary h-10 !py-0 text-[#b42318] hover:border-[#fecaca] hover:bg-[#fff5f5] disabled:opacity-60"
-          >
-            <Trash2 className="w-4 h-4" strokeWidth={1.75} />
-            {busy ? "Working..." : "Delete"}
-          </button>
         </div>
       </div>
 
