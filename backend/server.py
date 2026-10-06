@@ -3060,7 +3060,7 @@ async def fetch_fathom_meetings(connection: Dict[str, Any], limit: int = 50) -> 
             if not cursor or not page_items:
                 break
         for meeting in meetings:
-            recording_id = meeting.get("recording_id")
+            recording_id = fathom_meeting_external_id(meeting)
             if not recording_id:
                 continue
             transcript_resp = await http.get(

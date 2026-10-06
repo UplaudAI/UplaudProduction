@@ -294,6 +294,72 @@ async def test_fetch_fathom_meetings_paginates_until_limit(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_fetch_fathom_meetings_fetches_transcript_using_fallback_id(monkeypatch):
+    calls = []
+
+    class FakeResponse:
+        def __init__(self, payload, status_code=200):
+            self._payload = payload
+            self.status_code = status_code
+            self.text = str(payload)
+
+        def json(self):
+            return self._payload
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise RuntimeError(self.text)
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return False
+
+        async def get(self, url, headers=None, params=None, timeout=None):
+            calls.append(url)
+            if url.endswith("/meetings"):
+                return FakeResponse(
+                    {
+                        "items": [
+                            {
+                                "id": "abc123",
+                                "meeting_title": "Demo with transcript",
+                            }
+                        ]
+                    }
+                )
+            if url.endswith("/recordings/abc123/transcript"):
+                return FakeResponse(
+                    {
+                        "transcript": [
+                            {
+                                "timestamp": "00:00:01",
+                                "speaker": {"display_name": "Buyer"},
+                                "text": "This transcript should be found.",
+                            }
+                        ]
+                    }
+                )
+            return FakeResponse({}, status_code=404)
+
+    async def fake_refresh(connection):
+        return {"access_token": "token", "expires_at": int(server.time.time()) + 3600}
+
+    monkeypatch.setattr(server, "refresh_fathom_connection", fake_refresh)
+    monkeypatch.setattr(server.httpx, "AsyncClient", FakeClient)
+
+    meetings = await server.fetch_fathom_meetings({"owner": "user_123"}, limit=1)
+
+    assert calls == [
+        f"{server.FATHOM_API_BASE}/meetings",
+        f"{server.FATHOM_API_BASE}/recordings/abc123/transcript",
+    ]
+    assert meetings[0]["transcript"][0]["text"] == "This transcript should be found."
+
+
+@pytest.mark.asyncio
 async def test_fathom_expired_connection_does_not_use_auth_401():
     with pytest.raises(server.HTTPException) as exc:
         await server.refresh_fathom_connection({"owner": "user_123", "expires_at": 0})
